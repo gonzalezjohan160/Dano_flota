@@ -1,0 +1,22 @@
+.form-rol {
+    display: flex;
+    flex-direction: column;
+    max-width: 300px;
+    gap: 10px;
+}
+
+.form-rol input, .form-rol button {
+    padding: 8px;
+    font-size: 14px;
+}
+
+.form-rol button {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+.form-rol button:hover {
+    background-color: #1e7e34;
+}

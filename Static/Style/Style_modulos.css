@@ -1,0 +1,732 @@
+
+body {
+    background: #f3f3f3;
+    font-family: Arial, sans-serif;
+    padding: 0px;
+}
+
+table {
+    border-spacing: 0 12px;
+    padding: 10px;
+    background: transparent;
+}
+
+th,
+td {
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: center;
+}
+
+th {
+    background-color: #007BFF;
+    color: white;
+    cursor: pointer;
+    user-select: none;
+
+}
+
+.icono-orden {
+    font-size: 12px;
+    margin-left: 5px;
+    color: #333;
+}
+
+tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+h2 {
+    text-align: center;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 10;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;   /* quitar esta línea */
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    background-color: #fff;
+    margin: 5% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 60%;
+    border-radius: 8px;
+    max-height: 80%;
+    overflow-y: auto;
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover {
+    color: red;
+}
+
+.btn {
+    background-color: #007BFF;
+    color: white;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn:hover {
+    background-color: #0056b3;
+}
+
+.btn-success {
+    background-color: #28a745;
+}
+
+.btn-success:hover {
+    background-color: #218838;
+}
+
+form label {
+    display: block;
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+form input {
+    width: 100%;
+    padding: 6px;
+    margin-top: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+
+form textarea {
+    width: 100%;
+    padding: 6px;
+    margin-top: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: Arial, sans-serif; /* Igual que los inputs */
+    font-size: 14px;                 /* Igual que los inputs */
+    box-sizing: border-box;          /* Evita que el padding cambie el tamaño total */
+    resize: vertical;                /* Solo permitir cambiar altura si quieres */
+}
+
+
+form select {
+    width: 101.5%;
+    padding: 6px;
+    margin-top: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+/* ===== Galería multimedia ===== */
+.galeria {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.adjunto-item {
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    text-align: center;
+    padding: 10px;
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.adjunto-item:hover {
+    transform: scale(1.03);
+    background: #eef6ff;
+}
+
+.adjunto-item img {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.adjunto-item video,
+.adjunto-item audio {
+    width: 100%;
+    border-radius: 6px;
+    outline: none;
+    margin-bottom: 5px;
+}
+
+.adjunto-item a {
+    display: block;
+    color: #007bff;
+    font-weight: bold;
+    text-decoration: none;
+    margin-top: 5px;
+    word-break: break-all;
+}
+
+.adjunto-item a:hover {
+    text-decoration: underline;
+}
+
+.file-icon {
+    font-size: 48px;
+    color: #888;
+    margin: 15px 0;
+}
+
+.file-icon.pdf {
+    color: #e74c3c;
+}
+
+.file-icon.xls {
+    color: #27ae60;
+}
+
+.file-icon.doc {
+    color: #2980b9;
+}
+
+.file-icon.default {
+    color: #7f8c8d;
+}
+
+/* 🔍 Lightbox */
+.lightbox {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    justify-content: center;
+    align-items: center;
+}
+
+.lightbox img {
+    max-width: 90%;
+    max-height: 90%;
+    border-radius: 10px;
+}
+
+.lightbox .close {
+    position: absolute;
+    top: 20px;
+    right: 40px;
+    color: white;
+    font-size: 40px;
+    cursor: pointer;
+}
+
+/* Estilo del encabezado con filtros integrados */
+thead th {
+    background: #007BFF;           /* color azul */
+    color: white;
+    text-align: center;
+    padding: 12px 15px;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-radius: 12px; /* redondear solo arriba */
+    box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+    position: relative;
+}
+
+thead th input {
+    width: 90%;
+    margin-top: 6px;
+    padding: 5px 7px;
+    font-size: 13px;
+    border: 1px solid #d5d5d5;
+    border-radius: 4px;
+    background: #f8f9fa;
+    transition: all 0.2s ease;
+}
+
+thead th input:focus {
+    background: white;
+    border-color: #ffdd57;
+    outline: none;
+    box-shadow: 0 0 4px rgba(255, 221, 87, 0.6);
+}
+
+thead th input:hover:not(:disabled) {
+    background: #fff;
+}
+
+thead th input:disabled {
+    border: none;
+    background: transparent;
+}
+
+.radio-buttons {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.radio-buttons input {
+    display: none;
+}
+
+.radio-buttons span {
+    padding: 6px 18px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+    background: #f8f8f8;
+}
+
+.radio-buttons input:checked + span {
+    background: #28a745;
+    color: white;
+    border-color: #28a745;
+}
+
+.table-card {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+    overflow-y: auto;
+    max-height: 70vh;
+}
+
+thead th {
+    background: linear-gradient(135deg, #0d6efd, #0a58ca);
+    color: white;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+tbody tr {
+    transition: background 0.2s ease, transform 0.1s ease;
+}
+
+tbody tr:hover {
+    background: #eef6ff;
+    transform: scale(1.002);
+}
+
+.row-danger {
+    background: #ffe5e5;
+    border-left: 5px solid #dc3545;
+}
+
+.row-ok {
+    background: #ffffff;
+}
+
+#tabla-registros {
+    border-collapse: separate; /* necesario para sticky */
+    width: 100%;
+}
+
+#tabla-registros thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: linear-gradient(135deg, #1e4684, #1F3A5F);
+}
+
+#tabla-registros tbody tr.row-danger {
+    background-color: #ffe5e5 !important;
+    border-left: 6px solid #dc3545;
+}
+
+#tabla-registros tbody tr.row-ok {
+    background-color: #ffffff;
+}
+/* Resaltados de filas pasados */
+#tabla-registros tbody tr.row-danger:hover {
+    background-color: #ffd6d6 !important;
+}
+/* Resaltados de filas a tiempo */
+#tabla-registros tbody tr.row-ok:hover {
+    background-color: #d1d1d1 !important;
+}
+
+#tabla-registros tbody tr {
+    background-color: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.06);
+    /* overflow: hidden; /* para que el borde redondeado funcione */
+}
+
+#tabla-registros tbody tr:hover {
+    background-color: #d1d1d1;
+}
+
+#tabla-registros tbody td {
+    border: none;               /* quita bordes internos */
+    padding: 12px 10px;
+}
+
+#tabla-registros tbody tr td:first-child {
+    border-top-left-radius: 10px;
+    border-bottom-left-radius: 10px;
+}
+
+#tabla-registros tbody tr td:last-child {
+    border-top-right-radius: 10px;
+    border-bottom-right-radius: 10px;
+}
+
+.info-evento {
+        margin-bottom: 15px;
+    }
+
+    .tabla-info {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+
+    .tabla-info th {
+        text-align: left;
+        background: #f4f4f4;
+        padding: 6px;
+        width: 30%;
+    }
+
+    .tabla-info td {
+        padding: 6px;
+    }
+
+    /* ===========================
+    ESTILO UNIFICADO DE TABLAS
+    =========================== */
+
+    .tabla-estilo {
+        width: 100%;
+        border-spacing: 0 12px;
+        background: transparent;
+    }
+
+    .tabla-estilo table {
+        width: 100%;
+        border-collapse: separate;
+    }
+
+    /* ===== Encabezado ===== */
+    .tabla-estilo thead th {
+        background: linear-gradient(135deg, #0d6efd, #0a58ca);
+        color: white;
+        position: sticky;
+        top: 0;
+        z-index: 5; /* importante para que quede encima */
+        background: linear-gradient(135deg, #0d6efd, #0a58ca);
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 12px 10px;
+        text-align: center;
+    }
+
+    /* ===== Filas ===== */
+    .tabla-estilo tbody tr {
+        background-color: white;
+        border-radius: 10px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.06);
+        transition: background 0.2s ease, transform 0.1s ease;
+    }
+
+    .tabla-estilo tbody tr:hover {
+        background: #eef6ff;
+        transform: scale(1.002);
+    }
+
+    /* ===== Celdas ===== */
+    .tabla-estilo tbody td {
+        border: none;
+        padding: 12px 10px;
+        text-align: left;
+        font-size: 14px;
+    }
+
+    /* Bordes redondeados por fila */
+    .tabla-estilo tbody tr td:first-child {
+        border-top-left-radius: 10px;
+        border-bottom-left-radius: 10px;
+        font-weight: bold;
+        color: #0d6efd;
+        width: 35%;
+    }
+
+    .tabla-estilo tbody tr td:last-child {
+        border-top-right-radius: 10px;
+        border-bottom-right-radius: 10px;
+    }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 768px) {
+        .tabla-estilo thead {
+            display: none;
+        }
+
+        .tabla-estilo tbody tr {
+            display: block;
+            margin-bottom: 12px;
+        }
+
+        .tabla-estilo tbody td {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+        }
+
+        .tabla-estilo tbody td::before {
+            content: attr(data-label);
+            font-weight: bold;
+            color: #0d6efd;
+        }
+    }
+
+    #map {
+        width: 100%;
+        height: 350px;
+        margin: 10px 0;
+        border-radius: 6px;
+    }
+    .form-modal {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .form-section {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #e0e0e0;
+    }
+
+    .form-section.highlight {
+        background: #eef6ff;
+        border-left: 5px solid #0d6efd;
+    }
+
+    .form-section h4 {
+        margin: 0 0 12px;
+        color: #0d6efd;
+        font-size: 15px;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-actions {
+        text-align: right;
+        margin-top: 10px;
+    }
+
+    .btn-lg {
+        padding: 10px 22px;
+        font-size: 15px;
+    }
+
+/* Contenedor del details */
+#estado_details {
+    width: 100%;
+    margin-top: 5px;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 14px;
+    position: relative;
+}
+
+/* Caja cerrada tipo select */
+#estado_details summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 6px 35px 6px 10px; /* espacio para la flecha */
+    position: relative;        /* IMPORTANTE */
+    display: flex;
+    align-items: center;       /* centra verticalmente el texto */
+    min-height: 32px;          /* igual que input */
+}
+
+/* Hover */
+#estado_details summary:hover {
+    border-color: #0d6efd;
+}
+
+/* Estado abierto */
+#estado_details[open] summary {
+    border-color: #0d6efd;
+    box-shadow: 0 0 4px rgba(13,110,253,0.4);
+}
+
+/* Quitar flecha nativa */
+#estado_details summary::-webkit-details-marker {
+    display: none;
+}
+
+/* Flecha tipo select real */
+#estado_details summary::after {
+    content: "";
+    position: absolute;
+    right: 12px;
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid #555;
+    border-bottom: 2px solid #555;
+    transform: rotate(45deg);
+    transition: transform 0.2s ease;
+}
+
+/* Rotación cuando está abierto */
+#estado_details[open] summary::after {
+    transform: rotate(-135deg);
+}
+
+
+/* ===== Dropdown completo ===== */
+
+#estado_details[open] {
+    border-radius: 4px;
+}
+
+/* Aquí está la corrección importante */
+#estado_details[open] {
+    background: white;
+}
+
+#estado_details[open] > label {
+    display: flex;
+}
+
+/* Contenedor interno como bloque */
+#estado_details[open] {
+    padding-bottom: 5px;
+}
+
+/* Opciones */
+#estado_details label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-weight: normal;
+    transition: background 0.15s ease;
+}
+
+#estado_details label:hover {
+    background: #eef6ff;
+}
+
+/* Scroll si crece */
+#estado_details[open] {
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+/* Checkbox azul */
+#estado_details input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    accent-color: #0d6efd;
+}
+
+/* Contenedor principal: Todo en una sola fila */
+.barra-filtros-inline {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 20px;
+    background-color: white; 
+    padding: 8px 20px;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+    
+    /* AJUSTE DE CAPAS: Bajamos el z-index para que el modal pase por encima */
+    position: relative;
+    z-index: 10; /* Antes estaba en 1000, lo bajamos a 10 */
+}
+
+/* Grupo Individual: Texto al lado del Cuadro */
+.filtro-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filtro-inline label {
+    font-size: 13px;
+    font-weight: bold;
+    color: #333;
+    white-space: nowrap;
+    margin: 0; /* Asegura que no haya márgenes extra */
+}
+
+/* Cuadros de texto y Selects compactos */
+.control-compacto {
+    height: 32px;
+    padding: 2px 8px;
+    font-size: 13px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #fff;
+    outline: none;
+    width: auto;
+}
+
+/* Botones alineados a la derecha */
+.acciones-inline {
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
+}
+
+.btn-azul-sm, .btn-verde-sm {
+    height: 32px;
+    padding: 0 15px;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    cursor: pointer;
+    transition: 0.2s;
+    display: flex; /* Centrado interno */
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-azul-sm { background-color: #007bff; }
+.btn-verde-sm { background-color: #28a745; }
+
+/* REGLA DE SEGURIDAD PARA EL MODAL:
+   Si el modal sigue quedando atrás, añade esta regla para forzar su visibilidad */
+.modal, .modal-backdrop {
+    z-index: 2000 !important;
+}

@@ -1,0 +1,117 @@
+{% extends "Interfaz.html" %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="{{ url_for('static', filename='Style/Style_captur.css') }}">
+
+{% endblock %}
+
+{% block content %}
+<div class="contenedor-form">
+    <form class="form-capturador" id="miFormulario" enctype="multipart/form-data">
+        <h2>Registro de reparaciónes a la flota</h2>
+
+        <!-- Unidad Funcional y Móvil -->
+        <select name="UF" id="UF_input" required>
+            <option value="" disabled selected hidden>SELECCIONE LA UNIDAD FUNCIONAL</option>
+            <option value="10">10</option>
+            <option value="16">16</option>
+        </select>
+
+        <input type="text" name="Movil" id="Movil_input" placeholder="INGRESE EL ID MÓVIL" required autocomplete="off">
+
+        <!-- Tipología -->
+        <input type="text" id="Tipologia_input" name="Tipologia" placeholder="SELECCIONE LA TIPOLOGÍA" required
+            readonly><br>
+
+
+        <!-- Otros campos -->
+
+        <select name="Zona_inter" id="Zona_inter_input" required>
+            <option value="" disabled selected hidden>SELECCIONE LA ZONA INTERVENIDA</option>
+            <option value="LATERAL IZQUIERDO">LATERAL IZQUIERDO</option>
+            <option value="LATERAL DERECHO">LATERAL DERECHO</option>
+            <option value="FRONTAL">FRONTAL</option>
+            <option value="POSTERIOR">POSTERIOR</option>
+            <option value="TECHO">TECHO</option>
+            <option value="LLANTAS">LLANTAS</option>
+            <option value="ITS">ITS</option>
+            <option value="SIRCI">SIRCI</option>
+            <option value="CARROCERÍA INTERNA">CARROCERÍA INTERNA</option>
+            <option value="TREN MOTRIZ">TREN MOTRIZ</option>
+            <option value="CHASIS">CHASIS</option>
+        </select><br>
+
+        <input type="text" id="parte_intervenida_input" name="Parte_intervenida"
+            placeholder="INGRESE LA PARTE INTERVENIDA" required autocomplete="off"><br>
+
+        <input type="text" id="Costo_id" placeholder="COSTO DE LA INTERVENCIÓN" inputmode="numeric" inputmode="numeric"
+            required>
+        <input type="hidden" id="Costo_real" name="costo"><br>
+
+        <input type="text" name="Usuario" placeholder="USUARIO" value="{{ session.get('usuario', 'EM00084') }}" readonly required><br>
+
+        <!-- Evidencias -->
+        <label for="evidencia"><b>SUBA LAS EVIDENCIAS:</b></label><br>
+        <input type="file" id="evidencia" name="Evidencia" accept="image/*,video/*" multiple><br><br>
+        <div id="lista_adjuntos"></div>
+
+        <!-- Captura de fotos -->
+        <h3>📸 Tomar Fotos</h3>
+        <br>
+        <div class="botones-video">
+            <button type="button" id="btnTomarFoto">📷 Tomar Foto</button>
+        </div>
+        <!-- Captura de video -->
+        <h3>🎥 Grabar Video</h3>
+        <div class="botones-video">
+            <button type="button" id="btnStartVideo">🔴 Iniciar Grabación</button>
+            <button type="button" id="btnStopVideo" disabled>⏹ Detener</button>
+        </div><br><br>
+        <!-- indicador de inicio de grabación -->
+        <div id="camara_container" style="position:relative; width:100%; display:flex;">
+            <div id="camara_recordDot"></div>
+            <div id="camara_timer">00:00</div>
+            <video id="camara" autoplay playsinline style="width:100%; border-radius:8px;"></video>
+        </div>
+
+        <!-- Visualizador de fotos -->
+        <div id="preview_fotos_container">
+            <div id="preview_fotos">
+                <button type="button" id="btnPrevFoto" class="navFoto">❮</button>
+                <img id="fotoActual" src="" style="display:none;">
+                <button type="button" id="btnNextFoto" class="navFoto">❯</button>
+                <button id="btnDeleteFoto" class="btnDeleteFoto" style="display:none;">❌</button>
+            </div>
+        </div>
+
+        <br><br><br><br><br><br><br><br>
+
+        <div id="preview_videos_container">
+            <div id="preview_videos">
+                <button type="button" id="btnPrevVideo" class="navVideo">❮</button>
+                <video id="videoActual" controls style="display:none;"></video>
+                <button type="button" id="btnNextVideo" class="navVideo">❯</button>
+                <button id="btnDeleteVideo" class="btnDeleteVideo" style="display:none;">❌</button>
+            </div>
+        </div><br><br> <br><br> <br><br> <br><br>
+
+        <div class="botones-video">
+            <button type="submit">Enviar</button>
+        </div>
+        <p id="mensaje"></p>
+
+
+
+    </form>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script src="{{ url_for('static', filename='Script/Script_captur_rep.js') }}"></script>
+
+{% endblock %}

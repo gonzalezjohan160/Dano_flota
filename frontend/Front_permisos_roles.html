@@ -1,0 +1,48 @@
+{% extends "Interfaz.html" %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='Style/Style_usuario.css') }}">
+
+{% endblock %}
+
+{% block content %}
+<h2>Asignar Permisos a Rol</h2>
+<div class="form-container">
+    <form method="POST" class="form-rol">
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Rol</label>
+                <select name="user" required>
+                    {% for user in users %}
+                    <option value="{{ user[0] }}">{{ user[1] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="tabla-wrapper">
+                <table class="tabla-checkbox">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>Permiso</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for permiso in permisos %}
+                        <tr>
+                            <td><input type="checkbox" name="permisos" value="{{ permiso[0] }}"></td>
+                            <td>{{ permiso[1] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+
+        <button type="submit">Asignar Permisos</button>
+
+    </form>
+</div>
+{% endblock %}

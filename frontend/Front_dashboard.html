@@ -1,0 +1,182 @@
+{% extends "Interfaz.html" %}
+
+    
+{% block extra_css %}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />   
+    <link rel="stylesheet" href="{{ url_for('static', filename='Style/Style_dashboard.css') }}">
+     
+{% endblock %}
+   
+   
+{% block content %}
+
+
+<div class="dashboard-container">
+    <h1 class="dashboard-title">Panel de Control - Daños a la Flota</h1>
+
+    <form class="filter-bar" method="GET">
+        <div class="filter-group">
+            <label>Fecha Inicio</label>
+            <input type="date" name="fecha_inicio" value="{{ f_inicio }}">
+        </div>
+        <div class="filter-group">
+            <label>Fecha Fin</label>
+            <input type="date" name="fecha_fin" value="{{ f_fin }}">
+        </div>
+        <div class="filter-group">
+            <label>Unidad Funcional (UF)</label>
+            <select name="uf">
+                <option value="">Todas las UF</option>
+                {% for uf in lista_uf %}
+                <option value="{{ uf }}" {% if uf == uf_sel %}selected{% endif %}>{{ uf }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn-filter">Aplicar Filtros</button>
+    </form>
+
+    <div class="grid-dashboard">
+        
+        <div class="card">
+            <div class="card-header">Pendientes por Gestión</div>
+            <div class="card-body">
+                <canvas id="barChart1"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Costo Daños vs Conciliado</div>
+            <div class="card-body">
+                <canvas id="barChart2"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Total de Casos vs Casos Cerrados RRLL</div>
+            <div class="card-body">
+                <canvas id="barChartRRLL"></canvas>
+            </div>
+        </div>    
+
+        <div class="card">
+            <div class="card-header">Eventos por Franja Horaria</div>
+            <div class="card-body">
+                <canvas id="lineChartFranjas"></canvas>
+            </div>
+        </div>
+        
+        
+        <div class="card">
+            <div class="card-header">Top 10 Operadores (Siniestralidad)</div>
+            <div class="card-body table-scroll">
+                <table class="custom-table">
+                    <thead>
+                        <tr>
+                            <th>Cód / Nombre</th>
+                            <th class="text-center">Cant.</th>
+                            <th class="text-right">Costo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in ranking %}
+                        <tr>
+                            <td>
+                                <span class="op-code">{{ row[0] }}</span><br>
+                                <small>{{ row[1] }}</small>
+                            </td>
+                            <td class="text-center"><span class="badge">{{ row[2] }}</span></td>
+                            <td class="text-right text-danger">${{ "{:,.0f}".format(row[3]) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">  
+            <div class="card-header"> Rutas con Más Eventos</div>
+
+            <div class="card-body table-scroll">
+                <table class="custom-table">
+                    <thead>
+                        <tr>
+                            <th>Ruta</th>
+                            <th class="text-center">Cantidad</th>
+                        </tr>   
+                    </thead>
+                    
+                    <tbody>
+                        {% for row in ranking_rutas %}
+                        <tr>
+                            <td>{{ row[0] }}</td>
+                            <td class="text-center"><span class="badge">{{ row[1] }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+
+                </table>
+
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                Registradores con Más Eventos
+            </div>
+
+            <div class="card-body table-scroll">
+                <table class="custom-table">
+                    <thead>
+                        <tr>
+                            <th>Registrador</th>
+                            <th class="text-center">Cantidad</th>
+                        </tr>   
+                    </thead>
+                    
+                    <tbody>
+                        {% for row in ranking_registradores %}
+                        <tr>
+                            <td> <span class="op-code">{{ row[0] }}</span> </td>
+                            <td class="text-center"><span class="badge">{{ row[1] }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>        
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Georreferenciación de Daños</div>
+            <div class="card-body">
+                <div id="map"></div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+
+{% endblock %}
+
+
+{% block extra_js %}
+
+        <!-- Cargar Chart.js desde CDN -->
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <!-- JSON de registros -->
+        <script id="registros-json" type="application/json">{{ registros | tojson }}</script>
+        <script id="costos-json" type="application/json">{{ costos | tojson }}</script>
+        <script id="franjas-json" type="application/json">{{ franjas | tojson }}</script>
+        <script id="valores-json" type="application/json">{{ valores | tojson }}</script>
+        <script id="rr-json" type="application/json">{{ rrll | tojson }}</script>
+        <script id="heat-data-json" type="application/json">{{ heatdata | tojson }}</script>
+
+        <canvas id="barChart"></canvas>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
+        <script src="{{ url_for('Front_dashboard.static', filename='Script/Script_dashboard.js') }}"></script>
+        
+
+
+{% endblock %}
+   

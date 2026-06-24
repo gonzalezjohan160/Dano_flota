@@ -1,0 +1,70 @@
+{% extends "Interfaz.html" %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='Style/Style_modulos.css') }}">
+
+{% endblock %}
+
+{% block content %}
+<h2>Perfil de usuario</h2>
+
+<div class="tabla-estilo">
+    <table>
+        <tbody> <tr><td><strong>NOMBRE USUARIO</strong></td><td>{{ registro.Nombre or "-" }}</td></tr>
+            <tr><td><strong>AVATAR (USER)</strong></td><td>{{ registro.Username or "-" }}</td></tr>
+            <tr><td><strong>IDENTIFICACIÓN</strong></td><td>{{ registro.IDusuario or "-" }}</td></tr>
+            <tr><td><strong>CORREO</strong></td><td>{{ registro.Email or "-" }}</td></tr>
+            <tr><td><strong>U.F</strong></td><td>{{ registro.UF or "-" }}</td></tr>
+            <tr><td><strong>FECHA CREACIÓN</strong></td><td>{{ registro.FechaCreacion or "-" }}</td></tr>
+            <tr><td><strong>ESTADO</strong></td><td>{{ "Activo" if registro.Activo else "Inactivo" }}</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<hr>
+<h3>Seguridad</h3>
+<button type="button" class="btn-verde-sm" onclick="document.getElementById('form-password').style.display='block'">
+    Cambiar Contraseña
+</button>
+
+<div id="form-password" style="display:none; margin-top: 20px; border: 1px solid #ccc; padding: 15px;">
+    <form id="changePasswordForm"> 
+        <div>
+            <label>Contraseña Actual:</label><br>
+            <input type="password" name="old_password" required>
+        </div>
+        <br>
+        <div>
+            <label>Nueva Contraseña:</label><br>
+            <input type="password" name="new_password" required>
+        </div>
+        <br>
+        <div>
+            <label>Confirmar Nueva Contraseña:</label><br>
+            <input type="password" name="confirm_password" required>
+        </div>
+        <br>
+        <button type="submit" class="btn-verde-sm">Actualizar Contraseña</button>
+        <button type="button" class="btn-azul-sm" onclick="document.getElementById('form-password').style.display='none'">Cancelar</button>
+        
+        <div id="mensaje-alerta" style="margin-top: 15px; padding: 10px; display: none; border: 1px solid transparent; border-radius: 4px;"></div>
+    </form>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+
+    <!-- JSON de registros -->
+    <script id="registro-json" type="application/json">
+    {{ registro|tojson | safe }}
+    </script>
+
+    <script>
+            // Esta variable sí la procesa Jinja2 y el JS externo la podrá ver
+            const URL_CAMBIO_PASS = "{{ url_for('Profile.cambiar_password') }}";
+        </script>
+
+    <script src="{{ url_for('static', filename='Script/Script_profile.js') }}"></script>
+
+{% endblock %}

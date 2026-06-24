@@ -1,0 +1,169 @@
+/* =============================
+   BASE GENERAL
+============================= */
+* {
+    box-sizing: border-box;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+body {
+    margin: 0;
+    background-color: #f4f6f8;
+}
+
+.dashboard {
+    padding: 30px;
+    max-width: 1100px;
+    margin: auto; /* centra todo */
+}
+
+h1 {
+    margin-bottom: 20px;
+    color: #1f2937;
+}
+
+.card {
+    background: #ffffff;
+    padding: 25px;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+/* =============================
+   FORMULARIO ROLES/PERMISOS
+============================= */
+
+.form-rol {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: 800px;
+    width: 100%;
+    margin: auto; /* centro en la tarjeta */
+}
+
+/* Fila select + tabla */
+.form-row {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+}
+
+/* Select de rol */
+.form-row .form-group {
+    flex: 0 0 200px; /* ancho fijo */
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Inputs y selects */
+.form-rol input,
+.form-rol select {
+    padding: 10px;
+    font-size: 14px;
+    border: 1px solid #dcdfe6;
+    border-radius: 6px;
+    width: 100%;
+}
+
+.form-rol input:focus,
+.form-rol select:focus {
+    border-color: #1f2937;
+    outline: none;
+}
+
+/* Tabla de checkboxes */
+.tabla-wrapper {
+    flex: 1; /* ocupa el espacio restante */
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #dcdfe6;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.tabla-checkbox {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tabla-checkbox th {
+    background-color: #1f2937;
+    color: white;
+    padding: 8px;
+    text-align: left;
+}
+
+.tabla-checkbox td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #dcdfe6;
+}
+
+.tabla-checkbox tr:hover {
+    background-color: #f1f5f9;
+}
+
+.tabla-checkbox input[type="checkbox"] {
+    transform: scale(1.2);
+    cursor: pointer;
+}
+
+/* Botón */
+.form-rol button {
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.form-rol button:hover {
+    background-color: #1e7e34;
+}
+
+/* Responsive: apilar en móvil */
+@media (max-width: 700px) {
+    .form-row {
+        flex-direction: column;
+    }
+
+    .form-row .form-group {
+        flex: 1 1 100%;
+    }
+
+    .tabla-wrapper {
+        max-height: 200px;
+    }
+}
+
+/* Centrar todos los h2 dentro de formularios o cards */
+h2 {
+    text-align: center;
+}
+
+    /* Estilos base para las alertas */
+    .alert {
+        padding: 15px;
+        margin-bottom: 20px;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        font-family: sans-serif;
+    }
+    /* Estilo específico para errores */
+    .alert-error {
+        color: #721c24;
+        background-color: #f8d7da;
+        border-color: #f5c6cb;
+    }
+    /* Estilo específico para éxito */
+    .alert-success {
+        color: #155724;
+        background-color: #d4edda;
+        border-color: #c3e6cb;
+    }

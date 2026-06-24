@@ -1,0 +1,440 @@
+* * {
+    box-sizing: border-box;
+    font-family: 'Ubuntu', sans-serif;
+}
+
+body {
+    margin: 0;
+    background: #f2f2f2;
+}
+
+/* TOPBAR */
+.topbar {
+    height: 60px;
+    background: #002832;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+}
+
+.topbar .logo span {
+    font-size: 12px;
+    opacity: .7;
+}
+
+/* LAYOUT */
+.layout {
+    display: flex;
+    height: calc(100vh - 60px);
+}
+
+/* Sidebar colapsada */
+.sidebar {
+    width: 60px;
+    background: #014b57;
+    color: white;
+    padding: 15px 8px;
+    transition: width 0.3s ease;
+    overflow-x: hidden;
+    
+}
+
+/* Sidebar expandida al hover */
+.sidebar:hover, 
+.sidebar.has-active-submenu {
+    width: 240px;
+}
+
+/* Links generales */
+.sidebar nav > a {
+    display: flex;
+    align-items: center;
+    gap: 10px;   
+    padding: 10px;
+    color: white;
+    text-decoration: none;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: background 0.3s;
+}
+
+/* Fondo al pasar el mouse sobre links */
+.sidebar nav a:hover {
+    background: #026c7a;
+}
+
+/* Estilo para iconos: primer hijo del <a> */
+.sidebar nav a > *:first-child {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.sidebar nav a .icon img {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+}
+
+/* Cuando está colapsada, centramos el icono */
+.sidebar:not(:hover) nav a {
+    justify-content: center;
+}
+
+/* Ocultar el texto cuando la sidebar está colapsada */
+.sidebar:not(:hover) nav a .text {
+    display: none;
+}
+
+.sidebar .avatar {
+    width: 40px;
+    height: 40px;
+    background: #ccc;
+    border-radius: 50%;
+    margin-right: 10px;
+}
+
+/* Contenedor del usuario */
+.user-menu {
+    margin-bottom: 20px;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.user {
+    position: relative; /* para posicionar dropdown relativo a este contenedor */
+    display: flex;
+    flex-direction: column;   /* ✅ o simplemente elimina esta línea */
+    align-items: center;
+    cursor: pointer;
+    padding: 8px 10px;
+    border-radius: 8px;
+    transition: background 0.2s;
+    background: #014b57;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.user.active {
+    background: #026c7a;
+    border-radius: 8px;
+}
+
+/* Avatar y nombre en fila */
+.user > .avatar,
+.user > .user-info {
+    display: inline-flex;
+    align-items: center;
+}
+
+.user > .avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    margin-right: 10px;
+    overflow: hidden;
+    background: #ccc;
+    flex-shrink: 0;
+}
+
+.user > .avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.user > .user-info {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: bold;
+}
+
+/* Flecha chevron a la derecha */
+.user::after {
+    content: "";
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%) rotate(45deg);
+    width: 6px;
+    height: 6px;
+    border-right: 2px solid white;
+    border-bottom: 2px solid white;
+    transition: transform 0.3s ease;
+    pointer-events: none; /* para que no interfiera en clicks */
+}
+
+.user.active::after {
+    transform: translateY(-50%) rotate(225deg);
+}
+
+/* Dropdown dentro de user, oculto por defecto */
+.user-dropdown {
+    max-height: 0;
+    overflow: hidden;
+    background: #026c7a;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+    border-radius: 0 0 8px 8px;
+    margin-top: 0px;
+    padding: 0 10px;
+    box-sizing: border-box;
+}
+
+/* Dropdown visible */
+.user-dropdown.show {
+    max-height: 500px; /* ajusta según contenido */
+    padding: 10px;
+}
+
+/* Links del dropdown */
+.user-dropdown a {
+    display: block;
+    padding: 8px 0;
+    color: white;
+    text-decoration: none;
+    border-top: none;
+}
+
+.user-dropdown a + a {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.user-dropdown a:hover {
+    background: #014b57;
+}
+
+/* Cuando la sidebar está colapsada, ocultamos el dropdown */
+.sidebar:not(:hover) .user-dropdown {
+    max-height: 0 !important;
+    padding: 0 10px !important;
+    overflow: hidden !important;
+}
+
+.sidebar:not(:hover) .user {
+    justify-content: center;
+    padding: 8px 0;
+}
+
+.sidebar:not(:hover) .user > .user-info {
+    display: none;
+}
+
+.sidebar:not(:hover) .user::after {
+    display: none;
+}
+
+/* Cuando la sidebar está colapsada */
+.sidebar:not(:hover) .user > .avatar {
+    margin-right: 0;   /* 🔥 quita el desplazamiento */
+}
+
+/* CONTENT */
+.content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.logout-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 40px;
+}
+
+.logout-btn img {
+    height: 28px;
+    width: auto;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.logout-btn img:hover {
+    transform: scale(1.1);
+}
+
+/* ===== SUBMENU STYLES ===== */
+
+/* Botón principal con submenu */
+.sidebar nav a.has-submenu {
+    display: flex;
+    align-items: left;
+    justify-content: flex-start;
+    gap: 20px;
+    padding: 10px;
+    color: white;
+    text-decoration: none;
+    border-radius: 5px;
+    cursor: pointer;
+    width: 100%;
+    position: relative;
+}
+
+/* Crear flecha tipo chevron */
+.sidebar nav a.has-submenu::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid white;
+    border-bottom: 2px solid white;
+    transition: transform 0.3s ease;
+    transform: rotate(45deg);
+    flex-shrink: 0;
+    margin-left: auto;
+    margin-right: 5px;
+}
+
+/* Rotar flecha cuando activo */
+.sidebar nav a.has-submenu.active::after {
+    transform: rotate(225deg);
+}
+
+/* OCULTAR FLECHA CUANDO SIDEBAR ESTÁ COLAPSADA */
+.sidebar:not(:hover) nav a.has-submenu::after {
+    display: none;
+}
+
+/* Sidebar se expande cuando hay submenu activo */
+.sidebar.has-active-submenu {
+    width: 250px;
+}
+
+
+/* Submenú oculto por defecto */
+.submenu {
+    display: flex;           /* siempre flex */
+    flex-direction: column;
+    padding-left: 30px;
+    margin-top: 5px;
+    max-height: 0;           /* colapsado por defecto */
+    overflow: hidden;        /* necesario para animación */
+    transition: max-height 0.3s ease, padding 0.3s ease;
+}
+/* Submenú links - SOLO LO NECESARIO */
+.submenu a {
+    display: block !important;   /* rompe el flex heredado */
+    width: 100%;
+    text-decoration: none;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.4;
+    padding: 8px 10px;
+    color: white;
+
+    border-radius: 5px;
+    margin-bottom: 8px;
+    text-align: left;
+    overflow: visible;            /* importante */
+}
+
+/* Hover submenú */
+.submenu a:hover {
+    background: #026c7a;
+}
+
+/* Mostrar submenú cuando botón está activo */
+.sidebar nav a.has-submenu.active + .submenu {
+    display: flex;
+    max-height: 500px;
+    overflow: visible; /* Cambiar a visible */
+}
+
+
+/* Hover general del botón */
+.sidebar nav a.has-submenu:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Cuando la sidebar está colapsada y no hay submenús activos */
+.sidebar:not(:hover):not(.has-active-submenu) .user-dropdown {
+    max-height: 0 !important;
+    padding: 0 10px !important;
+    overflow: hidden !important;
+}
+
+.sidebar:not(:hover):not(.has-active-submenu) .user {
+    justify-content: center;
+    padding: 8px 0;
+}
+
+.sidebar:not(:hover):not(.has-active-submenu) .user > .user-info {
+    display: none;
+}
+
+.sidebar:not(:hover):not(.has-active-submenu) .user::after {
+    display: none;
+}
+
+.sidebar:not(:hover):not(.has-active-submenu) .user > .avatar {
+    margin-right: 0;
+}
+
+/* Submenús colapsados solo si sidebar no tiene hover y no hay submenu activo */
+.sidebar:not(:hover):not(.has-active-submenu) .submenu {
+    max-height: 0 !important;
+    overflow: hidden !important;
+    padding: 0 10px !important;
+}
+
+/* Mostrar submenú activo sin importar hover ni colapso */
+.sidebar.has-active-submenu nav a.has-submenu.active + .submenu {
+    max-height: 500px !important; /* ajusta según contenido real */
+    overflow: visible !important;
+    padding: 5px 10px !important;
+}
+
+/* Rotar la flecha aunque la sidebar esté colapsada */
+.sidebar.has-active-submenu nav a.has-submenu.active::after {
+    display: block !important;
+    transform: rotate(225deg) !important;
+}
+
+/* Ocultar el texto: SOLO si no hay hover Y no hay submenú activo */
+.sidebar:not(:hover):not(.has-active-submenu) nav a .text {
+    display: none;
+}
+
+/* Ocultar la flecha (chevron): SOLO si no hay hover Y no hay submenú activo */
+.sidebar:not(:hover):not(.has-active-submenu) nav a.has-submenu::after {
+    display: none;
+}
+
+/* Alinear iconos al centro SOLO cuando esté realmente colapsada */
+.sidebar:not(:hover):not(.has-active-submenu) nav a {
+    justify-content: center;
+}
+
+/* Esto asegura que si no hay hover, nada fuerce a la sidebar a quedarse abierta */
+.sidebar:not(:hover) {
+    width: 60px !important;
+}
+
+/* Oculta submenús inmediatamente cuando la sidebar se encoge */
+.sidebar:not(:hover) .submenu,
+.sidebar:not(:hover) .user-dropdown {
+    max-height: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Oculta textos e iconos extra */
+.sidebar:not(:hover) .text,
+.sidebar:not(:hover) .user-info,
+.sidebar:not(:hover) .has-submenu::after {
+    display: none !important;
+}

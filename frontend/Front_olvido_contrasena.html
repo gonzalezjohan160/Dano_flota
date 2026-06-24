@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Recuperar contraseña</title>
+    <link rel="stylesheet" href="{{ url_for('Modulo_login.static', filename='Style/Style_login.css') }}">
+
+    <style>
+    body {
+        /* Flask renderizará esta ruta correctamente aquí */
+        background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), 
+                        url("{{ url_for('Modulo_login.static', filename='Images/Fondo_login.jpg') }}");
+    }
+</style>
+</head>
+<body>
+    <div class="login-container">
+        <h2>Recuperar contraseña</h2>
+
+        
+            <form method="POST">
+                <input type="email" name="email" placeholder="Ingresa tu correo" required>
+                <button type="submit">Enviar enlace</button>
+            </form>
+        
+
+        <a href="{{ url_for('Modulo_login.login') }}" class="link">Volver al login</a>
+    </div>
+</body>
+</html>

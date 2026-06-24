@@ -1,0 +1,241 @@
+from flask import Blueprint, render_template, request, jsonify, send_from_directory, send_file, abort, json
+from config import connect
+from datetime import datetime
+import folium
+from folium.plugins import HeatMap
+from backend_security import login_required, requiere_permiso
+
+Front_dashboard = Blueprint(
+    'Front_dashboard',               # nombre interno del blueprint
+    __name__,
+    template_folder=r'..\frontend',
+    static_folder=r'..\Static'
+)
+
+
+from flask import render_template, request
+
+@Front_dashboard.route('/')
+@login_required
+@requiere_permiso('Ingresar_dashboard')
+def index():
+    # 1. Obtener parámetros de los filtros desde la URL
+    # Si no se envían, puedes definir fechas por defecto
+    f_inicio = request.args.get('fecha_inicio', '2025-01-01')
+    f_fin = request.args.get('fecha_fin', '2026-12-31')
+    uf_filtro = request.args.get('uf', '')
+
+    conn = connect()
+    cursor = conn.cursor()
+
+    try:
+        # --- CONSULTA PARA EL SELECT DE UF (Para llenar el filtro en el HTML) ---
+        cursor.execute("SELECT DISTINCT UF FROM table_damage_to_fleet WHERE UF IS NOT NULL ORDER BY UF")
+        lista_uf = [row[0] for row in cursor.fetchall()]
+
+        # Preparar base de la condición WHERE para reutilizar
+        # Usamos parámetros (?) para evitar inyecciones SQL
+        params = [f_inicio, f_fin]
+        where_clause = "WHERE d.Fecha_evento BETWEEN ? AND ?"
+        
+        if uf_filtro:
+            where_clause += " AND d.UF = ?"
+            params.append(uf_filtro)
+
+        # --- 1️⃣ CONSULTA: PENDIENTES (Gráfica 1) ---
+        query_pendientes = f"""
+        SELECT 
+            YEAR(d.Fecha_evento), MONTH(d.Fecha_evento),
+                    COUNT(DISTINCT CASE
+                         WHEN
+                             o.Id_damage_to_fleet IS NOT NULL
+                              AND t.Id_damage_to_fleet IS NOT NULL
+                              AND s.Id_damage_to_fleet IS NOT NULL
+                              AND (
+                                     l.Id_damage_to_fleet IS NULL
+                                     OR l.Cerrado <> 'SI'
+                              )
+                              THEN d.Id
+                            END) as Labora,
+            COUNT(DISTINCT CASE WHEN t.Id_damage_to_fleet IS NULL AND (l.Id_damage_to_fleet IS NULL OR l.Cerrado = 'NO') THEN d.Id END) as MTTO,
+            COUNT(DISTINCT CASE WHEN o.Id_damage_to_fleet IS NULL AND (l.Id_damage_to_fleet IS NULL OR l.Cerrado = 'NO') THEN d.Id END) as Oper,
+            COUNT(DISTINCT CASE WHEN s.Id_damage_to_fleet IS NULL AND (l.Id_damage_to_fleet IS NULL OR l.Cerrado = 'NO') THEN d.Id END) as Svial            
+        FROM table_damage_to_fleet d
+        LEFT JOIN table_info_labora l ON l.Id_damage_to_fleet = d.Id
+        LEFT JOIN table_info_mtto t ON t.Id_damage_to_fleet = d.Id
+        LEFT JOIN table_info_oper o ON o.Id_damage_to_fleet = d.Id
+        LEFT JOIN table_info_svial s ON s.Id_damage_to_fleet = d.Id
+        {where_clause}
+        GROUP BY YEAR(d.Fecha_evento), MONTH(d.Fecha_evento)
+        ORDER BY 1, 2
+        """
+        cursor.execute(query_pendientes, params)
+        rows_p = cursor.fetchall()
+
+        # --- 2️⃣ CONSULTA: COSTOS MTTO (Gráfica 2 - Parte A) ---
+        # Unimos con table_damage_to_fleet para poder filtrar por UF y Fecha_evento
+        query_costos = f"""
+            SELECT YEAR(m.Fecha_registro), MONTH(m.Fecha_registro), SUM(ISNULL(m.Costo,0)) 
+            FROM table_info_mtto m
+            JOIN table_damage_to_fleet d ON m.Id_damage_to_fleet = d.Id
+            {where_clause}
+            GROUP BY YEAR(m.Fecha_registro), MONTH(m.Fecha_registro)
+        """
+        cursor.execute(query_costos, params)
+        rows_c = cursor.fetchall()
+
+        # --- 3️⃣ CONSULTA: VALORES LABORA (Gráfica 2 - Parte B) ---
+        query_valores = f"""
+            SELECT YEAR(l.Fecha_registro), MONTH(l.Fecha_registro), SUM(ISNULL(l.Valor_conciliado,0)) 
+            FROM table_info_labora l
+            JOIN table_damage_to_fleet d ON l.Id_damage_to_fleet = d.Id
+            {where_clause}
+            GROUP BY YEAR(l.Fecha_registro), MONTH(l.Fecha_registro)
+        """
+        cursor.execute(query_valores, params)
+        rows_v = cursor.fetchall()
+        
+        # --- CONSULTA: INSPECTORES ---
+        query_registradores = f"""
+            SELECT Registrador, COUNT(*) AS Cantidad
+            FROM table_damage_to_fleet d
+            {where_clause}
+            AND Registrador IS NOT NULL
+            AND Registrador <> ''
+            GROUP BY Registrador
+            ORDER BY COUNT(*) DESC
+        """
+        cursor.execute(query_registradores, params)
+        ranking_registradores = [[row[0], row[1]] for row in cursor.fetchall()]
+
+        # --- 4️⃣ CONSULTA: RANKING ---
+        query_ranking = f"""
+            SELECT TOP 10 d.Codigo, d.Nombre, COUNT(d.Id), SUM(ISNULL(m.Costo, 0))
+            FROM table_damage_to_fleet d
+            LEFT JOIN table_info_mtto m ON d.Id = m.Id_damage_to_fleet
+            {where_clause}
+            GROUP BY d.Codigo, d.Nombre 
+            ORDER BY COUNT(d.Id) DESC
+        """
+        cursor.execute(query_ranking, params)
+        ranking = [[row[0], row[1], row[2], float(row[3])] for row in cursor.fetchall()]
+        
+        # --- 5️⃣ CONSULTA: RUTAS CON MAS EVENTOS ---
+        query_rutas = f"""
+            SELECT Ruta, COUNT(*) AS Cantidad
+            FROM table_damage_to_fleet d
+            {where_clause}
+            AND Ruta IS NOT NULL
+            AND Ruta <> ''
+            GROUP BY Ruta
+            ORDER BY COUNT(*) DESC
+        """
+        cursor.execute(query_rutas, params)
+        ranking_rutas = [[row[0], row[1]] for row in cursor.fetchall()]
+        
+        
+        # --- CONSULTA: EVENTOS POR FRANJA HORARIA ---
+        query_franja = f"""
+            SELECT
+            franja_horaria,
+            COUNT(*) AS Cantidad
+            FROM table_damage_to_fleet d
+            {where_clause}
+            GROUP BY franja_horaria
+        """
+        cursor.execute(query_franja, params)
+        rows_franja = cursor.fetchall()
+        
+        orden_franja = ['04:00-10:00', '10:00-16:00', '16:00-22:00', '22:00-04:00']
+        dict_franja = {fila[0]: fila[1] for fila in rows_franja}
+        
+        franjas_final = []
+        for franja in orden_franja:
+            franjas_final.append([franja, dict_franja.get(franja, 0)])
+            
+        
+        # --- 6️⃣ CONSULTA: TOTAL CASOS VS CERRADOS RRLL ---
+        query_rrll = f"""
+            SELECT 
+                YEAR(d.Fecha_evento) AS Year, MONTH(d.Fecha_evento) AS Month,
+                COUNT(DISTINCT d.Id) AS Total_Casos,
+                COUNT(DISTINCT CASE WHEN l.Cerrado = 'SI' THEN d.Id END) AS Casos_Cerrados
+            FROM table_damage_to_fleet d
+            LEFT JOIN table_info_labora l ON l.Id_damage_to_fleet = d.Id
+            {where_clause}
+            GROUP BY YEAR(d.Fecha_evento), MONTH(d.Fecha_evento)
+            ORDER BY YEAR(d.Fecha_evento), MONTH(d.Fecha_evento)
+        """
+        cursor.execute(query_rrll, params)
+        rrll_data = cursor.fetchall()
+        
+        
+        
+        # --- 5️⃣ CONSULTA: MAPA DE CALOR ---
+        query_mapa = f"SELECT [Direccion] FROM [table_damage_to_fleet] d {where_clause} AND [Direccion] IS NOT NULL"
+        cursor.execute(query_mapa, params)
+        coords_rows = cursor.fetchall()
+
+        # --- PROCESAMIENTO DE DATOS (ESTRUCTURA ORIGINAL) ---
+
+        # Validación de ceros Pendientes
+        registros_final = []
+        for r in rows_p:
+            if (r[2] + r[3] + r[4] + r[5]) > 0:
+                registros_final.append([int(r[0]), int(r[1]), r[2], r[3], r[4], r[5]])
+
+        # Sincronización Financiera (Costos vs Valores)
+        dict_fin = {}
+        for r in rows_c:
+            key = (int(r[0]), int(r[1]))
+            dict_fin[key] = {'costo': float(r[2]), 'valor': 0.0}
+
+        for r in rows_v:
+            key = (int(r[0]), int(r[1]))
+            if key not in dict_fin:
+                dict_fin[key] = {'costo': 0.0, 'valor': float(r[2])}
+            else:
+                dict_fin[key]['valor'] = float(r[2])
+
+        sorted_keys = sorted(dict_fin.keys())
+        costos_final = []
+        valores_final = []
+        for k in sorted_keys:
+            costos_final.append([k[0], k[1], dict_fin[k]['costo']])
+            valores_final.append([k[0], k[1], dict_fin[k]['valor']])
+            
+        rrll_final = []
+        for r in rrll_data:
+            rrll_final.append([int(r[0]), int(r[1]), r[2], r[3]])    
+
+        # Procesamiento Mapa
+        heat_data = []
+        for row in coords_rows:
+            if row[0] and ',' in row[0]:
+                try:
+                    parts = row[0].split(',')
+                    lat, lon = float(parts[0].strip()), float(parts[1].strip())
+                    heat_data.append([lat, lon])
+                except: continue
+
+    except Exception as e:
+        print(f"Error en dashboard: {e}")
+        registros_final, costos_final, valores_final, ranking, heat_data, lista_uf = [], [], [], [], [], []
+    
+    finally:
+        cursor.close()
+        conn.close()
+
+    # Retornamos todo incluyendo los valores actuales de los filtros para mantenerlos en el HTML
+    return render_template('Front_dashboard.html', 
+                           registros=registros_final, 
+                           costos=costos_final, 
+                           valores=valores_final, 
+                           rrll=rrll_final,
+                           franjas=franjas_final,
+                           ranking=ranking,
+                           ranking_rutas=ranking_rutas,
+                           ranking_registradores=ranking_registradores, 
+                           heatdata=heat_data,
+                           lista_uf=lista_uf,
+                           f_inicio=f_inicio, f_fin=f_fin, uf_sel=uf_filtro)

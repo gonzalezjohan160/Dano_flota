@@ -1,0 +1,98 @@
+from flask import Flask, app, render_template, request, jsonify, send_from_directory, send_file, url_for, abort, redirect,session
+import os
+from mimetypes import guess_type
+from config import connect
+from datetime import datetime
+from backend_oper import Modulo_oper 
+from backend_laboral import Modulo_laboral 
+from backend_mtto import Modulo_mtto
+from backend_svial import Modulo_svial
+from backend_dashboard import Front_dashboard
+from backend_usuarios import Modulo_usuario
+from backend_permisos import Modulo_permisos
+from backend_permisos_roles import Modulo_permisos_roles
+from backend_login import Modulo_login
+from backend_historico_movil import Historico_movil
+from backend_capturador import Capturador
+from backend_reparaciones import Capturador_rep
+from backend_historico_danos import Historico_danos
+from backend_correcciones import Correcciones
+from backend_profile import Profile
+
+Interfaz = Flask(
+    __name__,
+    template_folder=r'..\frontend',
+    static_folder=r'..\Static'
+)
+
+Interfaz.secret_key = "***REMOVED***"
+
+Interfaz.register_blueprint(Modulo_login)
+
+# Registrar profile como Blueprint
+Interfaz.register_blueprint(Profile, url_prefix='/Profile')
+
+# Registrar Capturador como Blueprint
+Interfaz.register_blueprint(Capturador, url_prefix='/Capturador')
+
+# Registrar Modulo_oper como Blueprint
+Interfaz.register_blueprint(Modulo_oper, url_prefix='/Operaciones')
+
+# Registrar Modulo_laboral como Blueprint
+Interfaz.register_blueprint(Modulo_laboral, url_prefix='/laboral')
+
+# Registrar Modulo_mtto como Blueprint
+Interfaz.register_blueprint(Modulo_mtto, url_prefix='/Mtto')
+
+# Registrar Modulo_Svial como Blueprint
+Interfaz.register_blueprint(Modulo_svial, url_prefix='/Svial')
+
+# Registrar Dashboard como Blueprint
+Interfaz.register_blueprint(Front_dashboard, url_prefix='/Dashboard')
+
+# Registrar Permisos como Blueprint
+Interfaz.register_blueprint(Modulo_permisos, url_prefix='/Modulo_permisos')
+
+# Registrar Usuarios como Blueprint
+Interfaz.register_blueprint(Modulo_usuario, url_prefix='/Modulo_usuario')
+
+
+# Registrar roles como Blueprint
+Interfaz.register_blueprint(Modulo_permisos_roles, url_prefix='/Modulo_permisos_roles')
+
+# Registrar Historico_moviles como Blueprint
+Interfaz.register_blueprint(Historico_movil, url_prefix='/Historico_movil')
+
+# Registrar Capturador de reparaciones como Blueprint
+Interfaz.register_blueprint(Capturador_rep, url_prefix='/Capturador_rep')
+
+# Registrar Historico de daños como Blueprint
+Interfaz.register_blueprint(Historico_danos, url_prefix='/Historico_danos')
+
+# Registrar Correcciones como Blueprint
+Interfaz.register_blueprint(Correcciones, url_prefix='/Correcciones')
+
+@Interfaz.route('/interfaz')
+def index():
+    """Redirige a Dashboard al cargar la página raíz"""
+    return redirect('/Dashboard')
+
+
+@Interfaz.errorhandler(404)
+@Interfaz.errorhandler(403)
+def page_not_found(e):
+    # Verificamos si existe la clave 'usuario' en la sesión
+    if 'usuario' in session:
+        # Si está logeado, lo mandamos al dashboard (interfaz)
+        return redirect('/interfaz') 
+    else:
+        # Si no está logeado, al login
+        return redirect(url_for('Modulo_login.login'))
+
+
+if __name__ == "__main__":
+        print(Interfaz.url_map)
+       #Interfaz.run(host="0.0.0.0", port=5000, debug=True, ssl_context=None)
+        Interfaz.run(host="0.0.0.0", port=5000, ssl_context='adhoc', debug=True)
+        # Ejemplo: Limitar a 16 Megabytes el total de la petición
+        Interfaz.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024

@@ -1,0 +1,217 @@
+{% extends "Interfaz.html" %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='Style/Style_modulos.css') }}">
+        <!-- Leaflet CSS -->
+    <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+{% endblock %}
+   
+   
+{% block content %}
+
+    <h2>HISTORICO DE DAÑOS A FLOTA</h2>
+
+    
+    <div class="barra-filtros-inline">
+        <div class="filtro-inline">
+            <label for="filtroUF">UF:</label>
+            <select id="filtroUF" class="control-compacto">
+                <option value="todos">Todos</option>
+                <option value="10">10</option>
+                <option value="16">16</option>
+            </select>
+        </div>
+
+        <div class="filtro-inline">
+            <label for="fecha_inicio">Inicio:</label>
+            <input type="date" id="fecha_inicio" name="fecha_inicio" class="control-compacto" value="{{ request.args.get('fecha_inicio', '') }}">
+        </div>
+
+        <div class="filtro-inline">
+            <label for="fecha_fin">Fin:</label>
+            <input type="date" id="fecha_fin" name="fecha_fin" class="control-compacto" value="{{ request.args.get('fecha_fin', '') }}">
+        </div>
+
+        <div class="acciones-inline">
+            <button id="btnFiltrar" class="btn-azul-sm">Filtrar</button>
+            <button id="btnExportar" class="btn-verde-sm">Excel</button>
+        </div>
+    </div>
+
+
+    <div class="table-card">
+        <table id="tabla-registros">
+            <thead>
+                <tr class="encabezado">
+                    <th>
+                        ID
+                        <input type="text" data-col="0" placeholder="F ID">
+                    </th>
+                    <th>
+                        FECHA EVENTO
+                        <input type="date" data-col="1">
+                    </th>
+                    <th>
+                        MÓVIL
+                        <input type="text" data-col="2" placeholder="FILTRAR MÓVIL">
+                    </th>
+                    <th>
+                        CÓDIGO
+                        <input type="text" data-col="3" placeholder="FILTRAR CÓDIGO">
+                    </th>
+                    <th>
+                        NOMBRE
+                        <input type="text" data-col="4" placeholder="FILTRAR NOMBRE">
+                    </th>
+                    <th>
+                        DURACIÓN DESDE REGISTRO
+                        <input disabled style="background:transparent; border:none;">
+                    </th>
+                    <th>
+                        DURACIÓN DESDE EVENTO
+                        <input disabled style="background:transparent; border:none;">
+                    </th>
+                                        <th>
+                        OPER.
+                        <input disabled style="background:transparent; border:none;">
+                    </th>
+                    <th>
+                        MTTO
+                        <input disabled style="background:transparent; border:none;">
+                    </th>
+                    <th>
+                        S. VIAL
+                        <input disabled style="background:transparent; border:none;">
+                    </th>
+                    <th>
+                        ADJUNTOS
+                        <input disabled style="background:transparent; border:none;">
+                    </th>
+                </tr>
+            </thead>
+
+        <tbody id="tablaRegistros"></tbody>
+        </table>
+    </div>
+
+
+    <!-- Modal de Adjuntos -->
+    <div id="modalAdjuntos" class="modal">
+        <div class="modal-content" style="max-width: 80%;">
+            <span class="close" onclick="cerrarModalAdjuntos()">&times;</span>
+
+            <h3 style="text-align:center;">📝 INFORMACIÓN DEL EVENTO <span id="modal_laboral1"></span></h3>
+            <div class="tabla-estilo">
+                <table id="infoEvento">
+                    <thead>
+                        <tr>
+                        </tr>
+                    </thead>
+
+                    <tbody id="infoEventoBody"></tbody>
+                </table>
+            </div>
+
+                    <!-- MAPA -->
+            <h3 style="text-align:center;">🗺️ UBICACIÓN DEL EVENTO</h3>
+            <div id="map"></div>
+
+            <h3 style="text-align:center;">📋 INFORMACIÓN DE CONTROL OPERACIONAL</h3>
+            <div class="tabla-estilo">
+                <table id="info_oper">
+                    <thead>
+                        <tr>
+                        </tr>
+                    </thead>
+
+                    <tbody id="infoEventooper"></tbody>
+                </table>
+            </div>            
+
+            <h3 style="text-align:center;">👨‍🔧 INFORMACIÓN DE MANTENIMIENTO</h3>
+            <div class="tabla-estilo">
+                <table id="info_mtto">
+                    <thead>
+                        <tr>
+                        </tr>
+                    </thead>
+
+                    <tbody id="infoEventomtto"></tbody>
+                </table>
+            </div>
+
+            <h3 style="text-align:center;">👮‍♂️ INFORMACIÓN DE SEGURIDAD VÍAL</h3>
+            <div class="tabla-estilo">
+                <table id="info_svial">
+                    <thead>
+                        <tr>
+                        </tr>
+                    </thead>
+
+                    <tbody id="infoEventosvial"></tbody>
+                </table>
+            </div>
+
+            <h3 style="text-align:center;">⚖️ INFORMACIÓN DE RELACIONES LABORALES</h3>
+            <div class="tabla-estilo">
+                <table id="info_laboral">
+                    <thead>
+                        <tr>
+                        </tr>
+                    </thead>
+
+                    <tbody id="infoEventolaboral"></tbody>
+                </table>
+            </div>
+            
+            <h3 style="text-align:center;">🔄 CORRECCIONES</h3>
+            <div class="tabla-estilo">
+                <table id="info_correcciones">
+                    <thead>
+                        <tr>
+                        </tr>
+                    </thead>
+
+                    <tbody id="infoEventocorrecciones"></tbody>
+                </table>
+            </div>  
+
+            <h3 style="text-align:center;">📎 ARCHIVOS ADJUNTOS</h3>
+            
+            <!-- Galería -->
+            <div id="galeriaAdjuntos" class="galeria"></div>
+        </div>
+    </div>
+
+    <!-- Lightbox para imágenes -->
+    <div id="lightbox" class="lightbox">
+        <span class="close" onclick="cerrarLightbox()">&times;</span>
+        <img id="lightbox-img" src="" alt="Vista ampliada">
+    </div>
+
+
+
+
+
+{% endblock %}
+
+
+{% block extra_js %}
+        <!-- JSON de registros -->
+    <script id="registros-json" type="application/json">
+    {{ registros|tojson | safe }}
+    </script>
+
+    <!-- Leaflet JS -->
+    <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+    </script>
+
+    <script src="{{ url_for('static', filename='Script/Mult_formularios.js') }}"></script>
+    <script src="{{ url_for('static', filename='Script/Script_historico_danos.js') }}"></script>
+
+{% endblock %}
+   

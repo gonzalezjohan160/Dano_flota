@@ -1,0 +1,44 @@
+{% extends "Interfaz.html" %}
+
+{% block extra_css %}
+
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='Style/Style_usuario.css') }}">
+
+{% endblock %}
+
+
+
+{% block content %}
+
+<div class="container-modulo">
+    
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="flashes">
+      {% for category, message in messages %}
+        {# Creamos una clase dinámica según la categoría (error o success) #}
+        <div class="alert alert-{{ category }}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<h2>Crear Usuario</h2>
+<form method="POST" class="form-rol">
+    <input type="text" name="Nombre" placeholder="Nombre" required>
+    <input type="int" name="IDusuario" placeholder="ID" required>
+    <input type="text" name="username" placeholder="Usuario" required>
+    <input type="password" name="password" placeholder="Contraseña" required>
+    <select name="UF"  required>
+        <option value="" disabled selected hidden>UF</option>
+        <option value="10">10</option>
+        <option value="16">16</option>
+        <option value="TRANSVERSAL">Tranversal</option>
+    </select>
+    <input type="text" name="Email" placeholder="correo" required>
+    <button type="submit">Crear Usuario</button>
+</form>
+{% endblock %}

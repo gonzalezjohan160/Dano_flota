@@ -1,0 +1,99 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    
+    /* Configuración técnica del fondo */
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+}
+
+.login-container {
+    background-color: rgba(255, 255, 255, 0.92); /* Un blanco casi sólido para profesionalismo */
+    padding: 40px;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    width: 360px;
+    backdrop-filter: blur(8px); /* Efecto sutil de cristal */
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Mejora los inputs para que se vean más "Enterprise" */
+.login-container input {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 18px;
+    border: 1px solid #cbd5e0;
+    border-radius: 5px;
+    box-sizing: border-box;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.login-container .link {
+    display: block;
+    text-align: center;
+    color: #30bf1a;
+    margin-top: 10px;
+    text-decoration: none;
+}
+
+.login-container input:focus {
+    outline: none;
+    border-color: #0056b3;
+    box-shadow: 0 0 0 3px rgba(0, 86, 179, 0.1);
+}
+
+.login-container button {
+    width: 100%;
+    padding: 13px;
+    background-color: #0056b3;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-weight: 600;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.login-footer {
+    text-align: center;
+    margin-top: 15px;
+    font-size: 0.9em;
+    color: #666;
+}
+
+.flash{
+    text-align: center;
+    margin-bottom: 15px;
+    font-size: 1em;
+    color: #df1a1a;
+}
+
+/* Contenedor del logo para asegurar el centrado */
+.logo-wrapper {
+    text-align: center;
+    margin-bottom: 20px; /* Espacio entre el logo y el título */
+}
+
+.login-logo {
+    max-width: 150px;    /* Ajusta el ancho según el tamaño de tu logo */
+    height: auto;        /* Mantiene la proporción */
+    display: inline-block;
+}
+
+/* Opcional: Si quieres que el título h2 esté más cerca del logo */
+.login-container h2 {
+    text-align: center;
+    margin-bottom: 25px;
+    margin-top: 0;       /* Quitamos margen superior para que pegue al logo */
+    color: #333;
+    font-weight: 600;
+}

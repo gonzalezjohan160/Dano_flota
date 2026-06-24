@@ -1,0 +1,237 @@
+{% extends "Interfaz.html" %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='Style/Style_captur.css') }}">
+
+{% endblock %}
+
+
+{% block content %}
+<div class="contenedor-form">
+
+    <form  class="form-capturador" id="miFormulario" action="/submit" method="POST" enctype="multipart/form-data">
+        <h2>Registro de daño a flota</h2>
+
+        <div class="caja">
+            <label for="evidencia"><b>INGRESE LA FECHA DEL EVENTO:</b></label><br>
+            <input type="date" id="Fecha" name="Fecha" required>
+        </div>
+
+
+        <!-- Unidad Funcional y Móvil -->
+        <select name="UF" id="UF_input" required>
+            <option value="" disabled selected hidden>SELECCIONE LA UNIDAD FUNCIONAL</option>
+            <option value="10">10</option>
+            <option value="16">16</option>
+        </select>
+
+        <input type="text" name="Movil" id="Movil_input" placeholder="INGRESE EL ID MÓVIL" required autocomplete="off">
+
+        <div style="text-align:center; margin:20px 0;">
+            <img src="/Static/Images/Tabla_codigos.JPG"
+                alt="Tabla de códigos"
+                style="max-width: 100%; height: 100px; border-radius:2px;">
+        </div>
+
+        <!-- Código y Nombre -->
+        <input type="number" id="Codigo_input" name="Codigo" placeholder="INGRESE EL CÓDIGO" required
+            autocomplete="off"><br>
+        <input type="text" id="Nombre_input" name="Nombre" placeholder="INGRESE EL NOMBRE DEL RESPONSABLE" required
+            autocomplete="off"><br>
+
+        <!-- Área -->
+        <input type="text" id="Area_input" name="Area" placeholder="ÁREA" required readonly><br>
+
+        <!-- Ruta -->
+        <select name="Ruta" id="ruta_input" required>
+            <option value="" disabled selected hidden>SELECCIONE LA RUTA</option>
+        </select>
+
+        <!-- Tipología -->
+        <input type="text" id="Tipologia_input" name="Tipologia" placeholder="SELECCIONE LA TIPOLOGÍA" required
+            readonly><br>
+
+        <!-- Patio -->
+        <select name="Patio" id="Patio_input">
+            <option value="" disabled selected hidden>SELECCIONE SI EL EVENTO FUE EN PATIO</option>
+            <option value="Bilbao">BILBAO</option>
+            <option value="Gaitana">GAITANA</option>
+            <option value="san_Andres">SAN ANDRÉS</option>
+            <option value="san_Bernardino">SAN BERNARDINO</option>
+            <option value="Corpas">CORPAS</option>
+            <option value="Diana_Turbay">DIANA TURBAY</option>
+        </select>
+
+        <!-- Dirección -->
+        <div style="position: relative;">
+            <input type="text" id="direccion" name="Direccion" placeholder="INGRESE LA DIRECCIÓN" required
+                autocomplete="off">
+            <div id="sugerencias"></div>
+        </div>
+
+        <!-- Coordenadas ocultas -->
+        <input type="hidden" id="latitud" name="Latitud">
+        <input type="hidden" id="longitud" name="Longitud">
+
+        <!-- Mapa -->
+        <div id="map"></div><br>
+
+        <!-- Otros campos -->
+        <input type="text" name="Version_libre" placeholder="Versión libre" required autocomplete="off"><br>
+
+        <select name="Zona_dano" id="Zona_dano_input" required>
+            <option value="" disabled selected hidden>SELECCIONE LA ZONA AFECTADA</option>
+            <option value="LATERAL IZQUIERDO">LATERAL IZQUIERDO</option>
+            <option value="LATERAL DERECHO">LATERAL DERECHO</option>
+            <option value="FRONTAL">FRONTAL</option>
+            <option value="POSTERIOR">POSTERIOR</option>
+            <option value="TECHO">TECHO</option>
+            <option value="ESPEJOS">ESPEJOS</option>
+            <option value="PUERTAS">PUERTAS</option>
+            <option value="VIDRIOS">VIDRIOS</option>
+            <option value="LLANTAS">LLANTAS</option>
+            <option value="ITS">ITS</option>
+            <option value="SIRCI">SIRCI</option>
+            <option value="CARROCERÍA INTERNA">CARROCERÍA INTERNA</option>
+            <option value="TREN MOTRIZ">TREN MOTRIZ</option>
+            <option value="CHASIS">CHASIS</option>
+        </select><br>
+
+        <input type="text" id="parte_afectada_input" name="Parte_afectada" placeholder="INGRESE LA PARTE AFECTADA"
+            required autocomplete="off"><br>
+
+        <select name="Dano_ocasionado_por" id="Dano_ocasionado_por_input" required>
+            <option value="" disabled selected hidden>SELECCIONE LA CAUSA DEL DAÑO</option>
+            <option value="CONDUCTA OPERACIONAL">CONDUCTA OPERACIONAL</option>
+            <option value="INFRAESTRUCTURA PATIO">INFRAESTRUCTURA PATIO</option>
+            <option value="INFRAESTRUCTURA VIAL">INFRAESTRUCTURA VIAL</option>
+            <option value="VANDALISMO">VANDALISMO</option>
+            <option value="MECÁNICO">MECÁNICO</option>
+            <option value="SINIESTRO VIAL">SINIESTRO VIAL</option>
+            <option value="ALISTAMIENTO">ALISTAMIENTO</option>
+        </select><br>
+
+        <input type="text" name="Inspector" placeholder="Inspector" value="{{ session.get('usuario', 'EM00084') }}" readonly required><br>
+
+        <select name="Centro_de_operaciones" id="Centro_de_operaciones_input" required>
+            <option value="" disabled selected hidden>SELECCIONE EL CENTRO DE OPERACIÓNES</option>
+            <option value="GAITANA">GAITANA</option>
+            <option value="SAN ÁNDRES">SAN ÁNDRES</option>
+            <option value="BILBAO">BILBAO</option>
+            <option value="SAN BERNARDINO">SAN BERNARDINO</option>
+        </select><br>
+
+        <!-- Evidencias -->
+        <label for="evidencia"><b>SUBA LAS EVIDENCIAS:</b></label><br>
+        <input type="file" id="evidencia" name="Evidencia" accept="image/*,video/*" multiple><br><br>
+        <div id="lista_adjuntos"></div>
+
+        <!-- Captura de fotos -->
+        <h3>📸 Tomar Fotos</h3>
+        <br>
+        <div class="botones-video">
+        <button type="button" id="btnTomarFoto">📷 Tomar Foto</button>
+        </div>
+        
+        <!-- Captura de video -->
+        <h3>🎥 Grabar Video</h3>
+        <div class="botones-video">
+            <button type="button" id="btnStartVideo">🔴 Iniciar Grabación</button>
+            <button type="button" id="btnStopVideo" disabled>⏹ Detener</button>       
+        </div><br> 
+        <!-- indicador de inicio de grabación -->
+        <div id="camara_container" style="position:relative; width:100%; display:flex;">
+            <div id="camara_recordDot"></div>
+            <div id="camara_timer">00:00</div>
+            <video id="camara" autoplay playsinline style="width:100%; border-radius:8px;"></video>
+        </div>
+
+        <!-- Visualizador de fotos -->
+        <div id="preview_fotos_container">
+            <div id="preview_fotos">
+                <button type="button" id="btnPrevFoto" class="navFoto">❮</button>
+                <img id="fotoActual" src="" style="display:none;">
+                <button type="button" id="btnNextFoto" class="navFoto">❯</button>
+                <button id="btnDeleteFoto" class="btnDeleteFoto" style="display:none;">❌</button>
+            </div>
+        </div>
+        
+        <br><br><br><br><br><br><br><br>
+
+        <div id="preview_videos_container">
+            <div id="preview_videos">
+                <button type="button" id="btnPrevVideo" class="navVideo">❮</button>
+                <video id="videoActual" controls style="display:none;"></video>
+                <button type="button" id="btnNextVideo" class="navVideo">❯</button>
+                <button id="btnDeleteVideo" class="btnDeleteVideo" style="display:none;">❌</button>
+            </div>
+        </div><br><br> <br><br> <br><br> <br><br>
+
+        <!-- Captura de audio -->
+        <h3>🎤 Grabar Audio</h3>
+        <div class="botones-video">
+        <button type="button" id="btnStartAudio">🎙 Iniciar Audio</button>
+        <button type="button" id="btnStopAudio" disabled>⏹ Detener</button>
+        </div>
+        <div id="audios_preview"></div><br>
+        <div id="lista_audios"></div>
+        <div id="audio_timer" style="
+            display:none;
+            font-size: 20px;
+            font-weight: bold;
+            margin-top: 5px;
+            color: red;
+        ">
+            ● 00:00
+        </div>
+        <div class="botones-video">
+        <button type="submit">Enviar</button>
+        </div>
+        <p id="mensaje"></p>
+    
+        <div id="debug_envio" style="
+            background:#f7f7f7;
+            padding:15px;
+            margin-top:20px;
+            border-left:5px solid #007bff;
+            font-family: monospace;
+            display:none;
+        ">
+            <h3>📦 Resumen del envío</h3>
+            <pre id="debug_text"></pre>
+        </div>
+
+        <!-- ============================================================
+            MODAL ADVERTENCIA DE REGISTRO DUPLICADO
+        ============================================================ -->
+        <div id="modalDuplicado" class="modal-dup">
+            <div class="modal-dup-content">
+                
+                <h2>⚠ Registro Duplicado</h2>
+
+                <p>
+                    Ya existe un registro con la misma
+                    <b>Fecha del Evento</b>, <b>Móvil</b> y <b>Código de Conductor</b>.
+                    <br><br>
+                    ¿Desea continuar con el registro de todas formas?
+                </p>
+
+                <div class="modal-dup-buttons">
+                    <button id="btnModalCancelar" class="modal-btn cancel">Cancelar</button>
+                    <button id="btnModalContinuar" class="modal-btn continue">Continuar</button>
+                </div>
+            </div>
+        </div>
+
+    </form>
+</div>    
+{% endblock %}
+
+{% block extra_js %}
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script src="{{ url_for('static', filename='Script/Script_captur.js') }}"></script>
+
+{% endblock %}

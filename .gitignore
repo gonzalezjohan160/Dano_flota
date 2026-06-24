@@ -1,0 +1,21 @@
+# Entorno virtual
+venv/
+
+# Archivos cargados por usuarios
+Files/
+uploads/
+
+# Cache Python
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
+
+# Variables de entorno
+.env
+
+# Archivos temporales de SQL Server
+.vs/
+*.suo
+*.user

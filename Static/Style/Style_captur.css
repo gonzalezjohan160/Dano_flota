@@ -1,0 +1,446 @@
+
+.contenedor-form {
+    display: flex;
+    justify-content: center;
+    padding-top: 50px;
+    width: 100%;
+}
+
+.form-capturador {
+    background-color: rgba(255, 255, 255, 0.85);
+    padding: 30px 40px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    width: 100%;
+}
+
+
+
+input, select {
+    margin-bottom: 10px;
+    width: 100%;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+    background-color: #fcfcfc !important; /* fondo uniforme */
+    color: #918d8d !important; /* color de letra uniforme */
+    box-sizing: border-box;
+    appearance: none; 
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
+/* Mantener flecha personalizada del select */
+select {
+    background-image: url('data:image/svg+xml;utf8,<svg fill="%23333" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 16px;
+}
+
+input[type="text"] {
+    text-transform: uppercase;
+}
+
+button {
+    padding: 10px 20px;
+    border-radius: 5px;
+    border: none;
+    background-color: #007BFF;
+    color: white;
+    cursor: pointer;
+    font-size: 15px;
+}
+
+.botones-video {
+    display: flex;            /* pone los botones en fila */
+    justify-content: center;  /* centra todo el grupo horizontalmente */
+    gap: 10px;                /* espacio entre los botones */
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+#map {
+    height: 300px;
+    width: 100%;
+    margin-top: 10px;
+    border-radius: 8px;
+}
+
+#mensaje {
+    margin-top: 15px;
+    font-weight: bold;
+}
+
+#sugerencias div {
+    background: #fff;
+    padding: 5px;
+    cursor: pointer;
+    border: 1px solid #ccc;
+}
+
+#sugerencias div:hover {
+    background-color: #f0f0f0;
+}
+
+/* --- PREVIEW DE FOTOS --- */
+#preview_fotos_container {
+    width: 100%;
+    height: 260px;            /* 🔥 Antes 180px → ahora más vertical */
+    margin-top: 10px;
+}
+
+/* Contenedor principal (más alto y vertical) */
+#preview_fotos {
+    position: relative;
+    width: 100%;
+    height: 400px;            /* 🔥 Antes 150px → ahora más grande */
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fafafa;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;         /* 🔥 Para que la imagen no se salga */
+}
+
+/* Imagen ajustada completamente al contenedor */
+#fotoActual {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;      /* 🔥 La imagen se ajusta sin deformarse */
+    border-radius: 8px;
+}
+
+/* --- BOTONES FLOTANTES LATERALES --- */
+.navFoto {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.15);     /* Suave transparencia elegante */
+    backdrop-filter: blur(4px);          /* Efecto vidrio */
+    color: white;
+    border: none;
+    font-size: 45px;                     /* Tamaño perfecto para ❮ ❯ */
+    cursor: pointer;
+    border-radius: 12px;                 /* Bordes suaves */
+    height: 70px;
+    width: 45px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    line-height: 0;
+    transition: 0.25s;
+}
+
+/* Hover con efecto iluminado */
+.navFoto:hover {
+    background: rgba(0, 0, 0, 0.35);
+}
+/* Botón izquierda */
+#btnPrevFoto {
+    left: 10px;
+}
+
+/* Botón derecha */
+#btnNextFoto {
+    right: 10px;
+}
+
+/* --- BOTÓN ELIMINAR --- */
+.btnDeleteFoto {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(255, 0, 0, 0.20);
+    backdrop-filter: blur(4px);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    width: 45px;
+    height: 45px;
+    
+    font-size: 26px;
+    line-height: 0;              
+    padding: 0;                  
+    
+    display: flex;               
+    justify-content: center;
+    align-items: center;
+
+    cursor: pointer;
+    transition: 0.25s;
+}
+
+.btnDeleteFoto:hover {
+    background: rgba(255, 0, 0, 0.40);
+}
+
+#camara_container {
+    position: relative !important;
+    width: 100%;
+    height: auto;
+}
+
+#camara_recordDot {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 14px;
+    height: 14px;
+    background: rgba(255, 0, 0, 0.9);
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgba(255, 0, 0, 0.8);
+    animation: blinkDot 1s infinite;
+    z-index: 9999;
+    display: none;
+}
+
+@keyframes blinkDot {
+    0% { opacity: 1; }
+    50% { opacity: .25; }
+    100% { opacity: 1; }
+}
+
+#camara_timer {
+    position: absolute;
+    top: 8px;
+    left: 30px;
+    color: white;
+    font-size: 17px;
+    font-weight: bold;
+    text-shadow: 0 0 4px black;
+    display: none;        /* Oculto inicialmente */
+    z-index: 9999;
+}
+
+#preview_videos_container {
+    width: 100%;
+    height: 260px;            /* Igual al de fotos */
+    margin-top: 10px;
+}
+
+/* Contenedor principal alto y vertical */
+#preview_videos {
+    position: relative;
+    width: 100%;
+    height: 400px;            /* Igual al de fotos */
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fafafa;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+/* Video ajustado al contenedor */
+#videoActual {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;      /* No se deforma */
+    border-radius: 8px;
+    background: black;        /* Para evitar cuadros blancos */
+}
+
+/* BOTONES FLOTANTES LATERALES (misma clase que fotos) */
+.navVideo {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(4px);
+    color: white;
+    border: none;
+    font-size: 45px;
+    cursor: pointer;
+    border-radius: 12px;
+    height: 70px;
+    width: 45px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    line-height: 0;
+    transition: 0.25s;
+}
+
+.navVideo:hover {
+    background: rgba(0, 0, 0, 0.35);
+}
+
+/* Izquierda */
+#btnPrevVideo {
+    left: 10px;
+}
+
+/* Derecha */
+#btnNextVideo {
+    right: 10px;
+}
+
+/* BOTÓN ELIMINAR VIDEO (igual al de fotos) */
+.btnDeleteVideo {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(255, 0, 0, 0.20);
+    backdrop-filter: blur(4px);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    width: 45px;
+    height: 45px;
+    font-size: 26px;
+    line-height: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: 0.25s;
+}
+
+.btnDeleteVideo:hover {
+    background: rgba(255, 0, 0, 0.40);
+}
+
+.adjunto_item {
+    display: flex;
+    align-items: center;
+    background: #fafafa;
+    border: 1px solid #ddd;
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin-top: 6px;
+    gap: 10px;
+}
+
+.adjunto_nombre {
+    flex: 1;
+    font-size: 14px;
+    word-break: break-all;
+}
+
+.btnAdjuntoDelete {
+    background: rgba(255, 0, 0, 0.20);
+    backdrop-filter: blur(4px);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    width: 45px;
+    height: 35px;
+    font-size: 18px;
+    cursor: pointer;
+    transition: .25s;
+    line-height: 1;   
+    padding: 0;
+}
+
+.btnAdjuntoDelete:hover {
+    background: rgba(255, 0, 0, 0.40);
+}
+/* Lista de audios */
+.audio_item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f1f1f1;
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin-bottom: 6px;
+}
+
+/* Botón eliminar con X centrada */
+.audio_delete_btn {
+    background: #ff4a4a;
+    border: none;
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 14px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+}
+
+.audio_delete_btn:hover {
+    background: #d83b3b;
+}
+
+/* Fondo oscuro */
+.modal-dup {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.55);
+    justify-content: center;
+    align-items: center;
+}
+
+/* Caja blanca */
+.modal-dup-content {
+    background: #fff;
+    padding: 25px;
+    width: 90%;
+    max-width: 420px;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.4);
+    text-align: center;
+    animation: fadeIn 0.25s ease-in;
+}
+
+.modal-dup-content h2 {
+    color: #c0392b;
+    margin-top: 0;
+}
+
+.modal-dup-buttons {
+    margin-top: 20px;
+    display: flex;
+    justify-content: space-between;
+}
+
+h3 {
+    text-align: center;
+}
+
+h2 {
+    text-align: center;
+}
+
+.modal-btn {
+    padding: 10px 18px;
+    border-radius: 5px;
+    font-size: 16px;
+    cursor: pointer;
+    border: none;
+}
+
+.modal-btn.cancel {
+    background: #7f8c8d;
+    color: white;
+}
+
+.modal-btn.continue {
+    background: #c0392b;
+    color: white;
+}
+
+.modal-btn:hover {
+    opacity: 0.8;
+}
+
+/* Animación */
+@keyframes fadeIn {
+    from { transform: scale(0.8); opacity: 0; }
+    to   { transform: scale(1);   opacity: 1; }
+}
