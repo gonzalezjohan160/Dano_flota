@@ -7,6 +7,7 @@ import pyodbc
 import requests
 import traceback
 from backend_security import login_required, requiere_permiso
+from backend_email import enviar_correo
 
 
 Capturador = Blueprint(
@@ -225,9 +226,45 @@ def submit_form():
                     INSERT INTO table_damage_files (DamageId, FileName, FilePath)
                     VALUES (?, ?, ?)
                 """, (damage_id, final_name, path))
-
+                
         conn.commit()
+        
+        mensaje = f"""
+                    <h2>Nuevo Evento Registrado</h2>
+                    
+                    <p>Se ha registrado un nuevo daño a Flota en el sistema.</p>
+
+                    <p><b>ID Caso:</b> {damage_id}</p>
+
+                    <p>Por favor ingresar al aplicativo para revisar la información.</p>
+
+                <hr>
+
+                """
+        
+        # consultar correos
+        cursor.execute(
+        """
+            SELECT Email
+            FROM Table_usuarios
+            WHERE Activo = 1
+            AND Email IS NOT NULL
+            AND Email <> ''
+        """)
+            
+        destinatarios = [row[0] for row in cursor.fetchall()]
+        
+        print("Destinatarios:", destinatarios)
+        
+        try:
+            if destinatarios:
+                enviar_correo(destinatarios, "Nuevo Evento Registrado", mensaje)
+        except Exception as email_error:
+            print(f"Error al enviar correo: {email_error}")
+        
         return jsonify({"mensaje": "Registro exitoso", "id": damage_id})
+    
+    
 
     except Exception as e:
         if conn: conn.rollback()
