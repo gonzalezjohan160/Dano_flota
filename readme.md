@@ -1,6 +1,6 @@
 # Proyecto Emasivo Daño a flota 
 
-Un proyecto para gestijonar el daño a flota en Emasivo By Cristian el mejor
+Un proyecto para gestionar el daño a flota en Emasivo By Cristian
 
 # To Run project Now
 
