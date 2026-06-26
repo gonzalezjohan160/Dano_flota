@@ -117,6 +117,8 @@ patioSelect.addEventListener('change', () => {
 let timeout;
 direccionInput.addEventListener('input', () => {
     clearTimeout(timeout);
+    // desmarcar patio si se escribe manual
+    if(patioSelect.value !== '') {patioSelect.selectedIndex = 0;} 
     sugerencias.innerHTML = '';
     const query = direccionInput.value.trim();
     if (query.length < 3) return;
@@ -130,6 +132,8 @@ direccionInput.addEventListener('input', () => {
                 div.textContent = item.nombre;
                 div.onclick = () => {
                     direccionInput.value = item.nombre;
+                    // desmarcar seleccion de patio
+                    patioSelect.selectedIndex = 0;
                     latitud.value = item.lat;
                     longitud.value = item.lon;
                     sugerencias.innerHTML = '';
@@ -146,6 +150,8 @@ direccionInput.addEventListener('input', () => {
 // Click manual en mapa
 map.on('click', e => {
     const { lat, lng } = e.latlng;
+    // desmarcar patio
+    patioSelect.selectedIndex = 0; 
     if (marker) map.removeLayer(marker);
     marker = L.marker([lat, lng]).addTo(map);
     latitud.value = lat;
