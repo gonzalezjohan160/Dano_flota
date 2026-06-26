@@ -126,11 +126,8 @@ def submit_form():
         # --------------------------------------
         # GUARDADO DE ARCHIVOS
         # --------------------------------------
-        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        BASE_FOLDER = os.path.join(BASE_DIR, 'Files', 'Files_reparaciones')
-        os.makedirs(BASE_FOLDER, exist_ok=True)
-
-        repair_folder = os.path.join(BASE_FOLDER, str(repair_id))
+      
+        repair_folder = os.path.join(FILES_DIR, str(repair_id))
         os.makedirs(repair_folder, exist_ok=True)
 
         def allowed_file(filename):

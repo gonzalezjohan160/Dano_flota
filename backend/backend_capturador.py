@@ -19,6 +19,7 @@ Capturador = Blueprint(
 
 
 FILES_DIR = r'C:\media\emapp\dano_flota\Files\Files_ppal'  # carpeta para guardar archivos
+print("RUTA FILES_DIR:", FILES_DIR)
 os.makedirs(FILES_DIR, exist_ok=True)
 
 
@@ -195,8 +196,7 @@ def submit_form():
 
         # --- 5. GUARDADO FÍSICO DE ARCHIVOS ---
         # Definir rutas
-        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        damage_folder = os.path.join(BASE_DIR, 'Files', 'Files_ppal', str(damage_id))
+        damage_folder = os.path.join(FILES_DIR, str(damage_id))
         os.makedirs(damage_folder, exist_ok=True)
 
         def allowed_file(filename):
