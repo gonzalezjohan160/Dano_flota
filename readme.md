@@ -6,8 +6,8 @@ Un proyecto para gestionar el daño a flota en Emasivo By Cristian
 
 First run pip install -r requirements.txt
 
-1. activar el entorno
-.\venv\Scripts\Activate.ps1 // powershell
+1..\venv\Scripts\Activate activar el entorno
+.ps1 // powershell
 .\venv\Scripts\Activate // Win CMD
 2. cd backend folder
 3. python backend_interfaz.py

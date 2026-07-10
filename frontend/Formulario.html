@@ -1,8 +1,8 @@
 {% extends "Interfaz.html" %}
 
 {% block extra_css %}
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='Style/Style_captur.css') }}">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="{{ url_for('static', filename='Style/Style_captur.css') }}">
 
 {% endblock %}
 
@@ -10,7 +10,7 @@
 {% block content %}
 <div class="contenedor-form">
 
-    <form  class="form-capturador" id="miFormulario" action="/submit" method="POST" enctype="multipart/form-data">
+    <form class="form-capturador" id="miFormulario" action="/submit" method="POST" enctype="multipart/form-data">
         <h2>Registro de daño a flota</h2>
 
         <div class="caja">
@@ -29,8 +29,7 @@
         <input type="text" name="Movil" id="Movil_input" placeholder="INGRESE EL ID MÓVIL" required autocomplete="off">
 
         <div style="text-align:center; margin:20px 0;">
-            <img src="/Static/Images/Tabla_codigos.JPG"
-                alt="Tabla de códigos"
+            <img src="/Static/Images/Tabla_codigos.JPG" alt="Tabla de códigos"
                 style="max-width: 100%; height: 100px; border-radius:2px;">
         </div>
 
@@ -112,7 +111,8 @@
             <option value="ALISTAMIENTO">ALISTAMIENTO</option>
         </select><br>
 
-        <input type="text" name="Inspector" placeholder="Inspector" value="{{ session.get('usuario', 'EM00084') }}" readonly required><br>
+        <input type="text" name="Inspector" placeholder="Inspector" value="{{ session.get('usuario', 'EM00084') }}"
+            readonly required><br>
 
         <select name="Centro_de_operaciones" id="Centro_de_operaciones_input" required>
             <option value="" disabled selected hidden>SELECCIONE EL CENTRO DE OPERACIÓNES</option>
@@ -124,22 +124,22 @@
 
         <!-- Evidencias -->
         <label for="evidencia"><b>SUBA LAS EVIDENCIAS:</b></label><br>
-        <input type="file" id="evidencia" name="Evidencia" accept="image/*,video/*" multiple><br><br>
+        <input type="file" id="evidencia" name="Evidencia" accept="image/*,video/*,audio/*,.pdf" multiple><br><br>
         <div id="lista_adjuntos"></div>
 
         <!-- Captura de fotos -->
         <h3>📸 Tomar Fotos</h3>
         <br>
         <div class="botones-video">
-        <button type="button" id="btnTomarFoto">📷 Tomar Foto</button>
+            <button type="button" id="btnTomarFoto">📷 Tomar Foto</button>
         </div>
-        
+
         <!-- Captura de video -->
         <h3>🎥 Grabar Video</h3>
         <div class="botones-video">
             <button type="button" id="btnStartVideo">🔴 Iniciar Grabación</button>
-            <button type="button" id="btnStopVideo" disabled>⏹ Detener</button>       
-        </div><br> 
+            <button type="button" id="btnStopVideo" disabled>⏹ Detener</button>
+        </div><br>
         <!-- indicador de inicio de grabación -->
         <div id="camara_container" style="position:relative; width:100%; display:flex;">
             <div id="camara_recordDot"></div>
@@ -156,7 +156,7 @@
                 <button id="btnDeleteFoto" class="btnDeleteFoto" style="display:none;">❌</button>
             </div>
         </div>
-        
+
         <br><br><br><br><br><br><br><br>
 
         <div id="preview_videos_container">
@@ -171,8 +171,8 @@
         <!-- Captura de audio -->
         <h3>🎤 Grabar Audio</h3>
         <div class="botones-video">
-        <button type="button" id="btnStartAudio">🎙 Iniciar Audio</button>
-        <button type="button" id="btnStopAudio" disabled>⏹ Detener</button>
+            <button type="button" id="btnStartAudio">🎙 Iniciar Audio</button>
+            <button type="button" id="btnStopAudio" disabled>⏹ Detener</button>
         </div>
         <div id="audios_preview"></div><br>
         <div id="lista_audios"></div>
@@ -186,10 +186,10 @@
             ● 00:00
         </div>
         <div class="botones-video">
-        <button type="submit">Enviar</button>
+            <button type="submit">Enviar</button>
         </div>
         <p id="mensaje"></p>
-    
+
         <div id="debug_envio" style="
             background:#f7f7f7;
             padding:15px;
@@ -207,7 +207,7 @@
         ============================================================ -->
         <div id="modalDuplicado" class="modal-dup">
             <div class="modal-dup-content">
-                
+
                 <h2>⚠ Registro Duplicado</h2>
 
                 <p>
@@ -225,13 +225,13 @@
         </div>
 
     </form>
-</div>    
+</div>
 {% endblock %}
 
 {% block extra_js %}
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <script src="{{ url_for('static', filename='Script/Script_captur.js') }}"></script>
+<script src="{{ url_for('static', filename='Script/Script_captur.js') }}"></script>
 
 {% endblock %}
