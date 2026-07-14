@@ -3,10 +3,7 @@ import os
 from mimetypes import guess_type
 from config import connect
 from datetime import datetime
-from backend_oper import Modulo_oper 
-from backend_laboral import Modulo_laboral 
-from backend_mtto import Modulo_mtto
-from backend_svial import Modulo_svial
+from backend_unificado import Modulo_unificado
 from backend_dashboard import Front_dashboard
 from backend_usuarios import Modulo_usuario
 from backend_permisos import Modulo_permisos
@@ -35,17 +32,11 @@ Interfaz.register_blueprint(Profile, url_prefix='/Profile')
 # Registrar Capturador como Blueprint
 Interfaz.register_blueprint(Capturador, url_prefix='/Capturador')
 
-# Registrar Modulo_oper como Blueprint
-Interfaz.register_blueprint(Modulo_oper, url_prefix='/Operaciones')
-
-# Registrar Modulo_laboral como Blueprint
-Interfaz.register_blueprint(Modulo_laboral, url_prefix='/laboral')
-
-# Registrar Modulo_mtto como Blueprint
-Interfaz.register_blueprint(Modulo_mtto, url_prefix='/Mtto')
-
-# Registrar Modulo_Svial como Blueprint
-Interfaz.register_blueprint(Modulo_svial, url_prefix='/Svial')
+# Registrar Modulo_unificado como Blueprint
+# Expone /Operaciones, /Mantenimiento, /SeguridadVial y /RelacionesLaborales
+# (las claves de MODULOS en backend_unificado.py) a través de la ruta
+# genérica "/<modulo>", en vez de un blueprint por módulo.
+Interfaz.register_blueprint(Modulo_unificado, url_prefix='')
 
 # Registrar Dashboard como Blueprint
 Interfaz.register_blueprint(Front_dashboard, url_prefix='/Dashboard')

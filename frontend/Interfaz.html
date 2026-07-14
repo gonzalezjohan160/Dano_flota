@@ -7,7 +7,9 @@
     <!-- 👇 BLOQUE CSS DE LOS MÓDULOS -->
     {% block extra_css %}{% endblock %}
 </head>
-<body data-usuario="{{ session.get('usuario', 'USER') }}">
+<body   data-modulo="{{tipo_modulo}}"
+        data-titulo="{{titulo_modulo}}"
+        data-usuario="{{ session.get('usuario', 'USER') }}">
 
 <header class="topbar">
     <div class="logo">G-FLEETDAMAGE <span>Gmasivo Solutions</span></div>

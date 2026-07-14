@@ -1,0 +1,571 @@
+{% extends "Interfaz.html" %}
+
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='Style/Style_modulos.css') }}">
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+<!--
+    Estilos del nuevo look del modal "Añadir info" de Relaciones Laborales.
+    Todo va bajo #formModal.form-laboral para que NO afecte a los modales
+    de Operaciones/Mtto/Svial, que comparten el mismo HTML pero no llevan
+    esa clase (se activa por JS solo cuando CFG.propia === "laboral").
+-->
+<style>
+    /* Íconos ✓ / ✗ para las columnas ESTADO OPER./MTTO./SVIAL de la tabla */
+    .icono-estado {
+        font-size: 18px;
+        font-weight: 700;
+    }
+    .icono-estado.icono-ok { color: #28a745; }
+    .icono-estado.icono-pendiente { color: #dc3545; }
+
+    #formModal .card-seccion-header { display: none; }
+
+    #formModal.form-laboral .card-seccion {
+        background: #f7f8fa;
+        border-radius: 10px;
+        padding: 18px 20px;
+        margin-bottom: 18px;
+    }
+
+    #formModal.form-laboral .card-cierre {
+        background: #eaf2ff;
+        border-left: 4px solid #2f6fed;
+    }
+
+    #formModal.form-laboral .card-seccion-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 700;
+        color: #2f6fed;
+        margin-bottom: 14px;
+        font-size: 15px;
+    }
+
+    #formModal.form-laboral .form-grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 12px;
+    }
+
+    #formModal.form-laboral .form-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 6px;
+        font-size: 14px;
+    }
+
+    #formModal.form-laboral .form-group input,
+    #formModal.form-laboral .form-group select {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        box-sizing: border-box;
+    }
+
+    #formModal.form-laboral #bloqueCampoPrincipal label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 6px;
+        font-size: 14px;
+    }
+
+    /* Dropdown de selección múltiple con casillas (Caso pendiente
+       por el proceso: Mantenimiento / S.Vial / Operaciones / Completo) */
+    #formModal.form-laboral .multiselect {
+        position: relative;
+    }
+
+    #formModal.form-laboral .multiselect-toggle {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        background: #fff;
+        cursor: pointer;
+        font-size: 14px;
+        text-align: left;
+        color: #333;
+    }
+
+    #formModal.form-laboral .multiselect-flecha {
+        color: #888;
+        margin-left: 8px;
+    }
+
+    #formModal.form-laboral .multiselect-opciones {
+        display: none;
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        background: #fff;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+        z-index: 20;
+        padding: 6px 0;
+        max-height: 180px;
+        overflow-y: auto;
+    }
+
+    #formModal.form-laboral .multiselect-opciones.abierto {
+        display: block;
+    }
+
+    #formModal.form-laboral .multiselect-opcion {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        font-weight: 500;
+        font-size: 14px;
+        cursor: pointer;
+    }
+
+    #formModal.form-laboral .multiselect-opcion:hover {
+        background: #f2f5fb;
+    }
+
+    #formModal.form-laboral .multiselect-opcion input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+    }
+
+    #formModal.form-laboral #lblEvidencia { display: none; }
+
+    /* Toggle NO/SÍ tipo pastilla, en vez del radio button plano */
+    #formModal.form-laboral #bloqueRevision .radio-buttons {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 14px;
+        flex-direction: row-reverse; /* en RRLL se ve NO primero, luego SI */
+    }
+
+    #formModal.form-laboral #bloqueRevision .radio-buttons label {
+        padding: 8px 24px;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        background: #fff;
+        font-weight: 600;
+        cursor: pointer;
+        color: #333;
+    }
+
+    #formModal.form-laboral #bloqueRevision .radio-buttons input[type="radio"] {
+        display: none;
+    }
+
+    #formModal.form-laboral #bloqueRevision .radio-buttons label:has(input:checked) {
+        background: #28a745;
+        color: #fff;
+        border-color: #28a745;
+    }
+
+    /* Toggle NO/SÍ tipo pastilla reutilizable (usado, por ejemplo, en
+       "¿Existe algún daño más asociado al evento?" de Mantenimiento).
+       A diferencia del de arriba, este no depende de la clase
+       .form-laboral, así que sirve para cualquier módulo. */
+    .radio-buttons.pastilla {
+        display: flex;
+        gap: 10px;
+        margin: 6px 0 16px;
+    }
+
+    .radio-buttons.pastilla label {
+        padding: 8px 24px;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        background: #fff;
+        font-weight: 600;
+        cursor: pointer;
+        color: #333;
+    }
+
+    .radio-buttons.pastilla input[type="radio"] {
+        display: none;
+    }
+
+    .radio-buttons.pastilla label:has(input:checked) {
+        background: #28a745;
+        color: #fff;
+        border-color: #28a745;
+    }
+
+    #formModal.form-laboral select:disabled,
+    #formModal.form-laboral input:disabled {
+        background: #eee;
+        color: #888;
+        cursor: not-allowed;
+    }
+
+    /* Barra de paginación estilo Gmail: texto de rango + flechas
+       circulares, alineada a la derecha debajo de la tabla. */
+    .paginacion-tabla {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+        padding: 10px 4px;
+        font-size: 13px;
+        color: #5f6368;
+    }
+
+    .btn-paginacion {
+        width: 28px;
+        height: 28px;
+        border: none;
+        border-radius: 50%;
+        background: transparent;
+        color: #5f6368;
+        font-size: 16px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+
+    .btn-paginacion:hover:not(:disabled) {
+        background: #eee;
+    }
+
+    .btn-paginacion:disabled {
+        color: #ccc;
+        cursor: not-allowed;
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+<h2>{{ titulo_modulo }}</h2>
+
+<script>
+    const MODULO = "{{ modulo }}"
+    const TITULO = "{{ titulo_modulo }}"
+</script>
+
+<!-- Config de permisos/visibilidad de este módulo, generada por el backend -->
+<script id="modulo-config-json" type="application/json">
+    {{ modulo_config|tojson|safe }}
+</script>
+
+
+<div style="text-align:right; margin-bottom:15px;">
+    <label for="filtroUF">Filtrar por UF:</label>
+    <select id="filtroUF" class="btn">
+        <option value="todos">Todos</option>
+        <option value="10">UF 10</option>
+        <option value="16">UF 16</option>
+    </select>
+</div>
+
+<div class="table-card">
+    <table id="tabla-registros">
+        <thead>
+            <tr class="encabezado">
+                <th>
+                    ID
+                    <input type="text" data-col="0" placeholder="F ID">
+                </th>
+                <th>
+                    FECHA EVENTO
+                    <input type="date" data-col="1">
+                </th>
+                <th>
+                    MÓVIL
+                    <input type="text" data-col="2" placeholder="FILTRAR MÓVIL">
+                </th>
+                <th>
+                    CÓDIGO
+                    <input type="text" data-col="3" placeholder="FILTRAR CÓDIGO">
+                </th>
+                <th>
+                    NOMBRE
+                    <input type="text" data-col="4" placeholder="FILTRAR NOMBRE">
+                </th>
+                <th>
+                    DURACIÓN DESDE REGISTRO
+                    <input disabled style="background:transparent; border:none;">
+                </th>
+                <th>
+                    DURACIÓN DESDE EVENTO
+                    <input disabled style="background:transparent; border:none;">
+                </th>
+                <th class="col-estado" data-seccion="oper">
+                    ESTADO OPER.
+                    <input disabled style="background:transparent; border:none;">
+                </th>
+                <th class="col-estado" data-seccion="mtto">
+                    ESTADO MTTO.
+                    <input disabled style="background:transparent; border:none;">
+                </th>
+                <th class="col-estado" data-seccion="svial">
+                    ESTADO SVIAL
+                    <input disabled style="background:transparent; border:none;">
+                </th>
+                <th>
+                    ADJUNTOS
+                    <input disabled style="background:transparent; border:none;">
+                </th>
+                <th>
+                    ACCIONES
+                    <input disabled style="background:transparent; border:none;">
+                </th>
+            </tr>
+        </thead>
+
+        <tbody id="tablaRegistros"></tbody>
+    </table>
+
+    <div id="paginacionTabla" class="paginacion-tabla">
+        <span id="paginacionInfo">0–0 de 0</span>
+        <button id="btnPaginaAnterior" type="button" class="btn-paginacion" title="Página anterior">&#8249;</button>
+        <button id="btnPaginaSiguiente" type="button" class="btn-paginacion" title="Página siguiente">&#8250;</button>
+    </div>
+</div>
+
+<!-- Modal de operaciones (formulario "Añadir info" de la sección propia del módulo) -->
+<div id="miModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="cerrarModal()">&times;</span>
+        <h3>
+            <b>AGREGUE INFORMACIÓN SOBRE EL EVENTO: </b>
+            <span id="modal_registro"></span>
+        </h3>
+
+        <form id="formModal" method="post" onsubmit="return false;">
+
+            <!-- ================= INFORMACIÓN DEL CASO ================= -->
+            <div id="cardInfoCaso" class="card-seccion">
+                <div class="card-seccion-header">📌 Información del caso</div>
+
+                <!-- Campos extra específicos de Relaciones Laborales -->
+                <div id="bloqueCamposLaboral" style="display:none;">
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="fecha_presentacion">Fecha de presentación</label>
+                            <input type="date" id="fecha_presentacion">
+                        </div>
+                        <div class="form-group">
+                            <label for="estado_caso_toggle">Caso pendiente por el proceso</label>
+                            <div id="estado_caso_multiselect" class="multiselect">
+                                <button type="button" id="estado_caso_toggle" class="multiselect-toggle">
+                                    <span id="estado_caso_label">Seleccione estados</span>
+                                    <span class="multiselect-flecha">&#9662;</span>
+                                </button>
+                                <div id="estado_caso_opciones" class="multiselect-opciones">
+                                    <label class="multiselect-opcion">
+                                        <input type="checkbox" value="MANTENIMIENTO"> MANTENIMIENTO
+                                    </label>
+                                    <label class="multiselect-opcion">
+                                        <input type="checkbox" value="SEGURIDAD VIAL"> SEGURIDAD VIAL
+                                    </label>
+                                    <label class="multiselect-opcion">
+                                        <input type="checkbox" value="OPERACIONES"> OPERACIONES
+                                    </label>
+                                    <label class="multiselect-opcion">
+                                        <input type="checkbox" value="COMPLETO"> COMPLETO
+                                    </label>
+                                </div>
+                                <input type="hidden" id="estado_caso" value="">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="bloqueCampoPrincipal">
+                    <label id="lblCampoPrincipal" for="campo_principal"></label>
+                    <textarea id="campo_principal" rows="3" style="width:100%;" required></textarea>
+
+                    <!-- Solo Mantenimiento: el campo principal es un valor
+                         monetario ("Costo del daño"), así que se reemplaza
+                         el textarea de arriba por este input con formato
+                         de miles (igual que "Valor conciliado" en RRLL). -->
+                    <input type="text" id="campo_principal_costo_display" placeholder="Ingrese solo número" inputmode="numeric" style="width:100%; display:none;">
+                </div>
+
+                <!-- Solo Mantenimiento -->
+                <div id="bloqueDanoAdicional" style="display:none;">
+                    <label class="form-label">¿EXISTE ALGÚN DAÑO MÁS ASOCIADO AL EVENTO?</label>
+                    <div class="radio-buttons pastilla">
+                        <label>
+                            <input type="radio" name="DanoAdicional" value="NO" checked>
+                            <span>NO</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="DanoAdicional" value="SI">
+                            <span>SÍ</span>
+                        </label>
+                    </div>
+
+                    <div id="bloqueDanoAdicionalDetalle" style="display:none;">
+                        <label for="dano_adicional_detalle">DESCRIBA EL DAÑO ADICIONAL:</label>
+                        <textarea id="dano_adicional_detalle" rows="3" style="width:100%;"></textarea><br><br>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= CIERRE DEL CASO ================= -->
+            <div id="cardCierre" class="card-seccion card-cierre">
+                <div class="card-seccion-header">🔒 Cierre del caso</div>
+
+                <label id="lblRevision" class="form-label">¿LA INFORMACIÓN CARGADA ES CORRECTA?</label>
+                <div id="bloqueRevision">
+                    <div class="radio-buttons">
+                        <label>
+                            <input type="radio" name="Revinf" value="SI" checked>
+                            <span>SI</span>
+                        </label>
+
+                        <label>
+                            <input type="radio" name="Revinf" value="NO">
+                            <span>NO</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Solo Relaciones Laborales -->
+                <div id="bloqueLaboralCierre" style="display:none;">
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="motivo_cierre">Motivo del cierre</label>
+                            <select id="motivo_cierre" disabled>
+                                <option value="" disabled selected>Seleccione el motivo</option>
+                                <option value="RECOMENDACIÓN DE T.H">RECOMENDACIÓN DE T.H</option>
+                                <option value="LLAMADO DE ATENCIÓN">LLAMADO DE ATENCIÓN</option>
+                                <option value="SUSPENSIÓN">SUSPENSIÓN</option>
+                                <option value="TERMINACIÓN DE CONTRATO">TERMINACIÓN DE CONTRATO</option>
+                                <option value="CONCILIACIÓN">CONCILIACIÓN</option>
+                                <option value="CONCILIACIÓN Y DISCIPLINARIOS">CONCILIACIÓN Y DISCIPLINARIOS</option>
+                                <option value="EXTEMPORÁNEO">EXTEMPORÁNEO</option>
+                                <option value="EXTEMPORÁNEO_CONCILIACIÓN">EXTEMPORÁNEO_CONCILIACIÓN</option>
+                                <option value="EXONERACIÓN">EXONERACIÓN</option>
+                                <option value="RETIRO">RETIRO</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="valor_conciliado_display">Valor conciliado</label>
+                            <input type="text" id="valor_conciliado_display" placeholder="Ingrese solo número" inputmode="numeric" disabled>
+                            <input type="hidden" id="valor_conciliado" value="">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="bloqueObservaciones">
+                <label for="observaciones" style="margin-top:10px;">OBSERVACIONES:</label>
+                <textarea id="observaciones" rows="3" style="width:100%;" disabled></textarea><br><br>
+            </div>
+
+            <div id="cardEvidencias" class="card-seccion">
+                <div class="card-seccion-header">📎 Evidencias</div>
+                <label id="lblEvidencia" for="evidencia">SUBA LAS EVIDENCIAS:</label><br>
+                <input type="file" id="evidencia" accept="image/*,video/*,audio/*,.pdf" multiple><br><br>
+                <div id="lista_adjuntos"></div>
+            </div>
+
+            <div style="text-align:right;">
+                <button id="btnGuardar" type="submit" class="btn btn-success">💾 Guardar información</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<!-- Modal de Adjuntos / Detalle cruzado -->
+<div id="modalAdjuntos" class="modal">
+    <div class="modal-content" style="max-width: 80%;">
+        <span class="close" onclick="cerrarModalAdjuntos()">&times;</span>
+        <div id="seccionGeneral">
+            <h3 style="text-align:center;">📝 INFORMACIÓN DEL EVENTO <span id="modal_registro1"></span></h3>
+            <div class="tabla-estilo">
+                <table id="infoEvento">
+                    <thead><tr></tr></thead>
+                    <tbody id="infoEventoBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- MAPA -->
+        <h3 style="text-align:center;">🗺️ UBICACIÓN DEL EVENTO</h3>
+        <div id="map"></div>
+
+        <div id="seccionOper" data-seccion="oper">
+            <h3 style="text-align:center;">🛠️ INFORMACIÓN OPERACIONAL</h3>
+            <div class="tabla-estilo">
+                <table id="info_oper">
+                    <thead><tr></tr></thead>
+                    <tbody id="infoEventooper"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="seccionMTTO" data-seccion="mtto">
+            <h3 style="text-align:center;">👨‍🔧 INFORMACIÓN DE MANTENIMIENTO</h3>
+            <div class="tabla-estilo">
+                <table id="info_mtto">
+                    <thead><tr></tr></thead>
+                    <tbody id="infoEventomtto"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="seccionSvial" data-seccion="svial">
+            <h3 style="text-align:center;">👮‍♂️ INFORMACIÓN DE SEGURIDAD VÍAL</h3>
+            <div class="tabla-estilo">
+                <table id="info_svial">
+                    <thead><tr></tr></thead>
+                    <tbody id="infoEventosvial"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="seccionLaboral" data-seccion="laboral">
+            <h3 style="text-align:center;">⚖️ RELACIONES LABORALES</h3>
+            <div class="tabla-estilo">
+                <table id="info_laboral">
+                    <thead><tr></tr></thead>
+                    <tbody id="infoEventolaboral"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <h3 style="text-align:center;">📎 ARCHIVOS ADJUNTOS</h3>
+        <div id="galeriaAdjuntos" class="galeria"></div>
+    </div>
+</div>
+
+<!-- Lightbox para imágenes -->
+<div id="lightbox" class="lightbox">
+    <span class="close" onclick="cerrarLightbox()">&times;</span>
+    <img id="lightbox-img" src="" alt="Vista ampliada">
+</div>
+
+
+{% endblock %}
+
+
+{% block extra_js %}
+<!-- JSON de registros -->
+<script id="registros-json" type="application/json">
+    {{ registros|tojson | safe }}
+</script>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script src="{{ url_for('static', filename='Script/Script_oper.js') }}"></script>
+
+{% endblock %}
