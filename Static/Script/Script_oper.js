@@ -47,7 +47,6 @@ const DETAIL_CONFIG = {
     mtto: [
         { key: "Costo", label: "COSTO", formato: "moneda" },
         { key: "dano_adicional", label: "DAÑO ADICIONAL" },
-        { key: "dano_adicional_detalle", label: "DESCRIPCIÓN DEL DAÑO ADICIONAL" },
         { key: "observaciones", label: "OBSERVACIONES" }
     ],
 
@@ -81,7 +80,8 @@ const FORM_CONFIG = {
     mtto: {
         endpoint: "agregar_mtto",
         campos: [
-            { id: "campo_principal", nombre: "Costo" }
+            { id: "campo_principal", nombre: "Costo" },
+            { id: "observaciones", nombre: "observaciones" }
         ]
     },
 
@@ -159,6 +159,7 @@ document.addEventListener("DOMContentLoaded", () => {
             CFG.campoPrincipalLabel;
 
         const esLaboral = CFG.propia === "laboral";
+        const esMtto = CFG.propia === "mtto";
 
         // Activa el nuevo look (tarjetas, toggle NO/SÍ, campos de cierre)
         // solo para RRLL; los demás módulos conservan la apariencia de
@@ -172,8 +173,17 @@ document.addEventListener("DOMContentLoaded", () => {
             ? "¿SE GENERA CIERRE DEL CASO?"
             : "¿LA INFORMACIÓN CARGADA ES CORRECTA?";
 
+        // Mantenimiento reutiliza el campo Observaciones como descripción
+        // del daño adicional, así que siempre lo muestra y lo deja
+        // habilitado (los demás módulos siguen dependiendo de
+        // mostrarObservaciones / de si la revisión quedó en "NO").
+        const textareaObsInicial = document.getElementById("observaciones");
         document.getElementById("bloqueObservaciones").style.display =
-            CFG.mostrarObservaciones ? "block" : "none";
+            (CFG.mostrarObservaciones || esMtto) ? "block" : "none";
+
+        if (esMtto) {
+            textareaObsInicial.disabled = false;
+        }
 
         document.getElementById("bloqueCamposLaboral").style.display =
             esLaboral ? "block" : "none";
@@ -192,7 +202,6 @@ document.addEventListener("DOMContentLoaded", () => {
         // Mantenimiento: "Costo del daño" es un valor monetario, así que
         // se usa el input con formato de miles en vez del textarea libre
         // que usan los demás módulos (concepto/observaciones de texto).
-        const esMtto = CFG.propia === "mtto";
         const campoPrincipalTextarea = document.getElementById("campo_principal");
         const campoPrincipalCosto = document.getElementById("campo_principal_costo_display");
 
@@ -205,6 +214,10 @@ document.addEventListener("DOMContentLoaded", () => {
         // al evento?" (toggle NO/SÍ), justo debajo del costo del daño.
         document.getElementById("bloqueDanoAdicional").style.display =
             esMtto ? "block" : "none";
+
+        if (esMtto) {
+            actualizarObservacionesPorDanoAdicional();
+        }
 
         // Mostrar/ocultar secciones del modal de detalle según permisos
         document.querySelectorAll("[data-seccion]").forEach(el => {
@@ -1031,19 +1044,16 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("campo_principal").value = "";
         document.getElementById("campo_principal_costo_display").value = "";
         document.getElementById("observaciones").value = "";
-        document.getElementById("observaciones").disabled = true;
+        document.getElementById("observaciones").disabled = CFG.propia !== "mtto";
+        document.getElementById("observaciones").required = false;
 
         document.querySelectorAll("input[name='DanoAdicional']").forEach(r => {
             r.checked = r.value === "NO";
         });
 
-        const danoAdicionalDetalle = document.getElementById("dano_adicional_detalle");
-        const bloqueDanoAdicionalDetalle = document.getElementById("bloqueDanoAdicionalDetalle");
-        if (danoAdicionalDetalle) {
-            danoAdicionalDetalle.value = "";
-            danoAdicionalDetalle.required = false;
+        if (CFG.propia === "mtto") {
+            actualizarObservacionesPorDanoAdicional();
         }
-        if (bloqueDanoAdicionalDetalle) bloqueDanoAdicionalDetalle.style.display = "none";
 
         const fp = document.getElementById("fecha_presentacion");
         if (fp) fp.value = "";
@@ -1177,25 +1187,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
     //======================================================
     // TOGGLE "¿EXISTE ALGÚN DAÑO MÁS ASOCIADO AL EVENTO?"
-    // (solo Mantenimiento): muestra el textarea de descripción
-    // cuando se elige SÍ.
+    // (solo Mantenimiento): en vez de un campo aparte, reutiliza
+    // Observaciones como descripción del daño adicional cuando
+    // se elige SÍ (reetiqueta y la vuelve obligatoria).
     //======================================================
 
-    const bloqueDanoAdicionalDetalle = document.getElementById("bloqueDanoAdicionalDetalle");
-    const danoAdicionalDetalle = document.getElementById("dano_adicional_detalle");
+    function actualizarObservacionesPorDanoAdicional() {
+        const radioSeleccionado = document.querySelector("input[name='DanoAdicional']:checked");
+        const hayDanoAdicional = radioSeleccionado ? radioSeleccionado.value === "SI" : false;
+
+        const lblObservaciones = document.querySelector("#bloqueObservaciones label[for='observaciones']");
+        const textareaObservaciones = document.getElementById("observaciones");
+
+        lblObservaciones.textContent = hayDanoAdicional
+            ? "DESCRIBA EL DAÑO ADICIONAL:"
+            : "OBSERVACIONES:";
+
+        textareaObservaciones.required = hayDanoAdicional;
+    }
 
     document.querySelectorAll("input[name='DanoAdicional']").forEach(radio => {
         radio.addEventListener("change", () => {
             if (!radio.checked) return;
-
-            const hayDanoAdicional = radio.value === "SI";
-
-            bloqueDanoAdicionalDetalle.style.display = hayDanoAdicional ? "block" : "none";
-            danoAdicionalDetalle.required = hayDanoAdicional;
-
-            if (!hayDanoAdicional) {
-                danoAdicionalDetalle.value = "";
-            }
+            actualizarObservacionesPorDanoAdicional();
         });
     });
 
@@ -1238,12 +1252,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // Mantenimiento: "¿Existe algún daño más asociado al evento?"
         if (CFG.propia === "mtto") {
             const danoAdicional = document.querySelector("input[name='DanoAdicional']:checked");
-            const valorDanoAdicional = danoAdicional ? danoAdicional.value : "NO";
-            formData.append("dano_adicional", valorDanoAdicional);
-            formData.append(
-                "dano_adicional_detalle",
-                valorDanoAdicional === "SI" ? document.getElementById("dano_adicional_detalle").value : ""
-            );
+            formData.append("dano_adicional", danoAdicional ? danoAdicional.value : "NO");
         }
 
         adjuntosSeleccionados.forEach(file => {
@@ -1288,7 +1297,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (CFG.propia === "mtto") {
             const danoAdicional = document.querySelector("input[name='DanoAdicional']:checked");
             if (danoAdicional && danoAdicional.value === "SI" &&
-                !document.getElementById("dano_adicional_detalle").value.trim()) {
+                !document.getElementById("observaciones").value.trim()) {
                 alert("Describa el daño adicional.");
                 return false;
             }

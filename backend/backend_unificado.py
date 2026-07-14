@@ -136,12 +136,14 @@ INSERT_CONFIG = {
         "ruta": "agregar_mtto",
         "sql": """
             INSERT INTO table_info_mtto
-                (Id_damage_to_fleet, Costo, Usuario_registro_mtto)
-            VALUES(?,?,?)
+                (Id_damage_to_fleet, Costo, dano_adicional, observaciones, Usuario_registro_mtto)
+            VALUES(?,?,?,?,?)
         """,
         "campos": [
             {"origen": "id"},
             {"origen": "Costo"},
+            {"origen": "dano_adicional"},
+            {"origen": "observaciones"},
             {"origen": "usuario"}
         ],
         "tabla_files": "table_mtto_files",
@@ -270,7 +272,12 @@ def index(modulo):
                 d.Tipologia, d.Direccion, d.Version_libre, d.Parte_afectada, d.Dano_ocasionado,
                 d.Zona_dano, d.Registrador, d.Centro_operaciones, d.Area,
 
-                (SELECT COUNT(*) FROM table_damage_files f WHERE f.DamageId = d.Id) AS archivos_count,
+                (
+                    (SELECT COUNT(*) FROM table_damage_files  f  WHERE f.DamageId = d.Id) +
+                    (SELECT COUNT(*) FROM table_mtto_files    fm WHERE fm.DamageToFleetId = d.Id) +
+                    (SELECT COUNT(*) FROM table_svial_files   fs WHERE fs.DamageId = d.Id) +
+                    (SELECT COUNT(*) FROM table_laboral_files fl WHERE fl.DamageToFleetId = d.Id)
+                ) AS archivos_count,
 
                 (SELECT COUNT(*) FROM table_info_oper o WHERE o.Id_damage_to_fleet = d.Id) AS tiene_oper,
                 (SELECT COUNT(*) FROM table_info_mtto m WHERE m.Id_damage_to_fleet = d.Id) AS tiene_mtto,
