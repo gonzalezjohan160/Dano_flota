@@ -8,19 +8,9 @@
 
 <!--
     Estilos del nuevo look del modal "Añadir info" de Relaciones Laborales.
-    Todo va bajo #formModal.form-laboral para que NO afecte a los modales
-    de Operaciones/Mtto/Svial, que comparten el mismo HTML pero no llevan
-    esa clase (se activa por JS solo cuando CFG.propia === "laboral").
+    Todo va bajo #formModal.form-laboral.
 -->
 <style>
-    /* Íconos ✓ / ✗ para las columnas ESTADO OPER./MTTO./SVIAL de la tabla */
-    .icono-estado {
-        font-size: 18px;
-        font-weight: 700;
-    }
-    .icono-estado.icono-ok { color: #28a745; }
-    .icono-estado.icono-pendiente { color: #dc3545; }
-
     #formModal .card-seccion-header { display: none; }
 
     #formModal.form-laboral .card-seccion {
@@ -75,8 +65,8 @@
         font-size: 14px;
     }
 
-    /* Dropdown de selección múltiple con casillas (Caso pendiente
-       por el proceso: Mantenimiento / S.Vial / Operaciones / Completo) */
+    /* Caso pendiente
+       por el proceso: Mantenimiento / S.Vial / Operaciones / Completo */
     #formModal.form-laboral .multiselect {
         position: relative;
     }
@@ -171,10 +161,7 @@
         border-color: #28a745;
     }
 
-    /* Toggle NO/SÍ tipo pastilla reutilizable (usado, por ejemplo, en
-       "¿Existe algún daño más asociado al evento?" de Mantenimiento).
-       A diferencia del de arriba, este no depende de la clase
-       .form-laboral, así que sirve para cualquier módulo. */
+    /* Toggle NO/SÍ tipo pastilla reutilizable */
     .radio-buttons.pastilla {
         display: flex;
         gap: 10px;
@@ -208,7 +195,7 @@
         cursor: not-allowed;
     }
 
-    /* Barra de paginación estilo Gmail: texto de rango + flechas
+    /* Barra de paginación: texto de rango + flechas
        circulares, alineada a la derecha debajo de la tabla. */
     .paginacion-tabla {
         display: flex;
@@ -303,16 +290,8 @@
                     DURACIÓN DESDE EVENTO
                     <input disabled style="background:transparent; border:none;">
                 </th>
-                <th class="col-estado" data-seccion="oper">
-                    ESTADO OPER.
-                    <input disabled style="background:transparent; border:none;">
-                </th>
-                <th class="col-estado" data-seccion="mtto">
-                    ESTADO MTTO.
-                    <input disabled style="background:transparent; border:none;">
-                </th>
-                <th class="col-estado" data-seccion="svial">
-                    ESTADO SVIAL
+                <th class="col-fecha-laboral">
+                    FECHA R. LABORALES
                     <input disabled style="background:transparent; border:none;">
                 </th>
                 <th>
@@ -390,9 +369,9 @@
                     <textarea id="campo_principal" rows="3" style="width:100%;" required></textarea>
 
                     <!-- Solo Mantenimiento: el campo principal es un valor
-                         monetario ("Costo del daño"), así que se reemplaza
+                         monetario, así que se reemplaza
                          el textarea de arriba por este input con formato
-                         de miles (igual que "Valor conciliado" en RRLL). -->
+                         de miles. -->
                     <input type="text" id="campo_principal_costo_display" placeholder="Ingrese solo número" inputmode="numeric" style="width:100%; display:none;">
                 </div>
 

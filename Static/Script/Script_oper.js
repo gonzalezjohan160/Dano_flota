@@ -9,10 +9,10 @@ let adjuntosSeleccionados = [];
 let registros = [];
 let movilSeleccionado = "";
 
-// Paginación de la tabla principal (estilo Gmail: 30 filas por página).
+// Paginación de la tabla principal (30 filas por página).
 const FILAS_POR_PAGINA = 30;
 let paginaActual = 1;
-let listaTablaActual = []; // lista (ya filtrada) que se está paginando
+let listaTablaActual = []; // lista que se está paginando
 
 
 //======================================================
@@ -64,7 +64,7 @@ const DETAIL_CONFIG = {
 
 
 //======================================================
-// CONFIGURACIÓN DE FORMULARIOS (por sección "propia")
+// CONFIGURACIÓN DE FORMULARIOS
 //======================================================
 
 const FORM_CONFIG = {
@@ -140,13 +140,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Set de secciones visibles para consultas rápidas
     const SECCIONES_VISIBLES = new Set(CFG.seccionesVisibles || []);
 
-    // Las columnas ESTADO OPER./MTTO./SVIAL de la tabla principal solo
-    // tienen sentido en Relaciones Laborales (es el único módulo que
-    // necesita ver, de un vistazo, si las demás áreas ya diligenciaron
-    // su parte). En Operaciones/Mtto/Svial no deben mostrarse, aunque
-    // esas secciones sí sigan siendo visibles dentro del modal de
-    // detalle ("Ver archivos"), que usa SECCIONES_VISIBLES aparte.
-    const MOSTRAR_COLUMNAS_ESTADO = CFG.propia === "laboral";
+    // FECHA R. LABORALES 
+    const MOSTRAR_COLUMNA_FECHA_LABORAL = CFG.propia === "laboral";
 
 
     //======================================================
@@ -162,8 +157,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const esMtto = CFG.propia === "mtto";
 
         // Activa el nuevo look (tarjetas, toggle NO/SÍ, campos de cierre)
-        // solo para RRLL; los demás módulos conservan la apariencia de
-        // siempre porque las reglas CSS nuevas están scoped a esta clase.
+        // solo para RRLL.
         document.getElementById("formModal").classList.toggle("form-laboral", esLaboral);
 
         document.getElementById("cardCierre").style.display =
@@ -173,10 +167,7 @@ document.addEventListener("DOMContentLoaded", () => {
             ? "¿SE GENERA CIERRE DEL CASO?"
             : "¿LA INFORMACIÓN CARGADA ES CORRECTA?";
 
-        // Mantenimiento reutiliza el campo Observaciones como descripción
-        // del daño adicional, así que siempre lo muestra y lo deja
-        // habilitado (los demás módulos siguen dependiendo de
-        // mostrarObservaciones / de si la revisión quedó en "NO").
+
         const textareaObsInicial = document.getElementById("observaciones");
         document.getElementById("bloqueObservaciones").style.display =
             (CFG.mostrarObservaciones || esMtto) ? "block" : "none";
@@ -191,8 +182,7 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("bloqueLaboralCierre").style.display =
             esLaboral ? "block" : "none";
 
-        // En RRLL el caso arranca como "no cerrado"; en los demás módulos
-        // se conserva el default original (SI = información correcta).
+        // En RRLL el caso arranca como "no cerrado".
         if (esLaboral) {
             document.querySelector("input[name='Revinf'][value='NO']").checked = true;
             document.getElementById("motivo_cierre").disabled = true;
@@ -200,8 +190,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         // Mantenimiento: "Costo del daño" es un valor monetario, así que
-        // se usa el input con formato de miles en vez del textarea libre
-        // que usan los demás módulos (concepto/observaciones de texto).
+        // se usa el input con formato de miles
         const campoPrincipalTextarea = document.getElementById("campo_principal");
         const campoPrincipalCosto = document.getElementById("campo_principal_costo_display");
 
@@ -230,13 +219,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     configurarModulo();
 
-
-    //======================================================
-    // FORMATO DE MILES PARA "COSTO DEL DAÑO" (solo Mantenimiento)
-    // Se ve "1.500.000" en el input visible mientras se escribe, y el
-    // número limpio "1500000" queda en el textarea oculto #campo_principal,
-    // que es el que realmente lee construirFormData() al guardar.
-    //======================================================
 
     if (CFG.propia === "mtto") {
         const campoPrincipalCosto = document.getElementById("campo_principal_costo_display");
@@ -267,9 +249,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }).format(valor);
     }
 
-    // Convierte el valor crudo guardado en "Pendiente_proceso"
-    // (ej: "MANTENIMIENTO, OPERACIONES") en el texto que se muestra
-    // en el histórico de eventos del detalle de Relaciones Laborales.
+
+    // Histórico de eventos del detalle de Relaciones Laborales.
     const TEXTO_ESTADO_CASO = {
         "MANTENIMIENTO": "pendiente por mantenimiento",
         "OPERACIONES": "pendiente por operaciones",
@@ -303,15 +284,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }).join("");
     }
 
-    function iconoEstado(hecho) {
-        return hecho
-            ? `<span class="icono-estado icono-ok">✓</span>`
-            : `<span class="icono-estado icono-pendiente">✗</span>`;
-    }
-
-    // Interpreta las fechas tal como las manda el backend:
-    // 'fecha' (evento) llega como "YYYY-MM-DD" y 'fecha_r' (registro)
-    // como "DD/MM/YYYY HH:MM:SS". Se deja un fallback por si acaso.
+    // fecha de evento llega como "YYYY-MM-DD" y fecha registro
+    // como "DD/MM/YYYY HH:MM:SS". 
     function parseFechaBackend(valor) {
         if (!valor) return null;
 
@@ -344,7 +318,7 @@ document.addEventListener("DOMContentLoaded", () => {
     window.formatearFechaRegistro = formatearFechaRegistro;
 
     //======================================================
-    // FESTIVOS COLOMBIA 🇨🇴 (para el cálculo de duración hábil)
+    // FESTIVOS COLOMBIA 
     //======================================================
 
     const festivosPorAnio = {};
@@ -420,9 +394,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return !festivos.includes(iso);
     }
 
-    // Diferencia entre `inicio` y `fin` contando solo tiempo dentro de
-    // días hábiles (se descarta por completo el tiempo transcurrido en
-    // fines de semana y festivos colombianos).
+    // Diferencia entre inicio y fin contando solo tiempo dentro de días hábiles
     function calcularDuracionHabil(inicio, fin) {
         let actual = new Date(inicio);
         let totalMs = 0;
@@ -460,10 +432,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return { dias, horas, minutos, texto };
     }
 
-    // Devuelve la duración desde que se registró el evento y desde que
-    // ocurrió el evento en sí. `t` (usado para pintar la fila en rojo si
-    // llevan 2+ días sin resolver) se basa en la fecha del EVENTO, que es
-    // la que refleja qué tan urgente/atrasado está el caso.
+    // Duración desde que se registró el evento y desde que ocurrió el evento en si. 
     function calcularDuracionesRegistro(registro) {
         const tRegistro = calcularDiferencia(registro.fecha_r);
         const tEvento = calcularDiferencia(registro.fecha);
@@ -493,8 +462,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // FILTROS
     //======================================================
 
-    // Filtra el array `registros` según los inputs del encabezado
-    // (data-col) y el select #filtroUF, y vuelve a pintar la tabla.
     function filtrarTabla() {
 
         const filtros = {};
@@ -544,8 +511,6 @@ document.addEventListener("DOMContentLoaded", () => {
         renderTabla(filtrados);
     }
 
-    // Evita que se dupliquen los listeners: renderTabla() llama a
-    // activarFiltros() en cada render, así que solo se enganchan una vez.
     let filtrosActivados = false;
 
     window.activarFiltros = function () {
@@ -569,8 +534,8 @@ document.addEventListener("DOMContentLoaded", () => {
     //======================================================
 
     function aplicarVisibilidadColumnas() {
-        document.querySelectorAll("th.col-estado").forEach(th => {
-            th.style.display = MOSTRAR_COLUMNAS_ESTADO ? "" : "none";
+        document.querySelectorAll("th.col-fecha-laboral").forEach(th => {
+            th.style.display = MOSTRAR_COLUMNA_FECHA_LABORAL ? "" : "none";
         });
     }
 
@@ -614,14 +579,8 @@ document.addEventListener("DOMContentLoaded", () => {
             tr.classList.add(t && t.dias >= 2 ? "row-danger" : "row-ok");
             tr.dataset.uf = registro.UF;
 
-            const celdaOper = MOSTRAR_COLUMNAS_ESTADO
-                ? `<td class="col-estado">${iconoEstado(registro.tiene_oper)}</td>`
-                : "";
-            const celdaMtto = MOSTRAR_COLUMNAS_ESTADO
-                ? `<td class="col-estado">${iconoEstado(registro.tiene_mtto)}</td>`
-                : "";
-            const celdaSvial = MOSTRAR_COLUMNAS_ESTADO
-                ? `<td class="col-estado">${iconoEstado(registro.tiene_svial)}</td>`
+            const celdaFechaLaboral = MOSTRAR_COLUMNA_FECHA_LABORAL
+                ? `<td class="col-fecha-laboral">${window.formatearFechaRegistro(registro.fecha_r_laboral)}</td>`
                 : "";
 
             const celdaAdjuntos = registro.archivos_count > 0
@@ -640,9 +599,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <td>${registro.Nombre}</td>
                 <td>${duracion}</td>
                 <td>${duracionEvento}</td>
-                ${celdaOper}
-                ${celdaMtto}
-                ${celdaSvial}
+                ${celdaFechaLaboral}
                 <td>${celdaAdjuntos}</td>
                 <td>${celdaAcciones}</td>
             `;
@@ -654,8 +611,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     //--------------------------------------------------
-    // Controles de paginación (estilo Gmail: "1–30 de 245"
-    // + flechas anterior/siguiente).
+    // Controles de paginación
     //--------------------------------------------------
 
     function renderControlesPaginacion() {
@@ -694,10 +650,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     //--------------------------------------------------
-    // Botón de acción según si ya se diligenció la
-    // sección PROPIA de este módulo para ese registro.
-    // Relaciones laborales permite reabrir mientras no
-    // esté cerrado; los demás son de un único registro.
+    // Relaciones laborales permite reabrir mientras no esté cerrado
     //--------------------------------------------------
 
     function construirCeldaAcciones(registro) {
@@ -737,12 +690,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let markerModal = null;
     const cacheCoordsDireccion = {};
 
-    // Geocodifica una dirección de texto a {lat, lng} usando el servicio
-    // gratuito de Nominatim (OpenStreetMap). Cachea por dirección para no
-    // repetir peticiones; devuelve null si no hay dirección o no se
-    // encuentra resultado. Nota: Nominatim pide máx. 1 petición/seg. y no
-    // es apto para volúmenes altos; para producción intensiva conviene
-    // un proveedor con SLA (Google Geocoding, Mapbox, etc.).
+    // Geocodifica una dirección de texto a lat, lng 
     async function obtenerCoordsDesdeDireccion(direccion) {
         if (!direccion) return null;
 
@@ -750,12 +698,6 @@ document.addEventListener("DOMContentLoaded", () => {
             return cacheCoordsDireccion[direccion];
         }
 
-        // El campo "Direccion" a veces ya viene con coordenadas GPS en
-        // formato "lat,lng" (ej: "4.6562,-74.1200") en vez de una
-        // dirección de texto. En ese caso no hay nada que geocodificar:
-        // se usan directamente y se evita la llamada a Nominatim (que
-        // nunca encuentra resultados para un texto que en realidad son
-        // números).
         const coordMatch = String(direccion).trim().match(
             /^(-?\d{1,3}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$/
         );
@@ -807,8 +749,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         markerModal = L.marker([coords.lat, coords.lng]).addTo(mapaModal);
 
-        // El modal estaba oculto cuando Leaflet calculó el tamaño del
-        // contenedor; sin esto el mapa puede verse gris o cortado.
         setTimeout(() => mapaModal.invalidateSize(), 100);
     }
 
@@ -907,10 +847,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (coords) {
             actualizarMapaModal(coords);
         } else {
-            // Sin coordenadas válidas: se deja el mapa con la vista por
-            // defecto, pero igual se fuerza el recálculo de tamaño para
-            // que no se vea gris/cortado (el modal estaba oculto cuando
-            // Leaflet lo inicializó).
+            // Sin coordenadas válidas: se deja el mapa con la vista por defecto
             setTimeout(() => mapaModal.invalidateSize(), 100);
         }
     }
@@ -1073,8 +1010,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (vc) { vc.value = ""; }
         if (vcDisplay) { vcDisplay.value = ""; vcDisplay.disabled = true; }
 
-        // RRLL arranca en "NO" (caso no cerrado); los demás módulos
-        // conservan su default original ("SI" = información correcta).
+        // RRLL arranca en "NO" (caso no cerrado)
         const defaultRevinf = CFG.propia === "laboral" ? "NO" : "SI";
         document.querySelectorAll("input[name='Revinf']").forEach(r => {
             r.checked = r.value === defaultRevinf;
@@ -1093,9 +1029,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     //======================================================
-    // FORMATO DE MILES PARA "VALOR CONCILIADO"
-    // (se ve "1.500.000" en el input mientras se escribe, y se
-    // envía el número limpio "1500000" al backend)
+    // FORMATO DE MILES PARA VALOR CONCILIADO
     //======================================================
 
     if (valorConciliadoDisplay && valorConciliado) {
@@ -1187,9 +1121,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     //======================================================
     // TOGGLE "¿EXISTE ALGÚN DAÑO MÁS ASOCIADO AL EVENTO?"
-    // (solo Mantenimiento): en vez de un campo aparte, reutiliza
-    // Observaciones como descripción del daño adicional cuando
-    // se elige SÍ (reetiqueta y la vuelve obligatoria).
+    // (solo Mantenimiento).
     //======================================================
 
     function actualizarObservacionesPorDanoAdicional() {
@@ -1238,9 +1170,6 @@ document.addEventListener("DOMContentLoaded", () => {
             const revision = document.querySelector("input[name='Revinf']:checked").value;
             formData.append("Revinf", revision);
 
-            // Para Relaciones Laborales, "Cerrado_input" viaja al backend
-            // como el TIPO/MOTIVO del cierre (así lo lee
-            // agregar_relaciones_laborales), no como un simple "SI"/"NO".
             if (CFG.propia === "laboral") {
                 formData.append(
                     "Cerrado_input",
@@ -1308,8 +1237,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     //======================================================
-    // ACTUALIZAR ESTADO LOCAL TRAS GUARDAR (sin quitar la fila,
-    // solo refleja que la sección propia quedó registrada)
+    // ACTUALIZAR ESTADO LOCAL TRAS GUARDAR 
     //======================================================
 
     function actualizarEstadoLocal(id) {
@@ -1330,9 +1258,7 @@ document.addEventListener("DOMContentLoaded", () => {
             debeOcultarse = true;
         }
 
-        // Ya diligenció su parte (o, en RRLL, ya cerró el caso): deja de
-        // aparecer en esta tabla, igual que hará el backend en el
-        // próximo recargue — así no hay que esperar a refrescar la página.
+        // Ya diligenció su parte 
         if (debeOcultarse) {
             registros = registros.filter(r => r.Id != id);
         }

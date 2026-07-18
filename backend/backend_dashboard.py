@@ -4,6 +4,7 @@ from datetime import datetime
 import folium
 from folium.plugins import HeatMap
 from backend_security import login_required, requiere_permiso
+import traceback
 
 Front_dashboard = Blueprint(
     'Front_dashboard',               # nombre interno del blueprint
@@ -168,8 +169,52 @@ def index():
         """
         cursor.execute(query_rrll, params)
         rrll_data = cursor.fetchall()
+
+        # --- 7️⃣ CONSULTA: EVENTOS POR VEHÍCULO (Móvil) ---
+        query_vehiculos = f"""
+            SELECT 
+                d.Movil,
+                COUNT(DISTINCT d.Id) AS Cantidad,
+                SUM(ISNULL(m.Costo, 0)) AS ValorDanos
+            FROM table_damage_to_fleet d
+            LEFT JOIN table_info_mtto m ON m.Id_damage_to_fleet = d.Id
+            {where_clause}
+            AND d.Movil IS NOT NULL
+            AND d.Movil <> ''
+            GROUP BY d.Movil
+            ORDER BY COUNT(DISTINCT d.Id) DESC
+        """
+        cursor.execute(query_vehiculos, params)
+        rows_vehiculos = cursor.fetchall()
+
+        # --- 8️⃣ CONSULTA: EVENTOS POR ZONA AFECTADA ---
+        query_zonas = f"""
+            SELECT 
+                d.Zona_dano,
+                COUNT(*) AS Cantidad
+            FROM table_damage_to_fleet d
+            {where_clause}
+            AND d.Zona_dano IS NOT NULL
+            AND d.Zona_dano <> ''
+            GROUP BY d.Zona_dano
+            ORDER BY COUNT(*) DESC
+        """
+        cursor.execute(query_zonas, params)
+        rows_zonas = cursor.fetchall()
         
-        
+        # -- CONSULTA: ULTIMOS EVENTOS(62 días)
+        query_ultimos_eventos = """
+            SELECT
+                d.Movil,
+                d.Fecha_evento,
+                d.Zona_dano,
+                d.Parte_afectada
+            FROM table_damage_to_fleet d
+            WHERE d.Fecha_evento >= DATEADD(DAY, -62, GETDATE())
+            ORDER BY d.Fecha_evento DESC
+        """
+        cursor.execute(query_ultimos_eventos)
+        rows_ultimos_eventos = cursor.fetchall()
         
         # --- 5️⃣ CONSULTA: MAPA DE CALOR ---
         query_mapa = f"SELECT [Direccion] FROM [table_damage_to_fleet] d {where_clause} AND [Direccion] IS NOT NULL"
@@ -208,6 +253,27 @@ def index():
         for r in rrll_data:
             rrll_final.append([int(r[0]), int(r[1]), r[2], r[3]])    
 
+        # Procesamiento Eventos por Vehículo
+        vehiculos_final = []
+        for r in rows_vehiculos:
+            vehiculos_final.append([r[0], r[1], float(r[2])])
+
+        # Procesamiento Eventos por Zona Afectada
+        zonas_final = []
+        for r in rows_zonas:
+            zonas_final.append([r[0], r[1]])
+            
+        # Procesamiento Últimos Eventos
+        ultimos_eventos = []
+        
+        for row in rows_ultimos_eventos:
+            ultimos_eventos.append({
+                "Movil":row[0],
+                "Fecha_evento":row[1].strftime("%d/%m/%Y") if row[1] else "",
+                "Zona_dano":row[2],
+                "Parte_afectada":row[3]
+             })    
+
         # Procesamiento Mapa
         heat_data = []
         for row in coords_rows:
@@ -217,10 +283,11 @@ def index():
                     lat, lon = float(parts[0].strip()), float(parts[1].strip())
                     heat_data.append([lat, lon])
                 except: continue
-
+    
     except Exception as e:
-        print(f"Error en dashboard: {e}")
-        registros_final, costos_final, valores_final, ranking, heat_data, lista_uf = [], [], [], [], [], []
+        traceback.print_exc()
+        print(e)
+        registros_final, costos_final, valores_final, ranking, heat_data, lista_uf, franjas_final, rrll_final, ultimos_eventos, ranking_rutas, ranking_registradores, vehiculos_final, zonas_final = [], [], [], [], [], [], [], [], [], [], [], [], []
     
     finally:
         cursor.close()
@@ -238,4 +305,7 @@ def index():
                            ranking_registradores=ranking_registradores, 
                            heatdata=heat_data,
                            lista_uf=lista_uf,
+                           ultimos_eventos = ultimos_eventos,
+                           vehiculos = vehiculos_final,
+                           zonas = zonas_final,
                            f_inicio=f_inicio, f_fin=f_fin, uf_sel=uf_filtro)

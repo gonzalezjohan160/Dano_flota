@@ -37,6 +37,50 @@
 
     <div class="grid-dashboard">
         
+        <div class="card card-full">
+            <div class="card-header">
+
+                Últimos eventos registrados
+
+            </div>
+            <div class="card-body">
+                <div class="table-filter">
+                    <label for="filtroMovil">
+                        Móvil
+                    </label>
+
+                    <input
+                        type="text"
+                        id="filtroMovil"
+                        placeholder="Ej: Z32-4032">
+
+                </div>
+                <div class="table-scroll">
+                    <table class = "custom-table" id="tablaUltimosEventos">
+                        <thead>
+                            <tr>
+                                <th>Móvil</th>
+                                <th>Fecha Evento</th>
+                                <th>Zona Afectada </th>
+                                <th>Parte Afectada </th>
+                            </tr>
+                        </thead>
+                        
+                        <tbody id="tbodyUltimosEventos">
+                            {% for evento in ultimos_eventos %}
+                            <tr>
+                                <td>{{evento.Movil}}</td>
+                                <td>{{evento.Fecha_evento}}</td>
+                                <td>{{evento.Zona_dano}}</td>
+                                <td>{{evento.Parte_afectada}}</td>
+                            </tr>    
+                            {% endfor %}    
+                        </tbody>    
+                    </table>    
+                </div>    
+            </div>    
+        </div>
+
         <div class="card">
             <div class="card-header">Pendientes por Gestión</div>
             <div class="card-body">
@@ -145,6 +189,69 @@
             </div>
         </div>
 
+        <div class="card card-full">
+            <div class="card-header">
+                Eventos por Vehículo
+            </div>
+            <div class="card-body">
+                <div class="table-filter">
+                    <label for="filtroVehiculo">
+                        Móvil
+                    </label>
+
+                    <input
+                        type="text"
+                        id="filtroVehiculo"
+                        placeholder="Ej: Z32-4032">
+
+                </div>
+                <div class="table-scroll">
+                    <table class="custom-table" id="tablaVehiculos">
+                        <thead>
+                            <tr>
+                                <th>Vehículo</th>
+                                <th class="text-center">Cantidad (Eventos)</th>
+                                <th class="text-right">Valor de Daños</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="tbodyVehiculos">
+                            {% for row in vehiculos %}
+                            <tr>
+                                <td>{{ row[0] }}</td>
+                                <td class="text-center"><span class="badge">{{ row[1] }}</span></td>
+                                <td class="text-right text-danger">${{ "{:,.0f}".format(row[2]) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Eventos por Zona Afectada</div>
+            <div class="card-body table-scroll">
+                <table class="custom-table">
+                    <thead>
+                        <tr>
+                            <th>Zona Afectada</th>
+                            <th class="text-center">Cantidad (Eventos)</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for row in zonas %}
+                        <tr>
+                            <td>{{ row[0] }}</td>
+                            <td class="text-center"><span class="badge">{{ row[1] }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-header">Georreferenciación de Daños</div>
             <div class="card-body">
@@ -170,6 +277,10 @@
         <script id="valores-json" type="application/json">{{ valores | tojson }}</script>
         <script id="rr-json" type="application/json">{{ rrll | tojson }}</script>
         <script id="heat-data-json" type="application/json">{{ heatdata | tojson }}</script>
+        <script id="ultimos-eventos-json" type="application/json">
+            {{ ultimos_eventos | tojson }}  
+        </script>
+        <script id="vehiculos-json" type="application/json">{{ vehiculos | tojson }}</script>
 
         <canvas id="barChart"></canvas>
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -177,6 +288,4 @@
         <script src="{{ url_for('Front_dashboard.static', filename='Script/Script_dashboard.js') }}"></script>
         
 
-
 {% endblock %}
-   

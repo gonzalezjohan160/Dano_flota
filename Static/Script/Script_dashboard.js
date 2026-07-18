@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     const getJSON = (id) => {
         const el = document.getElementById(id);
         return el ? JSON.parse(el.textContent) : [];
@@ -10,6 +10,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const heatData = getJSON('heat-data-json');
     const rrll = getJSON('rr-json');
     const franjas = getJSON('franjas-json');
+    const ultimosEventos = getJSON('ultimos-eventos-json');
+    const vehiculosData = getJSON('vehiculos-json');
 
     // GRÁFICA 1: BARRAS
     if (registros.length > 0) {
@@ -24,7 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     { label: 'S.Vial', data: registros.map(r => r[5]), backgroundColor: '#0bf5ab' }
                 ]
             },
-            options: { responsive: true,  plugins: { legend: { position: 'bottom' } } }
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
         });
     }
 
@@ -57,33 +59,36 @@ document.addEventListener('DOMContentLoaded', function() {
 
         new Chart(document.getElementById('barChartRRLL'), {
             type: 'bar',
-            data: {labels: labelsRRLL, datasets: [{ label: 'Total Casos', data: totalCasos, backgroundColor: '#3b82f6' }, { label: 'Casos Cerrados', data: casosCerrados, backgroundColor: '#10b981' }]},
+            data: { labels: labelsRRLL, datasets: [{ label: 'Total Casos', data: totalCasos, backgroundColor: '#3b82f6' }, { label: 'Casos Cerrados', data: casosCerrados, backgroundColor: '#10b981' }] },
 
             options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
         });
     }
 
     // GRÁFICA 4: LÍNEA (FRANJAS HORARIAS)
-   
-     if (franjas.length > 0) {
+
+    if (franjas.length > 0) {
         new Chart(document.getElementById('lineChartFranjas'), {
             type: 'line',
             data: {
                 labels: franjas.map(f => f[0]),
                 datasets: [{ label: 'Cantidad Eventos', data: franjas.map(f => f[1]), borderColor: '#33d772', fill: true, tension: 0.3, pointRadius: 5, pointHoverRadius: 7 }]
             },
-            options: { responsive: true, plugins: { legend: { position: 'bottom' } },
+            options: {
+                responsive: true, plugins: { legend: { position: 'bottom' } },
                 scales: {
-                    y: { ticks: { stepSize: 1, beginAtZero: true 
+                    y: {
+                        ticks: {
+                            stepSize: 1, beginAtZero: true
 
-                        } 
+                        }
                     }
                 }
             }
 
         });
-        
-     }
+
+    }
 
 
     // MAPA
@@ -93,6 +98,94 @@ document.addEventListener('DOMContentLoaded', function() {
     if (heatData.length > 0) {
         L.heatLayer(heatData, { radius: 25, blur: 15, maxZoom: 17 }).addTo(map);
     }
-    
+
     setTimeout(() => map.invalidateSize(), 500);
+
+    const filtroMovil = document.getElementById("filtroMovil");
+    const tbodyUltimosEventos = document.getElementById("tbodyUltimosEventos");
+
+    function renderUltimosEventos(datos) {
+
+        tbodyUltimosEventos.innerHTML = "";
+
+        datos.forEach(evento => {
+
+            const fila = document.createElement("tr");
+
+            fila.innerHTML = `
+
+                <td>${evento.Movil}</td>
+                <td>${evento.Fecha_evento}</td>
+                <td>${evento.Zona_dano}</td>
+                <td>${evento.Parte_afectada}</td>
+
+            `;
+            tbodyUltimosEventos.appendChild(fila);
+        })
+    }
+
+    renderUltimosEventos(ultimosEventos);
+
+    filtroMovil.addEventListener("keyup", function () {
+
+        const texto = this.value.trim().toUpperCase();
+
+        if (texto === "") {
+
+            renderUltimosEventos(ultimosEventos);
+            return;
+        }
+
+        const filtrados = ultimosEventos.filter(evento =>
+            evento.Movil.toUpperCase().includes(texto)
+        );
+
+        renderUltimosEventos(filtrados);
+
+    });
+
+    // TABLA: EVENTOS POR VEHÍCULO
+    const filtroVehiculo = document.getElementById("filtroVehiculo");
+    const tbodyVehiculos = document.getElementById("tbodyVehiculos");
+
+    function renderVehiculos(datos) {
+
+        tbodyVehiculos.innerHTML = "";
+
+        datos.forEach(vehiculo => {
+
+            const fila = document.createElement("tr");
+
+            fila.innerHTML = `
+                <td>${vehiculo[0]}</td>
+                <td class="text-center"><span class="badge">${vehiculo[1]}</span></td>
+                <td class="text-right text-danger">$${Number(vehiculo[2]).toLocaleString('es-CO', { maximumFractionDigits: 0 })}</td>
+            `;
+            tbodyVehiculos.appendChild(fila);
+        })
+    }
+
+    if (filtroVehiculo && tbodyVehiculos) {
+
+        renderVehiculos(vehiculosData);
+
+        filtroVehiculo.addEventListener("keyup", function () {
+
+            const texto = this.value.trim().toUpperCase();
+
+            if (texto === "") {
+
+                renderVehiculos(vehiculosData);
+                return;
+            }
+
+            const filtrados = vehiculosData.filter(vehiculo =>
+                String(vehiculo[0]).toUpperCase().includes(texto)
+            );
+
+            renderVehiculos(filtrados);
+
+        });
+    }
+
 });

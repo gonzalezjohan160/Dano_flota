@@ -34,8 +34,6 @@ Interfaz.register_blueprint(Capturador, url_prefix='/Capturador')
 
 # Registrar Modulo_unificado como Blueprint
 # Expone /Operaciones, /Mantenimiento, /SeguridadVial y /RelacionesLaborales
-# (las claves de MODULOS en backend_unificado.py) a través de la ruta
-# genérica "/<modulo>", en vez de un blueprint por módulo.
 Interfaz.register_blueprint(Modulo_unificado, url_prefix='')
 
 # Registrar Dashboard como Blueprint

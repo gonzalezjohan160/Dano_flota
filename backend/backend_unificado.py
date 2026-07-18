@@ -37,21 +37,6 @@ for carpeta in UPLOAD_FOLDERS.values():
 
 # ==========================================================
 # CONFIGURACIÓN GENERAL DE LOS MÓDULOS
-#
-# Esta es la ÚNICA fuente de verdad sobre qué puede ver y
-# hacer cada módulo. Se envía tal cual al HTML (como JSON) y
-# el JS unificado (Script_oper.js) la usa para pintar la
-# tabla, el modal de detalle y el formulario, en vez de tener
-# una copia hardcodeada separada que se puede desincronizar.
-#
-# claves de "secciones": las mismas 4 que existen en la BD:
-#   oper | mtto | svial | laboral
-#
-# "secciones_visibles" -> qué secciones puede VER el módulo en
-#                          el modal de detalle (solo lectura,
-#                          salvo la propia)
-# "propia"              -> la sección que este módulo diligencia
-#                          (habilita su formulario de "Añadir info")
 # ==========================================================
 
 MODULOS = {
@@ -104,9 +89,7 @@ MODULOS = {
 
 
 # ==========================================================
-# CONFIGURACIÓN DE INSERTS (secciones "simples": oper, mtto,
-# svial). RelacionesLaborales (clave "laboral") tiene su propia
-# lógica más abajo porque hace upsert + auditoría.
+# CONFIGURACIÓN DE INSERTS
 # ==========================================================
 
 INSERT_CONFIG = {
@@ -230,13 +213,6 @@ def verificar_acceso_modulo(modulo):
 
 # ==========================================================
 # PANTALLA PRINCIPAL — TABLA CON TODOS LOS REGISTROS
-#
-# A diferencia de la versión anterior, aquí YA NO se excluyen
-# los registros que ya tienen info de un módulo: la tabla
-# muestra TODO. Las restricciones de qué puede hacer cada
-# módulo se aplican en el frontend usando la config de arriba
-# y los indicadores "tiene_oper/tiene_mtto/tiene_svial/
-# laboral_cerrado" que se calculan aquí.
 # ==========================================================
 
 @Modulo_unificado.route("/<modulo>")
@@ -252,16 +228,12 @@ def index(modulo):
 
     filtro_sql, parametros = obtener_filtro_uf()
 
-    # Una vez que el módulo dueño de una sección ya diligenció su
-    # información, el registro deja de aparecer en SU tabla (ya queda
-    # visible en el histórico de daños). En Relaciones Laborales el
-    # criterio es distinto: el registro sigue apareciendo mientras el
-    # caso siga abierto, y desaparece solo cuando se cierra.
+   
     FILTRO_PENDIENTE_MODULO = {
         "Operaciones": "tiene_oper = 0",
         "Mtto": "tiene_mtto = 0",
         "Svial": "tiene_svial = 0",
-        "laboral": "laboral_cerrado = 0",
+        "laboral": "tiene_oper = 1 AND tiene_mtto = 1 AND tiene_svial = 1 AND laboral_cerrado = 0",
     }
     filtro_modulo = FILTRO_PENDIENTE_MODULO[modulo]
 
@@ -282,7 +254,20 @@ def index(modulo):
                 (SELECT COUNT(*) FROM table_info_oper o WHERE o.Id_damage_to_fleet = d.Id) AS tiene_oper,
                 (SELECT COUNT(*) FROM table_info_mtto m WHERE m.Id_damage_to_fleet = d.Id) AS tiene_mtto,
                 (SELECT COUNT(*) FROM table_info_svial s WHERE s.Id_damage_to_fleet = d.Id) AS tiene_svial,
-                (SELECT COUNT(*) FROM table_info_labora l WHERE l.Id_damage_to_fleet = d.Id AND l.Cerrado = 'SI') AS laboral_cerrado
+                (SELECT COUNT(*) FROM table_info_labora l WHERE l.Id_damage_to_fleet = d.Id AND l.Cerrado = 'SI') AS laboral_cerrado,
+
+                -- Fecha R. Laborales: la más reciente de las 3 fechas de
+                -- registro (Operaciones, Mtto, S.Vial). Solo tiene sentido
+                -- una vez que las 3 ya existen (ver filtro de "laboral").
+                (
+                    SELECT MAX(fecha) FROM (
+                        SELECT o.Fecha_registro AS fecha FROM table_info_oper o WHERE o.Id_damage_to_fleet = d.Id
+                        UNION ALL
+                        SELECT m.Fecha_registro FROM table_info_mtto m WHERE m.Id_damage_to_fleet = d.Id
+                        UNION ALL
+                        SELECT s.Fecha_registro FROM table_info_svial s WHERE s.Id_damage_to_fleet = d.Id
+                    ) AS fechas_gestion
+                ) AS Fecha_r_laboral
 
             FROM table_damage_to_fleet d
             WHERE {filtro_sql}
@@ -314,6 +299,13 @@ def index(modulo):
         r["tiene_svial"] = bool(r["tiene_svial"])
         r["laboral_cerrado"] = bool(r["laboral_cerrado"])
 
+        fecha_rl = r.get("Fecha_r_laboral")
+        if isinstance(fecha_rl, datetime):
+            r["fecha_r_laboral"] = fecha_rl.strftime("%d/%m/%Y %H:%M:%S")
+        else:
+            r["fecha_r_laboral"] = None
+        del r["Fecha_r_laboral"]
+
     conn.close()
 
     return render_template(
@@ -327,11 +319,7 @@ def index(modulo):
 
 
 # ==========================================================
-# DETALLE DE UN REGISTRO (modal de adjuntos / info cruzada)
-#
-# Siempre devuelve las 4 secciones (oper, mtto, svial,
-# laboral); el frontend decide, según "seccionesVisibles" de
-# la config del módulo, cuáles pintar.
+# DETALLE DE UN REGISTRO
 # ==========================================================
 
 @Modulo_unificado.route("/<modulo>/detalle/<int:id>")
@@ -441,8 +429,7 @@ def ver_archivo(modulo):
     ruta_normalizada = os.path.normpath(ruta)
 
     # Solo se sirven archivos que estén dentro de alguna de las
-    # carpetas de subida conocidas (evita que "path" apunte a
-    # cualquier archivo del sistema).
+    # carpetas de subida conocidas.
     dentro_de_carpeta_permitida = any(
         ruta_normalizada.startswith(os.path.normpath(carpeta))
         for carpeta in UPLOAD_FOLDERS.values()
@@ -454,6 +441,7 @@ def ver_archivo(modulo):
         abort(404)
 
     mime, _ = guess_type(ruta_normalizada)
+   
 
     try:
         if mime and any(t in mime for t in ["image", "video", "audio"]):
@@ -543,8 +531,6 @@ def agregar(modulo, accion):
 
 # ==========================================================
 # INSERT RELACIONES LABORALES (upsert + auditoría)
-# Traído tal cual de backend_laboral.py, adaptado a la ruta
-# unificada /laboral/agregar_rl
 # ==========================================================
 
 def agregar_relaciones_laborales():
