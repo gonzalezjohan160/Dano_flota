@@ -375,6 +375,34 @@
                     <input type="text" id="campo_principal_costo_display" placeholder="Ingrese solo número" inputmode="numeric" style="width:100%; display:none;">
                 </div>
 
+                <div id="bloqueConciliadoFavor" style="display:none; margin-top:12px;">
+
+                    <label for="conciliado_a_favor">
+                        CONCILIADO A FAVOR
+                    </label>
+
+                    <select id="conciliado_a_favor" style="width:100%;">
+                        <option value="">-- Seleccione una opción --</option>
+                        <option value="terceros">A favor de terceros</option>
+                        <option value="empresa">A favor de la empresa</option>
+                    </select>
+
+                    <br><br>
+
+                    <label for="valor_conciliado_terceros">
+                        VALOR CONCILIADO
+                    </label>
+
+                    <input
+                    type="text"
+                    id="valor_conciliado_terceros"
+                    placeholder="Ingrese el valor"
+                    inputmode="numeric"
+                    disabled
+                    style="width:100%;">
+
+                </div>
+
                 <!-- Solo Mantenimiento -->
                 <div id="bloqueDanoAdicional" style="display:none;">
                     <label class="form-label">¿EXISTE ALGÚN DAÑO MÁS ASOCIADO AL EVENTO?</label>
@@ -443,6 +471,82 @@
                 <textarea id="observaciones" rows="3" style="width:100%;" disabled></textarea><br><br>
             </div>
 
+            <!-- ================= NUEVO FLUJO OPERACIONES ================= -->
+            <!-- Solo visible cuando CFG.propia === "oper" -->
+            <div id="cardFlujoOper" class="card-seccion" style="display:none;">
+
+                <div id="bloqueCostoSupera">
+                    <label class="form-label">¿EL COSTO DEL DAÑO SUPERA EL VALOR DE $2.000.000?</label>
+                    <div class="radio-buttons pastilla">
+                        <label>
+                            <input type="radio" name="CostoSupera2M" value="SI">
+                            <span>SI</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="CostoSupera2M" value="NO">
+                            <span>NO</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Solo si CostoSupera2M = NO -->
+                <div id="bloqueCostoDano" style="display:none;">
+                    <label for="costo_dano_display">COSTO DEL DAÑO</label>
+                    <input type="text" id="costo_dano_display" placeholder="Ingrese solo número" inputmode="numeric" style="width:100%;">
+                    <input type="hidden" id="costo_dano" value="">
+                    <div id="msgCostoDano" style="display:none; color:#c00; font-size:13px; margin-top:4px;"></div>
+                </div>
+
+                <!-- Solo si CostoSupera2M = NO -->
+                <div id="bloqueResponsabilidad" style="display:none;">
+                    <label class="form-label">¿OPERADOR ACEPTA LA RESPONSABILIDAD?</label>
+                    <div class="radio-buttons pastilla">
+                        <label>
+                            <input type="radio" name="ResponsabilidadOperador" value="SI">
+                            <span>SI</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="ResponsabilidadOperador" value="NO">
+                            <span>NO</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="ResponsabilidadOperador" value="NO APLICA">
+                            <span>NO APLICA</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Mensaje de bloqueo por reincidencia (3 eventos en 2 meses) -->
+                <div id="mensajeReincidencia" class="badge" style="display:none; background:#ffeaea; color:#b30000; padding:10px; border-radius:6px; margin-bottom:12px;"></div>
+
+                <!-- Solo si responsabilidad = SI y no hay reincidencia -->
+                <div id="bloqueConciliacion" style="display:none;">
+                    <label class="form-label">¿SE LLEGA A CONCILIACIÓN?</label>
+                    <div class="radio-buttons pastilla">
+                        <label>
+                            <input type="radio" name="Conciliacion" value="SI">
+                            <span>SI</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="Conciliacion" value="NO">
+                            <span>NO</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Solo si Conciliacion = SI -->
+                <div id="bloqueValorConciliadoOper" style="display:none;">
+                    <label for="valor_conciliado_oper_display">VALOR CONCILIADO</label>
+                    <input type="text" id="valor_conciliado_oper_display" placeholder="Ingrese solo número" inputmode="numeric" style="width:100%;">
+                    <input type="hidden" id="valor_conciliado_oper" value="">
+                </div>
+
+                <!-- Solo si ResponsabilidadOperador = NO APLICA. Reutiliza
+                     exactamente el mismo campo oculto (#valor_conciliado_oper)
+                     que "Valor conciliado", ya que ambos se guardan en la
+                     misma columna (table_info_labora.Valor_conciliado). -->
+            </div>
+
             <div id="cardEvidencias" class="card-seccion">
                 <div class="card-seccion-header">📎 Evidencias</div>
                 <label id="lblEvidencia" for="evidencia">SUBA LAS EVIDENCIAS:</label><br>
@@ -452,6 +556,7 @@
 
             <div style="text-align:right;">
                 <button id="btnGuardar" type="submit" class="btn btn-success">💾 Guardar información</button>
+                <button id="btnCerrarCaso" type="button" class="btn btn-success" style="display:none;">🔒 Cerrar caso</button>
             </div>
         </form>
     </div>

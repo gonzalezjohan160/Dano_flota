@@ -7,6 +7,7 @@ from backend_security import cargar_permisos
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from config import BASE_DIR
 
 def enviar_email(destinatario, link):
     
@@ -45,8 +46,8 @@ GDAMAGES GMASIVO SOLUTIONS
 Modulo_login = Blueprint(
     'Modulo_login',
     __name__,
-    template_folder=r'..\frontend',
-    static_folder=r'..\Static'
+    template_folder=str(BASE_DIR/"frontend"),
+    static_folder=str(BASE_DIR/"Static")
 )
 
 
@@ -54,6 +55,10 @@ Modulo_login = Blueprint(
 
 @Modulo_login.route('/', methods=['GET', 'POST'])
 def login():
+    # Si ya inició sesión, no mostrar nuevamente el login
+    if 'usuario' in session:
+        return redirect('/interfaz')
+    
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
@@ -70,6 +75,7 @@ def login():
             if check_password_hash(password_hash, password):
                 session['usuario'] = username
                 session['usuario_id'] = user_id
+                session.permanent = True
                 session['UF'] = str(uf).strip() if uf else "0"
                 session['permisos'] = cargar_permisos(user_id)
                 return redirect('/interfaz')

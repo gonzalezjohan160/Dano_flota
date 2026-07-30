@@ -253,7 +253,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         <tr><td>COSTO</td><td>${mtto ? formatoCOP(mtto.Costo) : "-"}</td></tr>
                         <tr><td>DAÑO ADICIONAL</td><td>${mtto?.dano_adicional || "-"}</td></tr>
                         <tr><td>OBSERVACIONES</td><td>${mtto?.observaciones || "-"}</td></tr>
-                        <tr><td>FECHA REGISTRO MANTENIMIENTO</td><td>${ mtto?.Fecha_registro ? formatoFechaHora(mtto.Fecha_registro) : "-"}</td></tr>
+                        <tr><td>FECHA REGISTRO COSTO</td><td>${ mtto?.Fecha_registro ? formatoFechaHora(mtto.Fecha_registro) : "-"}</td></tr>
                         <tr><td>USUARIO</td><td>${mtto?.Usuario_registro_mtto || "-"}</td></tr>
                     `;
 
@@ -267,7 +267,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         <tr><td>VALOR CONCILIADO</td><td>${formatoCOP(laboral?.Valor_conciliado) || "-"}</td></tr>
                         <tr><td>CERRADO POR:</td><td>${laboral?.Tipo_cerrado || "-"}</td></tr>
                         <tr><td>CERRADO</td><td>${laboral?.Cerrado || "-"}</td></tr>
-                        <tr><td>FECHA REGISTRO LABORAL</td><td>${ laboral?.Fecha_registro ? formatoFechaHora(laboral.Fecha_registro) : "-"}</td></tr>
+                        <tr><td>FECHA REGISTRO DEBIDO PROCESO</td><td>${ laboral?.Fecha_registro ? formatoFechaHora(laboral.Fecha_registro) : "-"}</td></tr>
                         <tr><td>USUARIO</td><td>${laboral?.Usuario_registro_labora || "-"}</td></tr>
                         <tr><td>PROCESO</td><td>${observacionesHTML}</td></tr>
                     `;

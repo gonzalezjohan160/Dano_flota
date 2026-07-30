@@ -5,12 +5,13 @@ import folium
 from folium.plugins import HeatMap
 from backend_security import login_required, requiere_permiso
 import traceback
+from config import BASE_DIR
 
 Front_dashboard = Blueprint(
     'Front_dashboard',               # nombre interno del blueprint
     __name__,
-    template_folder=r'..\frontend',
-    static_folder=r'..\Static'
+    template_folder=str(BASE_DIR/"frontend"),
+    static_folder=str(BASE_DIR/"Static")
 )
 
 

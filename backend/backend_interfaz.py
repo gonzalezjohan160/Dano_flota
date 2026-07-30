@@ -15,12 +15,21 @@ from backend_reparaciones import Capturador_rep
 from backend_historico_danos import Historico_danos
 from backend_correcciones import Correcciones
 from backend_profile import Profile
+from pathlib import Path
+from datetime import timedelta
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 Interfaz = Flask(
     __name__,
-    template_folder=r'..\frontend',
-    static_folder=r'..\Static'
+    template_folder=str(BASE_DIR / "frontend"),
+    static_folder=str(BASE_DIR / "Static")
 )
+
+Interfaz.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=20)
+Interfaz.config["SESSION_REFRESH_EACH_REQUEST"] = True
+Interfaz.config["SESSION_COOKIE_HTTPONLY"] = True
+Interfaz.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 Interfaz.secret_key = "***REMOVED***"
 
@@ -80,8 +89,9 @@ def page_not_found(e):
 
 
 if __name__ == "__main__":
+        # Ejemplo: Limitar a 16 Megabytes el total de la petición
+        Interfaz.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
         print(Interfaz.url_map)
        #Interfaz.run(host="0.0.0.0", port=5000, debug=True, ssl_context=None)
         Interfaz.run(host="0.0.0.0", port=5000, ssl_context='adhoc', debug=True)
-        # Ejemplo: Limitar a 16 Megabytes el total de la petición
-        Interfaz.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
+        

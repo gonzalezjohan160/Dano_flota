@@ -4,12 +4,14 @@ from mimetypes import guess_type
 from config import connect
 from datetime import datetime, timedelta
 from backend_security import login_required, requiere_permiso
+from config import BASE_DIR
+from config import UPLOAD_FOLDERS
 
 Correcciones = Blueprint(
     'Correcciones',               # nombre interno del blueprint
     __name__,
-    template_folder=r'..\frontend',
-    static_folder=r'..\Static'
+    template_folder=str(BASE_DIR/"frontend"),
+    static_folder=str(BASE_DIR/"Static")
 )
 
 
@@ -132,23 +134,17 @@ def detalle(id_damage):
         "archivos_svial": files_svial
     })
 
-UPLOAD_FOLDER_MTTO = r'..\Files\Files_mtto'
-os.makedirs(UPLOAD_FOLDER_MTTO, exist_ok=True)
-
-
-
 # --- CONFIGURACIÓN DE RUTAS POR ÁREA ---
 PATHS = {
-    'oper': r'C:\media\emapp\dano_flota\Files\Files_ppal',
-    'mtto': r'C:\media\emapp\dano_flota\Files\Files_mtto',
-    'svial': r'C:\media\emapp\dano_flota\Files\Files_svial',
-    'laboral': r'C:\media\emapp\dano_flota\Files\Files_laboral'
+    "oper": UPLOAD_FOLDERS["Operaciones"],
+    "mtto": UPLOAD_FOLDERS["Mtto"],
+    "svial": UPLOAD_FOLDERS["Svial"],
+    "laboral": UPLOAD_FOLDERS["laboral"]
 }
 
 # Recorremos el diccionario y creamos cada carpeta si no existe
 for area, ruta in PATHS.items():
-    if not os.path.exists(ruta):
-        os.makedirs(ruta, exist_ok=True)
+    ruta.mkdir(parents=True, exist_ok=True)
         
 
 def procesar_archivos_area(request_files, key, folder_base, table_name, id_damage, cursor):
@@ -158,17 +154,17 @@ def procesar_archivos_area(request_files, key, folder_base, table_name, id_damag
     if key in request_files:
         archivos = request_files.getlist(key)
         # Carpeta específica por ID de daño
-        ruta_area = os.path.join(folder_base, str(id_damage))
-        os.makedirs(ruta_area, exist_ok=True)
+        ruta_area = folder_base / str(id_damage)
+        ruta_area.mkdir(parents=True, exist_ok=True)
 
         for archivo in archivos:
             if archivo.filename != '':
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 name, ext = os.path.splitext(archivo.filename)
                 nombre_final = f"{name}_{timestamp}{ext}"
-                ruta_fisica = os.path.join(ruta_area, nombre_final)
+                ruta_fisica = ruta_area / nombre_final
                 
-                archivo.save(ruta_fisica)
+                archivo.save(str(ruta_fisica))
 
                 # Selección dinámica de columna de ID según tu esquema
                 col_id = "DamageId" if table_name in ["table_damage_files", "table_svial_files"] else "DamageToFleetId"
@@ -178,7 +174,7 @@ def procesar_archivos_area(request_files, key, folder_base, table_name, id_damag
                     ({col_id}, FileName, FilePath, Fecha_subida)
                     VALUES (?, ?, ?, ?)
                 """
-                cursor.execute(sql, (id_damage, archivo.filename, ruta_fisica, datetime.now()))
+                cursor.execute(sql, (id_damage, archivo.filename, str(ruta_fisica), datetime.now()))
 
 @Correcciones.route('/modificar/<int:id_damage>', methods=['POST'])
 @login_required

@@ -41,6 +41,20 @@ const DETAIL_CONFIG = {
     oper: [
         { key: "Observaciones_operaciones", label: "OBSERVACIONES OPERACIONALES" },
         { key: "rev_error", label: "INFO. CORRECTA" },
+        { key: "Observaciones_correctivos", label: "OBSERVACIONES ADICIONALES" },
+        { key: "responsabilidad_operador", label: "ACEPTA LA RESPONSABILIDAD EL OPERADOR" },
+        { key: "conciliacion", label: "CONCILIACIÓN" },
+        { key: "CostoDelDanoOper", label: "COSTO DEL DAÑO", formato: "moneda" },
+        { key: "ValorConciliadoOper", label: "VALOR CONCILIADO", formato: "moneda" }
+    ],
+
+    // Vista reducida de Operaciones: la usa Mantenimiento en "Ver
+    // archivos", donde los controles propios del flujo de Operaciones
+    // (responsabilidad, conciliación, costo, valor conciliado) no
+    // aplican -- Mantenimiento solo ve casos del camino > $2.000.000.
+    oper_basico: [
+        { key: "Observaciones_operaciones", label: "OBSERVACIONES OPERACIONALES" },
+        { key: "rev_error", label: "INFO. CORRECTA" },
         { key: "Observaciones_correctivos", label: "OBSERVACIONES ADICIONALES" }
     ],
 
@@ -88,7 +102,9 @@ const FORM_CONFIG = {
     svial: {
         endpoint: "agregar_svial",
         campos: [
-            { id: "campo_principal", nombre: "Observaciones_svial" }
+            { id: "campo_principal", nombre: "Observaciones_svial" },
+            { id: "conciliado_a_favor", nombre: "conciliado_a_favor" },
+            { id: "valor_conciliado_terceros", nombre: "valor_conciliado_terceros" }
         ]
     },
 
@@ -155,6 +171,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const esLaboral = CFG.propia === "laboral";
         const esMtto = CFG.propia === "mtto";
+        const esOper = CFG.propia === "oper";
+        const esSvial = CFG.propia === "svial";
+
+        // Nuevo flujo de Operaciones (valor del daño / responsabilidad / conciliación)
+        document.getElementById("cardFlujoOper").style.display = esOper ? "block" : "none";
+        document.getElementById("bloqueConciliadoFavor").style.display = esSvial ? "block" : "none";
 
         // Activa el nuevo look (tarjetas, toggle NO/SÍ, campos de cierre)
         // solo para RRLL.
@@ -666,6 +688,16 @@ document.addEventListener("DOMContentLoaded", () => {
                     </button>`;
         }
 
+        // Operaciones: el backend ya filtra la bandeja para que solo
+        // aparezcan casos nuevos o casos que reaparecen únicamente para
+        // cerrarse (conciliación SI + Seguridad Vial finalizado), así
+        // que "tiene_oper" no debe usarse aquí para ocultar el botón.
+        if (propia === "oper") {
+            return `<button class="btn btn-success" onclick="abrirModal('${registro.Id}')">
+                        Añadir info
+                    </button>`;
+        }
+
         const yaTiene = registro["tiene_" + propia];
 
         if (yaTiene) {
@@ -759,11 +791,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function renderDetalle(registro, data) {
 
+        const inicioProcesamiento = performance.now();
         const registroDetalle = data.registro ?? {};
         const oper = data.oper ?? {};
         const mtto = data.mtto ?? {};
         const svial = data.svial ?? {};
         const laboral = data.laboral ?? { eventos: [], estado: {} };
+        console.log(`[Ver archivos] Procesar JSON: ${(performance.now() - inicioProcesamiento).toFixed(2)} ms`);
 
         //--------------------------------------------------
         // TABLA GENERAL
@@ -775,25 +809,60 @@ document.addEventListener("DOMContentLoaded", () => {
             ...registroDetalle
         };
 
-        document.getElementById("infoEventoBody").innerHTML =
-            construirTabla(datosGeneral, DETAIL_CONFIG.general);
+        const inicioGeneral = performance.now();
+        const htmlGeneral = construirTabla(datosGeneral, DETAIL_CONFIG.general);
+        const inicioDomGeneral = performance.now();
+        document.getElementById("infoEventoBody").innerHTML = htmlGeneral;
+        console.log(`[Ver archivos] General - construir: ${(inicioDomGeneral - inicioGeneral).toFixed(2)} ms; DOM: ${(performance.now() - inicioDomGeneral).toFixed(2)} ms`);
 
         //--------------------------------------------------
         // OPERACIONAL
         //--------------------------------------------------
 
+        // El costo del daño digitado por Operaciones (cuando el valor no
+        // superó $2.000.000) se guarda en table_info_mtto.Costo, y el
+        // valor conciliado que Operaciones haya registrado (conciliación
+        // SI, o responsabilidad NO APLICA) se guarda en
+        // table_info_labora.Valor_conciliado -- ambas columnas ya
+        // existentes, reutilizadas aquí solo para mostrarlas dentro de
+        // la sección de Operaciones.
+        const costoRegistradoPorOper = !!oper.responsabilidad_operador;
+        const operRegistroConciliacion =
+            oper.conciliacion === "SI" || oper.responsabilidad_operador === "NO APLICA";
+
+        const operParaTabla = {
+            ...oper,
+            CostoDelDanoOper: costoRegistradoPorOper ? mtto.Costo : null,
+            ValorConciliadoOper: operRegistroConciliacion ? laboral.estado?.Valor_conciliado : null
+        };
+
+        // Mantenimiento solo ve casos del camino > $2.000.000, donde los
+        // controles propios de Operaciones (responsabilidad, conciliación,
+        // costo, valor conciliado) no aplican -- se usa la vista reducida.
+        const configOper = CFG.propia === "mtto" ? DETAIL_CONFIG.oper_basico : DETAIL_CONFIG.oper;
+
         if (SECCIONES_VISIBLES.has("oper")) {
-            document.getElementById("infoEventooper").innerHTML =
-                construirTabla(oper, DETAIL_CONFIG.oper);
+            const inicioOper = performance.now();
+            const htmlOper = construirTabla(operParaTabla, configOper);
+            const inicioDomOper = performance.now();
+            document.getElementById("infoEventooper").innerHTML = htmlOper;
+            console.log(`[Ver archivos] Operaciones - construir: ${(inicioDomOper - inicioOper).toFixed(2)} ms; DOM: ${(performance.now() - inicioDomOper).toFixed(2)} ms`);
         }
 
         //--------------------------------------------------
         // MANTENIMIENTO
         //--------------------------------------------------
 
+        // Si el costo fue registrado por Operaciones, ya se muestra en su
+        // propia sección -- no se duplica aquí.
+        const mttoParaTabla = costoRegistradoPorOper ? { ...mtto, Costo: null } : mtto;
+
         if (SECCIONES_VISIBLES.has("mtto")) {
-            document.getElementById("infoEventomtto").innerHTML =
-                construirTabla(mtto, DETAIL_CONFIG.mantenimiento || DETAIL_CONFIG.mtto);
+            const inicioMtto = performance.now();
+            const htmlMtto = construirTabla(mttoParaTabla, DETAIL_CONFIG.mantenimiento || DETAIL_CONFIG.mtto);
+            const inicioDomMtto = performance.now();
+            document.getElementById("infoEventomtto").innerHTML = htmlMtto;
+            console.log(`[Ver archivos] Mantenimiento - construir: ${(inicioDomMtto - inicioMtto).toFixed(2)} ms; DOM: ${(performance.now() - inicioDomMtto).toFixed(2)} ms`);
         }
 
         //--------------------------------------------------
@@ -801,8 +870,11 @@ document.addEventListener("DOMContentLoaded", () => {
         //--------------------------------------------------
 
         if (SECCIONES_VISIBLES.has("svial")) {
-            document.getElementById("infoEventosvial").innerHTML =
-                construirTabla(svial, DETAIL_CONFIG.svial);
+            const inicioSvial = performance.now();
+            const htmlSvial = construirTabla(svial, DETAIL_CONFIG.svial);
+            const inicioDomSvial = performance.now();
+            document.getElementById("infoEventosvial").innerHTML = htmlSvial;
+            console.log(`[Ver archivos] Seguridad Vial - construir: ${(inicioDomSvial - inicioSvial).toFixed(2)} ms; DOM: ${(performance.now() - inicioDomSvial).toFixed(2)} ms`);
         }
 
         //--------------------------------------------------
@@ -810,6 +882,8 @@ document.addEventListener("DOMContentLoaded", () => {
         //--------------------------------------------------
 
         if (SECCIONES_VISIBLES.has("laboral")) {
+
+            const inicioLaboral = performance.now();
 
             let filasEventos = "";
 
@@ -832,14 +906,24 @@ document.addEventListener("DOMContentLoaded", () => {
                 filasEventos = `<tr><td colspan="2">Sin eventos registrados</td></tr>`;
             }
 
-            document.getElementById("infoEventolaboral").innerHTML =
-                filasEventos + construirTabla(laboral.estado, DETAIL_CONFIG.laboral_estado);
+            // Si el valor conciliado fue registrado por Operaciones (ya se
+            // muestra en esa sección), no se duplica aquí -- cada módulo
+            // únicamente muestra el valor conciliado que realmente registró.
+            const estadoParaTabla = operRegistroConciliacion
+                ? { ...laboral.estado, Valor_conciliado: null }
+                : laboral.estado;
+
+            const htmlLaboral = filasEventos + construirTabla(estadoParaTabla, DETAIL_CONFIG.laboral_estado);
+            const inicioDomLaboral = performance.now();
+            document.getElementById("infoEventolaboral").innerHTML = htmlLaboral;
+            console.log(`[Ver archivos] Relaciones Laborales - construir: ${(inicioDomLaboral - inicioLaboral).toFixed(2)} ms; DOM: ${(performance.now() - inicioDomLaboral).toFixed(2)} ms`);
         }
 
         //--------------------------------------------------
         // MAPA
         //--------------------------------------------------
 
+        const inicioMapa = performance.now();
         const coords = await obtenerCoordsDesdeDireccion(registroDetalle.Direccion);
 
         initMapaModal();
@@ -850,6 +934,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Sin coordenadas válidas: se deja el mapa con la vista por defecto
             setTimeout(() => mapaModal.invalidateSize(), 100);
         }
+        console.log(`[Ver archivos] Mapa/geocodificación: ${(performance.now() - inicioMapa).toFixed(2)} ms`);
     }
 
 
@@ -859,11 +944,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function renderGaleria(archivos) {
 
+        const inicioArchivos = performance.now();
         const galeria = document.getElementById("galeriaAdjuntos");
         galeria.innerHTML = "";
 
         if (!archivos.length) {
             galeria.innerHTML = `<p style="text-align:center;color:#777">Sin archivos adjuntos</p>`;
+            console.log(`[Ver archivos] Archivos - construir e insertar DOM: ${(performance.now() - inicioArchivos).toFixed(2)} ms (sin archivos)`);
             return;
         }
 
@@ -896,6 +983,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
             galeria.appendChild(div);
         });
+
+        console.log(`[Ver archivos] Archivos - construir e insertar DOM: ${(performance.now() - inicioArchivos).toFixed(2)} ms (${archivos.length} archivos)`);
     }
 
 
@@ -905,17 +994,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
     window.mostrarAdjuntos = function (id) {
 
+        const inicioTotal = performance.now();
         const registro = registros.find(r => r.Id == id);
         if (!registro) return;
 
         movilSeleccionado = id;
 
+        const inicioModal = performance.now();
         document.getElementById("modalAdjuntos").style.display = "block";
         document.getElementById("modal_registro1").textContent = id;
+        console.log(`[Ver archivos] Abrir modal: ${(performance.now() - inicioModal).toFixed(2)} ms`);
 
+        const inicioFetch = performance.now();
         fetch(`/${CFG.modulo}/detalle/${id}`)
-            .then(r => r.json())
-            .then(data => {
+            .then(r => {
+                console.log(`[Ver archivos] Fetch: ${(performance.now() - inicioFetch).toFixed(2)} ms (HTTP ${r.status})`);
+                const inicioJson = performance.now();
+                return r.json().then(data => {
+                    console.log(`[Ver archivos] response.json(): ${(performance.now() - inicioJson).toFixed(2)} ms`);
+                    return data;
+                });
+            })
+            .then( data => {
+                const inicioRender = performance.now();
                 renderDetalle(registro, data);
 
                 // Junta los 4 conjuntos de archivos que puede ver el módulo
@@ -927,6 +1028,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 ];
 
                 renderGaleria(todosArchivos);
+                console.log(`[Ver archivos] Preparar JSON y disparar render: ${(performance.now() - inicioRender).toFixed(2)} ms`);
+                console.log(`[Ver archivos] Total hasta render inicial: ${(performance.now() - inicioTotal).toFixed(2)} ms`);
             })
             .catch(error => {
                 console.error(error);
@@ -943,11 +1046,107 @@ document.addEventListener("DOMContentLoaded", () => {
     // MODAL FORMULARIO ("Añadir info" de la sección propia)
     //======================================================
 
+    // Para Operaciones, si el registro llega a la bandeja con tiene_oper
+    // ya en true, solo puede ser porque el caso termina en Operaciones
+    // (conciliación = 'SI' o responsabilidad = 'NO APLICA') y todavía no
+    // se ha cerrado -- el backend solo devuelve esos casos en la bandeja
+    // de Operaciones (ver FILTRO_PENDIENTE_MODULO). En ese escenario el
+    // formulario se precarga con lo ya guardado, para que el usuario
+    // pueda seguir usando "Guardar información" o pasar a "Cerrar caso".
+    function esModoCierreOperaciones(id) {
+        if (CFG.propia !== "oper") return false;
+        const registro = registros.find(r => r.Id == id);
+        return !!(registro && registro.tiene_oper);
+    }
+
+    // Recuerda si el caso ya estaba guardado al abrir el modal (reabierto
+    // únicamente para poder cerrarse), para que "Cerrar caso" solo envíe
+    // la orden de cierre en vez de repetir el guardado.
+    let modoCierreActivo = false;
+    let envioOperacionesEnCurso = false;
+    let reincidenciaBloqueada = false;
+
+    function configurarModoOperaciones(modoCierre) {
+        if (CFG.propia !== "oper") return;
+        modoCierreActivo = modoCierre;
+    }
+
+    // Precarga en el formulario la información que Operaciones ya había
+    // guardado, sin ocultar ni bloquear nada -- el usuario puede seguir
+    // editando y usando "Guardar información" o "Cerrar caso" con
+    // normalidad.
+    async function precargarFormularioOperaciones(id) {
+        try {
+            const resp = await fetch(`/${CFG.modulo}/detalle/${id}`);
+            const data = await resp.json();
+
+            const oper = data.oper ?? {};
+            const mtto = data.mtto ?? {};
+            const laboral = data.laboral?.estado ?? {};
+
+            document.getElementById("campo_principal").value = oper.Observaciones_operaciones ?? "";
+            document.getElementById("observaciones").value = oper.Observaciones_correctivos ?? "";
+
+            document.querySelectorAll("input[name='Revinf']").forEach(r => {
+                r.checked = r.value === (oper.rev_error ?? "SI");
+            });
+
+            // Este caso solo puede reaparecer en la bandeja si el costo
+            // NO superó $2.000.000.
+            document.querySelectorAll("input[name='CostoSupera2M']").forEach(r => {
+                r.checked = r.value === "NO";
+            });
+            bloqueCostoDano.style.display = "block";
+            bloqueResponsabilidad.style.display = "block";
+
+            if (mtto.Costo != null) {
+                costoDanoDisplay.value = new Intl.NumberFormat("es-CO").format(Number(mtto.Costo));
+                costoDanoHidden.value = mtto.Costo;
+            }
+
+            document.querySelectorAll("input[name='ResponsabilidadOperador']").forEach(r => {
+                r.checked = r.value === oper.responsabilidad_operador;
+            });
+
+            if (oper.responsabilidad_operador === "SI" && oper.conciliacion === "SI") {
+                bloqueConciliacion.style.display = "block";
+
+                document.querySelectorAll("input[name='Conciliacion']").forEach(r => {
+                    r.checked = r.value === "SI";
+                });
+
+                bloqueValorConciliadoOper.style.display = "block";
+
+                if (laboral.Valor_conciliado != null) {
+                    valorConciliadoOperDisplay.value =
+                        new Intl.NumberFormat("es-CO").format(Number(laboral.Valor_conciliado));
+                    valorConciliadoOperHidden.value = laboral.Valor_conciliado;
+                }
+            }
+
+            actualizarVisibilidadCerrarCaso();
+        } catch (error) {
+            console.error("No se pudo precargar la información previa del caso:", error);
+        }
+    }
+
     window.abrirModal = function (id) {
 
+        reincidenciaBloqueada = false;
         movilSeleccionado = id;
         document.getElementById("modal_registro").textContent = id;
         document.getElementById("miModal").style.display = "block";
+
+        const modoCierre = esModoCierreOperaciones(id);
+        configurarModoOperaciones(modoCierre);
+
+        if (modoCierre) {
+            precargarFormularioOperaciones(id);
+        }
+
+        if (CFG.propia === "svial") {
+            configurarConciliacionTercerosSvial(id);
+        }
 
         inputAdjuntos = document.getElementById("evidencia");
         listaAdjuntos = document.getElementById("lista_adjuntos");
@@ -992,6 +1191,24 @@ document.addEventListener("DOMContentLoaded", () => {
             actualizarObservacionesPorDanoAdicional();
         }
 
+        if (CFG.propia === "oper") {
+            document.querySelectorAll("input[name='CostoSupera2M']").forEach(r => r.checked = false);
+            document.getElementById("costo_dano_display").value = "";
+            document.getElementById("costo_dano").value = "";
+            document.getElementById("bloqueCostoDano").style.display = "none";
+            document.getElementById("bloqueResponsabilidad").style.display = "none";
+            document.querySelectorAll("input[name='ResponsabilidadOperador']").forEach(r => r.checked = false);
+            document.querySelectorAll("input[name='Conciliacion']").forEach(r => r.checked = false);
+            document.getElementById("mensajeReincidencia").style.display = "none";
+            document.getElementById("mensajeReincidencia").textContent = "";
+            document.getElementById("bloqueConciliacion").style.display = "none";
+            document.getElementById("bloqueValorConciliadoOper").style.display = "none";
+            document.getElementById("valor_conciliado_oper_display").value = "";
+            document.getElementById("valor_conciliado_oper").value = "";
+            const msgCosto = document.getElementById("msgCostoDano");
+            if (msgCosto) { msgCosto.style.display = "none"; msgCosto.textContent = ""; }
+        }
+
         const fp = document.getElementById("fecha_presentacion");
         if (fp) fp.value = "";
 
@@ -1009,6 +1226,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (mc) { mc.value = ""; mc.disabled = true; }
         if (vc) { vc.value = ""; }
         if (vcDisplay) { vcDisplay.value = ""; vcDisplay.disabled = true; }
+
+        if (CFG.propia === "svial") {
+            resetConciliacionTercerosSvial();
+        }
 
         // RRLL arranca en "NO" (caso no cerrado)
         const defaultRevinf = CFG.propia === "laboral" ? "NO" : "SI";
@@ -1147,6 +1368,223 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     //======================================================
+    // NUEVO FLUJO DE OPERACIONES
+    // (¿costo > $2.000.000? / responsabilidad / reincidencia / conciliación)
+    //======================================================
+
+    const costoDanoDisplay = document.getElementById("costo_dano_display");
+    const costoDanoHidden = document.getElementById("costo_dano");
+    const bloqueCostoDano = document.getElementById("bloqueCostoDano");
+    const bloqueResponsabilidad = document.getElementById("bloqueResponsabilidad");
+    const mensajeReincidencia = document.getElementById("mensajeReincidencia");
+    const bloqueConciliacion = document.getElementById("bloqueConciliacion");
+    const msgCostoDano = document.getElementById("msgCostoDano");
+    const bloqueValorConciliadoOper = document.getElementById("bloqueValorConciliadoOper");
+    const valorConciliadoOperDisplay = document.getElementById("valor_conciliado_oper_display");
+    const valorConciliadoOperHidden = document.getElementById("valor_conciliado_oper");
+    const bloqueConciliacionTercerosSvial = document.getElementById("bloqueConciliadoFavor");
+    const conciliadoAFavor = document.getElementById("conciliado_a_favor");
+    const valorConciliadoTercerosSvial = document.getElementById("valor_conciliado_terceros");
+
+    // Límite máximo permitido para "Costo del daño"
+    const LIMITE_COSTO_DANO = 2000000;
+
+    // Formato de miles para "Costo del daño" + validación en tiempo real
+    // (si supera el límite, se bloquea el guardado desde validarFormulario)
+    if (costoDanoDisplay && costoDanoHidden) {
+        costoDanoDisplay.addEventListener("input", () => {
+            const soloDigitos = costoDanoDisplay.value.replace(/\D/g, "");
+            costoDanoDisplay.value = soloDigitos
+                ? new Intl.NumberFormat("es-CO").format(Number(soloDigitos))
+                : "";
+            costoDanoHidden.value = soloDigitos;
+
+            const superaLimite = Number(soloDigitos || 0) > LIMITE_COSTO_DANO;
+            if (msgCostoDano) {
+                msgCostoDano.textContent = superaLimite
+                    ? "Valor supera el monto máximo permitido de $2.000.000"
+                    : "";
+                msgCostoDano.style.display = superaLimite ? "block" : "none";
+            }
+        });
+    }
+
+    // Formato de miles para "Valor conciliado" (mismo patrón que "Costo del daño")
+    if (valorConciliadoOperDisplay && valorConciliadoOperHidden) {
+        valorConciliadoOperDisplay.addEventListener("input", () => {
+            const soloDigitos = valorConciliadoOperDisplay.value.replace(/\D/g, "");
+            valorConciliadoOperDisplay.value = soloDigitos
+                ? new Intl.NumberFormat("es-CO").format(Number(soloDigitos))
+                : "";
+            valorConciliadoOperHidden.value = soloDigitos;
+        });
+    }
+
+    function resetConciliacionTercerosSvial() {
+        if (!bloqueConciliacionTercerosSvial) return;
+        bloqueConciliacionTercerosSvial.style.display = CFG.propia === "svial" ? "block" : "none";
+        conciliadoAFavor.value = "";
+        valorConciliadoTercerosSvial.value = "";
+        valorConciliadoTercerosSvial.disabled = true;
+    }
+
+    function actualizarValorConciliadoTercerosSvial() {
+        const haySeleccion = !!conciliadoAFavor.value;
+        valorConciliadoTercerosSvial.disabled = !haySeleccion;
+        if (!haySeleccion) valorConciliadoTercerosSvial.value = "";
+    }
+
+    async function configurarConciliacionTercerosSvial(id) {
+        resetConciliacionTercerosSvial();
+    }
+
+    if (conciliadoAFavor && valorConciliadoTercerosSvial) {
+        conciliadoAFavor.addEventListener("change", actualizarValorConciliadoTercerosSvial);
+        valorConciliadoTercerosSvial.addEventListener("input", () => {
+            const soloDigitos = valorConciliadoTercerosSvial.value.replace(/\D/g, "");
+            valorConciliadoTercerosSvial.value = soloDigitos
+                ? new Intl.NumberFormat("es-CO").format(Number(soloDigitos))
+                : "";
+        });
+    }
+
+    function resetResponsabilidadYConciliacion() {
+        reincidenciaBloqueada = false;
+        document.querySelectorAll("input[name='ResponsabilidadOperador']").forEach(r => r.checked = false);
+        document.querySelectorAll("input[name='Conciliacion']").forEach(r => r.checked = false);
+        mensajeReincidencia.style.display = "none";
+        mensajeReincidencia.textContent = "";
+        bloqueConciliacion.style.display = "none";
+        bloqueValorConciliadoOper.style.display = "none";
+        valorConciliadoOperDisplay.value = "";
+        valorConciliadoOperHidden.value = "";
+        actualizarVisibilidadCerrarCaso();
+    }
+
+    // Muestra/oculta "Cerrar caso" en tiempo real, únicamente cuando el
+    // flujo actual del formulario termina en Operaciones: responsabilidad
+    // = SI y conciliación = SI, o responsabilidad = NO APLICA. En
+    // cualquier otro caso el botón permanece oculto y solo existe
+    // "Guardar información".
+    function actualizarVisibilidadCerrarCaso() {
+        if (CFG.propia !== "oper") return;
+
+        if (reincidenciaBloqueada) {
+            document.getElementById("btnCerrarCaso").style.display = "none";
+            return;
+        }
+
+        const responsabilidad = document.querySelector("input[name='ResponsabilidadOperador']:checked");
+        const conciliacion = document.querySelector("input[name='Conciliacion']:checked");
+
+        const terminaEnOperaciones =
+            (responsabilidad?.value === "SI" && conciliacion?.value === "SI") ||
+            responsabilidad?.value === "NO APLICA";
+
+        document.getElementById("btnCerrarCaso").style.display =
+            terminaEnOperaciones ? "inline-block" : "none";
+    }
+
+    // Pregunta 1: ¿el costo del daño supera $2.000.000?
+    document.querySelectorAll("input[name='CostoSupera2M']").forEach(radio => {
+        radio.addEventListener("change", () => {
+            if (!radio.checked) return;
+
+            const superaValor = radio.value === "SI";
+
+            bloqueCostoDano.style.display = superaValor ? "none" : "block";
+            bloqueResponsabilidad.style.display = superaValor ? "none" : "block";
+
+            if (superaValor) {
+                costoDanoDisplay.value = "";
+                costoDanoHidden.value = "";
+                if (msgCostoDano) {
+                    msgCostoDano.style.display = "none";
+                    msgCostoDano.textContent = "";
+                }
+            }
+
+            resetResponsabilidadYConciliacion();
+        });
+    });
+
+    // Pregunta: ¿operador acepta la responsabilidad?
+    document.querySelectorAll("input[name='ResponsabilidadOperador']").forEach(radio => {
+        radio.addEventListener("change", async () => {
+            if (!radio.checked) return;
+
+            reincidenciaBloqueada = false;
+            mensajeReincidencia.style.display = "none";
+            mensajeReincidencia.textContent = "";
+            bloqueConciliacion.style.display = "none";
+            bloqueValorConciliadoOper.style.display = "none";
+            valorConciliadoOperDisplay.value = "";
+            valorConciliadoOperHidden.value = "";
+            document.querySelectorAll("input[name='Conciliacion']").forEach(r => r.checked = false);
+            actualizarVisibilidadCerrarCaso();
+
+            if (radio.value === "NO APLICA") {
+                return;
+            }
+
+            // La validación de reincidencia aplica tanto si el operador
+            // acepta la responsabilidad (SI) como si no la acepta (NO):
+            // ambas cuentan como responsabilidad del operador. "NO
+            // APLICA" ya retornó arriba y nunca llega aquí.
+            if (radio.value !== "SI" && radio.value !== "NO") return;
+
+            if (!movilSeleccionado) return;
+
+            try {
+                const resp = await fetch(`/Operaciones/verificar_reincidencia/${movilSeleccionado}`);
+                const data = await resp.json();
+
+                // Si el usuario cambió de respuesta mientras se consultaba,
+                // no se aplica una respuesta anterior.
+                if (!radio.checked) return;
+
+                if (data.bloqueado) {
+                    reincidenciaBloqueada = true;
+                    mensajeReincidencia.textContent =
+                        "El operador ya registra 3 eventos con responsabilidad dentro de un período de 2 meses. " +
+                        "El caso debe ser remitido a Relaciones Laborales.";
+                    mensajeReincidencia.style.display = "block";
+                    bloqueConciliacion.style.display = "none";
+                    document.getElementById("btnCerrarCaso").style.display = "none";
+                } else if (radio.value === "SI") {
+                    // La pregunta de conciliación solo existe cuando la
+                    // responsabilidad es SI; para NO el flujo continúa
+                    // igual que hoy (sin este bloque).
+                    bloqueConciliacion.style.display = "block";
+                }
+            } catch (error) {
+                console.error("No se pudo verificar la reincidencia del operador:", error);
+                alert("No se pudo verificar el historial del operador. Intente nuevamente.");
+            }
+        });
+    });
+
+    // Pregunta: ¿se llega a conciliación? Si es SI, aparece "Valor
+    // conciliado" (mismo patrón que "Costo del daño") y puede aparecer
+    // "Cerrar caso".
+    document.querySelectorAll("input[name='Conciliacion']").forEach(radio => {
+        radio.addEventListener("change", () => {
+            if (!radio.checked) return;
+
+            const esSi = radio.value === "SI";
+
+            bloqueValorConciliadoOper.style.display = esSi ? "block" : "none";
+            if (!esSi) {
+                valorConciliadoOperDisplay.value = "";
+                valorConciliadoOperHidden.value = "";
+            }
+
+            actualizarVisibilidadCerrarCaso();
+        });
+    });
+
+
+    //======================================================
     // CONSTRUIR FORMDATA
     //======================================================
 
@@ -1182,6 +1620,37 @@ document.addEventListener("DOMContentLoaded", () => {
         if (CFG.propia === "mtto") {
             const danoAdicional = document.querySelector("input[name='DanoAdicional']:checked");
             formData.append("dano_adicional", danoAdicional ? danoAdicional.value : "NO");
+        }
+
+        if (CFG.propia === "svial" && conciliadoAFavor.value) {
+            formData.append("conciliado_a_favor", conciliadoAFavor.value);
+            formData.append(
+                "valor_conciliado_terceros",
+                valorConciliadoTercerosSvial.value.replace(/\D/g, "")
+            );
+        }
+
+        // Operaciones: nuevo flujo (costo del daño / responsabilidad / conciliación)
+        if (CFG.propia === "oper") {
+            const costoSupera = document.querySelector("input[name='CostoSupera2M']:checked");
+            formData.append("costo_supera_2m", costoSupera ? costoSupera.value : "");
+
+            if (costoSupera && costoSupera.value === "NO") {
+                formData.append("costo_valor", document.getElementById("costo_dano").value);
+
+                const responsabilidad = document.querySelector("input[name='ResponsabilidadOperador']:checked");
+                formData.append("responsabilidad_operador", responsabilidad ? responsabilidad.value : "");
+
+                if (responsabilidad && responsabilidad.value === "SI" &&
+                    document.getElementById("bloqueConciliacion").style.display !== "none") {
+                    const conciliacion = document.querySelector("input[name='Conciliacion']:checked");
+                    formData.append("conciliacion", conciliacion ? conciliacion.value : "");
+
+                    if (conciliacion && conciliacion.value === "SI") {
+                        formData.append("valor_conciliado_oper", document.getElementById("valor_conciliado_oper").value);
+                    }
+                }
+            }
         }
 
         adjuntosSeleccionados.forEach(file => {
@@ -1232,6 +1701,47 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
+        if (CFG.propia === "oper") {
+            const costoSupera = document.querySelector("input[name='CostoSupera2M']:checked");
+            if (!costoSupera) {
+                alert("Responda si el costo del daño supera $2.000.000.");
+                return false;
+            }
+
+            if (costoSupera.value === "NO") {
+                if (!document.getElementById("costo_dano").value) {
+                    alert("Ingrese el costo del daño.");
+                    return false;
+                }
+
+                // Mientras el mensaje de "supera el monto máximo" esté
+                // visible, no se permite guardar la información.
+                if (Number(document.getElementById("costo_dano").value || 0) > LIMITE_COSTO_DANO) {
+                    return false;
+                }
+
+                const responsabilidad = document.querySelector("input[name='ResponsabilidadOperador']:checked");
+                if (!responsabilidad) {
+                    alert("Responda si el operador acepta la responsabilidad.");
+                    return false;
+                }
+
+                if (responsabilidad.value === "SI" &&
+                    document.getElementById("bloqueConciliacion").style.display !== "none") {
+                    const conciliacion = document.querySelector("input[name='Conciliacion']:checked");
+                    if (!conciliacion) {
+                        alert("Responda si se llega a conciliación.");
+                        return false;
+                    }
+
+                    if (conciliacion.value === "SI" && !document.getElementById("valor_conciliado_oper").value) {
+                        alert("Ingrese el valor conciliado.");
+                        return false;
+                    }
+                }
+            }
+        }
+
         return true;
     }
 
@@ -1253,6 +1763,23 @@ document.addEventListener("DOMContentLoaded", () => {
                 registro.laboral_cerrado = true;
                 debeOcultarse = true;
             }
+        } else if (CFG.propia === "oper") {
+            registro.tiene_oper = true;
+
+            // Si el caso termina en Operaciones (responsabilidad SI +
+            // conciliación SI), el registro debe seguir apareciendo como
+            // pendiente para poder cerrarse luego con "Cerrar caso". En
+            // cualquier otro escenario continúa el flujo hacia
+            // Relaciones Laborales exactamente como ya funciona hoy.
+            const responsabilidad = document.querySelector("input[name='ResponsabilidadOperador']:checked")?.value;
+            const conciliacion = document.querySelector("input[name='Conciliacion']:checked")?.value;
+            const terminaEnOperaciones =
+                !reincidenciaBloqueada && (
+                    (responsabilidad === "SI" && conciliacion === "SI") ||
+                    responsabilidad === "NO APLICA"
+                );
+
+            debeOcultarse = !terminaEnOperaciones;
         } else {
             registro["tiene_" + CFG.propia] = true;
             debeOcultarse = true;
@@ -1273,11 +1800,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function enviarFormulario() {
 
+        if (CFG.propia === "oper" && envioOperacionesEnCurso) return;
+
         if (!validarFormulario()) return;
 
         const formulario = FORM_CONFIG[CFG.propia];
         const endpoint = `/${CFG.modulo}/${formulario.endpoint}`;
         const idGuardado = movilSeleccionado;
+
+        if (CFG.propia === "oper") {
+            envioOperacionesEnCurso = true;
+            document.getElementById("btnGuardar").disabled = true;
+        }
 
         try {
             const response = await fetch(endpoint, {
@@ -1288,6 +1822,11 @@ document.addEventListener("DOMContentLoaded", () => {
             const result = await response.json();
 
             if (result.status === "success") {
+                if (CFG.propia === "oper" && result.bloqueado_reincidencia) {
+                    reincidenciaBloqueada = true;
+                    bloqueConciliacion.style.display = "none";
+                    document.getElementById("btnCerrarCaso").style.display = "none";
+                }
                 alert(result.message);
                 actualizarEstadoLocal(idGuardado);
                 cerrarModal();
@@ -1297,6 +1836,11 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             console.error(error);
             alert("Error enviando formulario.");
+        } finally {
+            if (CFG.propia === "oper") {
+                envioOperacionesEnCurso = false;
+                document.getElementById("btnGuardar").disabled = false;
+            }
         }
     }
 
@@ -1308,6 +1852,106 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("formModal").addEventListener("submit", e => {
         e.preventDefault();
         enviarFormulario();
+    });
+
+
+    //======================================================
+    // CERRAR CASO (solo Operaciones, cuando hubo conciliación)
+    //======================================================
+
+    // Envía únicamente la orden de cierre (Id + usuario). Se usa tanto en
+    // "modo cierre" (la info ya se guardó antes) como al final del flujo
+    // de guardar+cerrar del formulario nuevo.
+    async function enviarCierreCaso(idGuardado) {
+        const formData = new FormData();
+        formData.append("Id_damage_to_fleet", idGuardado);
+        formData.append("Usuario_registro_oper", document.body.dataset.usuario);
+
+        const response = await fetch(`/${CFG.modulo}/cerrar_caso_oper`, {
+            method: "POST",
+            body: formData
+        });
+
+        return response.json();
+    }
+
+    document.getElementById("btnCerrarCaso")?.addEventListener("click", async () => {
+
+        if (!movilSeleccionado) {
+            alert("Seleccione un registro.");
+            return;
+        }
+
+        const idGuardado = movilSeleccionado;
+
+        // Modo cierre: el caso ya fue guardado antes (reapareció en la
+        // bandeja únicamente para cerrarse). Solo se envía la orden de
+        // cierre, exactamente como ya funcionaba.
+        if (modoCierreActivo) {
+
+            if (!confirm("¿Confirma que desea cerrar este caso? Esta acción no se puede deshacer.")) {
+                return;
+            }
+
+            try {
+                const result = await enviarCierreCaso(idGuardado);
+
+                if (result.status === "success") {
+                    alert(result.message);
+                    registros = registros.filter(r => r.Id != idGuardado);
+                    renderTabla(registros);
+                    cerrarModal();
+                } else {
+                    alert(result.message);
+                }
+            } catch (error) {
+                console.error(error);
+                alert("Error cerrando el caso.");
+            }
+            return;
+        }
+
+        // Formulario nuevo: el caso termina en Operaciones (responsabilidad
+        // SI + conciliación SI). "Cerrar caso" primero guarda toda la
+        // información (igual que "Guardar información", reutilizando el
+        // mismo endpoint) y, si el guardado es exitoso, envía la orden de
+        // cierre reutilizando la misma lógica del modo cierre.
+        if (!validarFormulario()) return;
+
+        if (!confirm("¿Confirma que desea cerrar este caso? Esta acción no se puede deshacer.")) {
+            return;
+        }
+
+        try {
+            const responseGuardar = await fetch(`/${CFG.modulo}/${FORM_CONFIG[CFG.propia].endpoint}`, {
+                method: "POST",
+                body: construirFormData()
+            });
+
+            const resultGuardar = await responseGuardar.json();
+
+            if (resultGuardar.status !== "success") {
+                alert(resultGuardar.message);
+                return;
+            }
+
+            actualizarEstadoLocal(idGuardado);
+
+            const resultCierre = await enviarCierreCaso(idGuardado);
+
+            if (resultCierre.status === "success") {
+                alert(resultCierre.message);
+                registros = registros.filter(r => r.Id != idGuardado);
+                renderTabla(registros);
+            } else {
+                alert(resultCierre.message);
+            }
+
+            cerrarModal();
+        } catch (error) {
+            console.error(error);
+            alert("Error cerrando el caso.");
+        }
     });
 
 

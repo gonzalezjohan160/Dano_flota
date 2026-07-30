@@ -6,12 +6,15 @@ import pandas as pd
 from config import connect
 from datetime import datetime, timedelta
 from backend_security import login_required, requiere_permiso
+from config import BASE_DIR
+from pathlib import Path
+from config import UPLOAD_FOLDERS
 
 Historico_danos = Blueprint(
     'Historico_danos',               # nombre interno del blueprint
     __name__,
-    template_folder=r'..\frontend',
-    static_folder=r'..\Static'
+    template_folder=str(BASE_DIR/"frontend"),
+    static_folder=str(BASE_DIR/"Static")
 )
 
 
@@ -266,15 +269,24 @@ def ver_archivo():
     if not path:
         return abort(400, "Ruta de archivo no especificada")
 
-    # Normaliza la ruta para Windows
-    path = os.path.normpath(path)
+    # # Convertir a Path
+    path = Path(path).resolve()
+    
+     # Verificar que pertenezca a alguna carpeta permitida
+    permitido = any(
+        carpeta.resolve() in path.parents
+        for carpeta in UPLOAD_FOLDERS.values()
+    )
 
-    if not os.path.exists(path):
+    if not permitido:
+        abort(403)
+        
+    if not path.is_file():
         print(f"⚠️ Archivo no encontrado: {path}")
-        return abort(404, description="Archivo no encontrado")
+        abort(404, description="Archivo no encontrado")
 
     # Detectar tipo MIME según la extensión
-    mime_type, _ = guess_type(path)
+    mime_type, _ = guess_type(str(path))
 
     try:
         # Si es imagen, video o audio: mostrar directamente en el navegador
@@ -414,7 +426,7 @@ def exportar_excel():
             "COSTO": mtto.get("Costo"),
             "DAÑO ADICIONAL": mtto.get("dano_adicional"),
             "OBSERVACIONES MTTO": mtto.get("observaciones"),
-            "FECHA REGISTRO MANTENIMIENTO": mtto.get("Fecha_registro"),
+            "FECHA REGISTRO COSTO": mtto.get("Fecha_registro"),
             "USUARIO MTTO": mtto.get("Usuario_registro_mtto"),
 
             # SVIAL
@@ -426,7 +438,7 @@ def exportar_excel():
             "VALOR CONCILIADO": laboral.get("Valor_conciliado"),
             "CERRADO POR": laboral.get("Tipo_cerrado"),
             "CERRADO": laboral.get("Cerrado"),
-            "FECHA REGISTRO LABORAL": laboral.get("Fecha_registro"),
+            "FECHA REGISTRO DEBIDO PROCESO": laboral.get("Fecha_registro"),
             "USUARIO LABORAL": laboral.get("Usuario_registro_labora"),
             "PROCESO LABORAL MÚLTIPLE": proceso_texto.strip()
         }

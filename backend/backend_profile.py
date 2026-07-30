@@ -5,13 +5,14 @@ from config import connect
 from datetime import datetime
 from backend_security import login_required, requiere_permiso
 from werkzeug.security import generate_password_hash, check_password_hash
+from config import BASE_DIR
 
 
 Profile = Blueprint(
     'Profile',               # nombre interno del blueprint
     __name__,
-    template_folder=r'..\frontend',
-    static_folder=r'..\Static'
+    template_folder=str(BASE_DIR/"frontend"),
+    static_folder=str(BASE_DIR/"Static")
 )
 
 

@@ -4,12 +4,15 @@ from mimetypes import guess_type
 from config import connect
 from datetime import datetime
 from backend_security import login_required, requiere_permiso
+from config import BASE_DIR
+from config import UPLOAD_FOLDERS
+from pathlib import Path
 
 Historico_movil = Blueprint(
     'Historico_movil',               # nombre interno del blueprint
     __name__,
-    template_folder=r'..\frontend',
-    static_folder=r'..Static'
+    template_folder=str(BASE_DIR/"frontend"),
+    static_folder=str(BASE_DIR/"Static")
 )
 
 
@@ -195,15 +198,24 @@ def ver_archivo():
     if not path:
         return abort(400, "Ruta de archivo no especificada")
 
-    # Normaliza la ruta para Windows
-    path = os.path.normpath(path)
+    # Convertir a Path
+    path = Path(path).resolve()
+    
+    # Verificar que el archivo pertenezca a una carpeta permitida
+    permitido = any(
+        carpeta.resolve() in path.parents
+        for carpeta in UPLOAD_FOLDERS.values()
+    )
 
-    if not os.path.exists(path):
+    if not permitido:
+        abort(403)
+        
+    if not path.is_file():
         print(f"⚠️ Archivo no encontrado: {path}")
-        return abort(404, description="Archivo no encontrado")
+        abort(404, description="Archivo no encontrado")    
 
     # Detectar tipo MIME según la extensión
-    mime_type, _ = guess_type(path)
+    mime_type, _ = guess_type(str(path))
 
     try:
         # Si es imagen, video o audio: mostrar directamente en el navegador

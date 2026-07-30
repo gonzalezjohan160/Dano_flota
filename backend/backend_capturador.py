@@ -8,19 +8,25 @@ import requests
 import traceback
 from backend_security import login_required, requiere_permiso
 from backend_email import enviar_correo
+from pathlib import Path
+from flask import Flask
+from config import BASE_DIR
+from config import UPLOAD_FOLDERS
 
 
 Capturador = Blueprint(
-    'Capturador',               # nombre interno del blueprint
+    "Capturador",                                   # nombre interno del blueprint
     __name__,
-    template_folder=r'..\frontend',
-    static_folder=r'..\Static'
+    template_folder=str(BASE_DIR / "frontend"),
+    static_folder=str(BASE_DIR / "Static")               
 )
 
 
-FILES_DIR = r'C:\media\emapp\dano_flota\Files\Files_ppal'  # carpeta para guardar archivos
+FILES_DIR = UPLOAD_FOLDERS["Operaciones"]
+
 print("RUTA FILES_DIR:", FILES_DIR)
-os.makedirs(FILES_DIR, exist_ok=True)
+
+FILES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 
@@ -196,13 +202,13 @@ def submit_form():
 
         # --- 5. GUARDADO FÍSICO DE ARCHIVOS ---
         # Definir rutas
-        damage_folder = os.path.join(FILES_DIR, str(damage_id))
-        os.makedirs(damage_folder, exist_ok=True)
+        damage_folder = FILES_DIR/str(damage_id)
+        damage_folder.mkdir(parents=True, exist_ok=True)
 
         def allowed_file(filename):
             ALLOWED_EXT = {'.jpg', '.jpeg', '.png', '.gif', '.mp4', '.avi', 
                            '.mov', '.mp3', '.wav', '.pdf', '.ogg', '.webm'}
-            return os.path.splitext(filename)[1].lower() in ALLOWED_EXT
+            return Path(filename).suffix.lower() in ALLOWED_EXT
 
         for key, f in all_files:
             filename = f.filename
@@ -214,18 +220,19 @@ def submit_form():
 
             if allowed_file(filename):
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                name, ext = os.path.splitext(filename)
+                name = Path(filename).stem
+                ext = Path(filename).suffix
                 final_name = f"{name}_{timestamp}{ext}"
-                path = os.path.join(damage_folder, final_name)
+                path = damage_folder / final_name
                 
                 # Guardar en disco
-                f.save(path)
+                f.save(str(path))
 
                 # Registrar en tabla de archivos
                 cursor.execute("""
                     INSERT INTO table_damage_files (DamageId, FileName, FilePath)
                     VALUES (?, ?, ?)
-                """, (damage_id, final_name, path))
+                """, (damage_id, final_name, str(path)))
                 
         conn.commit()
         

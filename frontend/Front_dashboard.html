@@ -1,13 +1,13 @@
 {% extends "Interfaz.html" %}
 
-    
+
 {% block extra_css %}
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />   
-    <link rel="stylesheet" href="{{ url_for('static', filename='Style/Style_dashboard.css') }}">
-     
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="{{ url_for('static', filename='Style/Style_dashboard.css') }}">
+
 {% endblock %}
-   
-   
+
+
 {% block content %}
 
 
@@ -28,7 +28,7 @@
             <select name="uf">
                 <option value="">Todas las UF</option>
                 {% for uf in lista_uf %}
-                <option value="{{ uf }}" {% if uf == uf_sel %}selected{% endif %}>{{ uf }}</option>
+                <option value="{{ uf }}" {% if uf==uf_sel %}selected{% endif %}>{{ uf }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -36,7 +36,7 @@
     </form>
 
     <div class="grid-dashboard">
-        
+
         <div class="card card-full">
             <div class="card-header">
 
@@ -49,14 +49,11 @@
                         Móvil
                     </label>
 
-                    <input
-                        type="text"
-                        id="filtroMovil"
-                        placeholder="Ej: Z32-4032">
+                    <input type="text" id="filtroMovil" placeholder="Ej: Z32-4032">
 
                 </div>
                 <div class="table-scroll">
-                    <table class = "custom-table" id="tablaUltimosEventos">
+                    <table class="custom-table" id="tablaUltimosEventos">
                         <thead>
                             <tr>
                                 <th>Móvil</th>
@@ -65,7 +62,7 @@
                                 <th>Parte Afectada </th>
                             </tr>
                         </thead>
-                        
+
                         <tbody id="tbodyUltimosEventos">
                             {% for evento in ultimos_eventos %}
                             <tr>
@@ -73,45 +70,45 @@
                                 <td>{{evento.Fecha_evento}}</td>
                                 <td>{{evento.Zona_dano}}</td>
                                 <td>{{evento.Parte_afectada}}</td>
-                            </tr>    
-                            {% endfor %}    
-                        </tbody>    
-                    </table>    
-                </div>    
-            </div>    
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
         <div class="card">
-            <div class="card-header">Pendientes por Gestión</div>
+            <div class="card-header">Pendientes por gestión</div>
             <div class="card-body">
                 <canvas id="barChart1"></canvas>
             </div>
         </div>
 
         <div class="card">
-            <div class="card-header">Costo Daños vs Conciliado</div>
+            <div class="card-header">Costo daños vs conciliado</div>
             <div class="card-body">
                 <canvas id="barChart2"></canvas>
             </div>
         </div>
 
         <div class="card">
-            <div class="card-header">Total de Casos vs Casos Cerrados RRLL</div>
+            <div class="card-header">Total de casos vs casos cerrados RRLL</div>
             <div class="card-body">
                 <canvas id="barChartRRLL"></canvas>
             </div>
-        </div>    
+        </div>
 
         <div class="card">
-            <div class="card-header">Eventos por Franja Horaria</div>
+            <div class="card-header">Eventos por franja horaria</div>
             <div class="card-body">
                 <canvas id="lineChartFranjas"></canvas>
             </div>
         </div>
-        
-        
+
+
         <div class="card">
-            <div class="card-header">Top 10 Operadores (Siniestralidad)</div>
+            <div class="card-header">Top 10 operadores (Siniestralidad)</div>
             <div class="card-body table-scroll">
                 <table class="custom-table">
                     <thead>
@@ -137,8 +134,8 @@
             </div>
         </div>
 
-        <div class="card">  
-            <div class="card-header"> Rutas con Más Eventos</div>
+        <div class="card">
+            <div class="card-header"> Rutas con más eventos</div>
 
             <div class="card-body table-scroll">
                 <table class="custom-table">
@@ -146,9 +143,9 @@
                         <tr>
                             <th>Ruta</th>
                             <th class="text-center">Cantidad</th>
-                        </tr>   
+                        </tr>
                     </thead>
-                    
+
                     <tbody>
                         {% for row in ranking_rutas %}
                         <tr>
@@ -165,18 +162,18 @@
 
         <div class="card">
             <div class="card-header">
-                Usuarios con Más Eventos
+                Usuarios con más eventos
             </div>
 
             <div class="card-body table-scroll">
                 <table class="custom-table">
                     <thead>
                         <tr>
-                            <th>Registrador</th>
+                            <th>Usuario</th>
                             <th class="text-center">Cantidad</th>
-                        </tr>   
+                        </tr>
                     </thead>
-                    
+
                     <tbody>
                         {% for row in ranking_registradores %}
                         <tr>
@@ -185,13 +182,13 @@
                         </tr>
                         {% endfor %}
                     </tbody>
-                </table>        
+                </table>
             </div>
         </div>
 
         <div class="card card-full">
             <div class="card-header">
-                Eventos por Vehículo
+                Eventos por vehículo
             </div>
             <div class="card-body">
                 <div class="table-filter">
@@ -199,10 +196,7 @@
                         Móvil
                     </label>
 
-                    <input
-                        type="text"
-                        id="filtroVehiculo"
-                        placeholder="Ej: Z32-4032">
+                    <input type="text" id="filtroVehiculo" placeholder="Ej: Z32-4032">
 
                 </div>
                 <div class="table-scroll">
@@ -230,7 +224,7 @@
         </div>
 
         <div class="card">
-            <div class="card-header">Eventos por Zona Afectada</div>
+            <div class="card-header">Eventos por zona afectada</div>
             <div class="card-body table-scroll">
                 <table class="custom-table">
                     <thead>
@@ -253,7 +247,7 @@
         </div>
 
         <div class="card">
-            <div class="card-header">Georreferenciación de Daños</div>
+            <div class="card-header">Georreferenciación de daños</div>
             <div class="card-body">
                 <div id="map"></div>
             </div>
@@ -268,24 +262,24 @@
 
 {% block extra_js %}
 
-        <!-- Cargar Chart.js desde CDN -->
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        <!-- JSON de registros -->
-        <script id="registros-json" type="application/json">{{ registros | tojson }}</script>
-        <script id="costos-json" type="application/json">{{ costos | tojson }}</script>
-        <script id="franjas-json" type="application/json">{{ franjas | tojson }}</script>
-        <script id="valores-json" type="application/json">{{ valores | tojson }}</script>
-        <script id="rr-json" type="application/json">{{ rrll | tojson }}</script>
-        <script id="heat-data-json" type="application/json">{{ heatdata | tojson }}</script>
-        <script id="ultimos-eventos-json" type="application/json">
+<!-- Cargar Chart.js desde CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- JSON de registros -->
+<script id="registros-json" type="application/json">{{ registros | tojson }}</script>
+<script id="costos-json" type="application/json">{{ costos | tojson }}</script>
+<script id="franjas-json" type="application/json">{{ franjas | tojson }}</script>
+<script id="valores-json" type="application/json">{{ valores | tojson }}</script>
+<script id="rr-json" type="application/json">{{ rrll | tojson }}</script>
+<script id="heat-data-json" type="application/json">{{ heatdata | tojson }}</script>
+<script id="ultimos-eventos-json" type="application/json">
             {{ ultimos_eventos | tojson }}  
         </script>
-        <script id="vehiculos-json" type="application/json">{{ vehiculos | tojson }}</script>
+<script id="vehiculos-json" type="application/json">{{ vehiculos | tojson }}</script>
 
-        <canvas id="barChart"></canvas>
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
-        <script src="{{ url_for('Front_dashboard.static', filename='Script/Script_dashboard.js') }}"></script>
-        
+<canvas id="barChart"></canvas>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
+<script src="{{ url_for('Front_dashboard.static', filename='Script/Script_dashboard.js') }}"></script>
+
 
 {% endblock %}

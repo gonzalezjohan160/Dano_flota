@@ -1,12 +1,13 @@
 from flask import Blueprint, render_template, request, flash, redirect
 from config import connect
 from backend_security import login_required, requiere_permiso
+from config import BASE_DIR
 
 Modulo_permisos = Blueprint(
     'Modulo_permisos',
     __name__,
-    template_folder=r'..\frontend',   # Ajusta según tu carpeta de templates
-    static_folder=r'..\Static'        # Ajusta según tu carpeta de CSS/JS
+    template_folder=str(BASE_DIR/"frontend"),   
+    static_folder=str(BASE_DIR/"Static")       
 )
 
 @Modulo_permisos.route('/', methods=['GET', 'POST'])

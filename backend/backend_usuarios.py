@@ -2,12 +2,13 @@ from flask import Blueprint, render_template, request, flash, redirect
 from config import connect
 from werkzeug.security import generate_password_hash
 from backend_security import login_required, requiere_permiso
+from config import BASE_DIR
 
 Modulo_usuario = Blueprint(
     'Modulo_usuario',
     __name__,
-    template_folder=r'..\frontend',  
-    static_folder=r'..\Static'       
+    template_folder=str(BASE_DIR/"frontend"),  
+    static_folder=str(BASE_DIR/"Static")       
 )
 
 @Modulo_usuario.route('/', methods=['GET', 'POST'])

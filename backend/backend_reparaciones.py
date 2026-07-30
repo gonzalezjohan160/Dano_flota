@@ -5,17 +5,23 @@ from mimetypes import guess_type
 from config import connect
 import traceback
 from backend_security import login_required, requiere_permiso
+from config import BASE_DIR
+from config import UPLOAD_FOLDERS
+
 
 Capturador_rep = Blueprint(
     'Capturador_rep',               # nombre interno del blueprint
     __name__,
-    template_folder=r'..\frontend',
-    static_folder=r'..\Static'
+    template_folder= str(BASE_DIR/"frontend"),
+    static_folder=str(BASE_DIR/"Static")
 )
 
+
 # Ruta donde se guardan los archivos
-FILES_DIR = r'C:\media\emapp\dano_flota\Files\Files_reparaciones'  # carpeta para guardar archivos
-os.makedirs(FILES_DIR, exist_ok=True)
+FILES_DIR = UPLOAD_FOLDERS["Reparaciones"]
+
+# Crear la carpeta si no existe
+FILES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 
@@ -127,8 +133,8 @@ def submit_form():
         # GUARDADO DE ARCHIVOS
         # --------------------------------------
       
-        repair_folder = os.path.join(FILES_DIR, str(repair_id))
-        os.makedirs(repair_folder, exist_ok=True)
+        repair_folder = FILES_DIR / str(repair_id)
+        repair_folder.mkdir(parents=True, exist_ok=True)
 
         def allowed_file(filename):
                     ext = os.path.splitext(filename)[1].lower()
@@ -155,18 +161,18 @@ def submit_form():
                 
                 # El nombre final usará la 'key' original (foto, video, etc) para saber qué es
                 final_name = f"{key}_{timestamp}_{i}{ext}"
-                path = os.path.join(repair_folder, final_name)
+                path = repair_folder / final_name
 
                 # Resetear el puntero por si las validaciones de arriba lo movieron
                 f.seek(0)
-                f.save(path)
+                f.save(str(path))
 
                 # Guardar en la base de datos
                 cursor.execute("""
                     INSERT INTO table_intervenciones_files
                     (RepairId, FileName, FilePath)
                     VALUES (?, ?, ?)
-                """, (repair_id, final_name, path))
+                """, (repair_id, final_name, str(path)))
 
         conn.commit()
         cursor.close()
