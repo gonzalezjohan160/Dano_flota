@@ -6,7 +6,7 @@ from plistlib import UID
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-MEDIA_DIR = Path(os.getenv("MEDIA_DIR", "/media/emapp/"))
+MEDIA_DIR = Path(os.getenv("MEDIA_DIR", "/media/emapp/dano_flota"))
 
 
 # Carpeta principal
