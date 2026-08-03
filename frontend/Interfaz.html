@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <title>APP – Daño a flota</title>
@@ -7,176 +8,174 @@
     <!-- 👇 BLOQUE CSS DE LOS MÓDULOS -->
     {% block extra_css %}{% endblock %}
 </head>
-<body   data-modulo="{{tipo_modulo}}"
-        data-titulo="{{titulo_modulo}}"
-        data-usuario="{{ session.get('usuario', 'USER') }}">
 
-<header class="topbar">
-    <div class="logo">G-FLEETDAMAGE <span>Gmasivo Solutions</span></div>
+<body data-modulo="{{tipo_modulo}}" data-titulo="{{titulo_modulo}}" data-usuario="{{ session.get('usuario', 'USER') }}">
 
-    <div class="topbar-right">
+    <header class="topbar">
+        <div class="logo">G-FLEETDAMAGE <span>Gmasivo Solutions</span></div>
 
-        <a href="{{ url_for('Modulo_login.logout') }}"
-        onclick="return confirm('¿Deseas cerrar sesión?')"
-        class="logout-btn">
+        <div class="topbar-right">
 
-            <img src="{{ url_for('static', filename='Images/logout.png') }}" 
-                alt="Cerrar sesión">
-                
-        </a>
-    </div>
-</header>
+            <a href="{{ url_for('Modulo_login.logout') }}" onclick="return confirm('¿Deseas cerrar sesión?')"
+                class="logout-btn">
 
-<div class="layout">
-    <aside class="sidebar">
-        <div class="user-menu">
-            <div class="user" id="userToggle">
-                <div class="avatar">
-                    <img src="{{ url_for('static', filename='Images/usuario.png') }}" alt="Usuario">
-                </div>
+                <img src="{{ url_for('static', filename='Images/Logout.png') }}" alt="Cerrar sesión">
 
-                <div class="user-info">
-                    <span class="username">
-                        {{ session.get('usuario', 'EM00084') }}
-                    </span>
+            </a>
+        </div>
+    </header>
 
-                </div>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="user-menu">
+                <div class="user" id="userToggle">
+                    <div class="avatar">
+                        <img src="{{ url_for('static', filename='Images/usuario.png') }}" alt="Usuario">
+                    </div>
+
+                    <div class="user-info">
+                        <span class="username">
+                            {{ session.get('usuario', 'EM00084') }}
+                        </span>
+
+                    </div>
 
                     <div class="user-dropdown" id="userDropdown">
                         <a href="/Profile">Mi perfil</a>
                         <a href="{{ url_for('Modulo_login.logout') }}" class="logout-link">
                             Cerrar sesión
                         </a>
-                    </div>                
+                    </div>
+
+                </div>
+
 
             </div>
 
+            <nav>
+                {% if 'Ingresar_dashboard' in session.get('permisos', []) %}
+                <a href="javascript:void(0)" class="has-submenu">
+                    <span class="icon">
+                        <img src="{{ url_for('static', filename='Images/Dashboard.png') }}" alt="DASHBOARD">
+                    </span>
+                    <span class="text">Dashboard</span>
+                </a>
+                <div class="submenu">
+                    <a href="/Dashboard">Dashboard</a>
 
-        </div>
-        
-        <nav>
-            {% if 'Ingresar_dashboard' in session.get('permisos', []) %}
-            <a href="javascript:void(0)" class="has-submenu">
-                <span class="icon">
-                    <img src="{{ url_for('static', filename='Images/Dashboard.png') }}" alt="DASHBOARD">
-                </span>
-                <span class="text">Dashboard</span>
-            </a>
-            <div class="submenu">
-                <a href="/Dashboard">Dashboard</a>
+                    {% if 'Ingresar_historico_danos' in session.get('permisos', []) %}
+                    <a href="/Historico_danos">Historico de daños</a>
+                    {% endif %}
+                </div>
+                {% endif %}
 
-                {% if 'Ingresar_historico_danos' in session.get('permisos', []) %}
-                 <a href="/Historico_danos">Historico de daños</a>
-                 {% endif %}
-            </div>
-            {% endif %}
-            
-            <!-- OPERACIONES-->
-            <a href="javascript:void(0)" class="has-submenu">
-                <span class="icon">
-                    <img src="{{ url_for('static', filename='Images/Bus.png') }}" alt="Operaciones">
-                </span>
-                <span class="text">Operaciones</span>
-            </a>
-            <!-- SUB - OPERACIONES-->    
-            <div class="submenu">
-            {% if 'Ingresar_modulo__oper' in session.get('permisos', []) %}    
-                <a href="/Operaciones">Concepto operacional</a>
-            {% endif %}
-           
-            {% if 'Ingresar_captur_danos' in session.get('permisos', []) %}   
-                <a href="/Capturador">Subir evento</a>
-            {% endif %}
-            </div>
-            
-            
-            <!-- MANTENIMIENTO-->
-            <a href="javascript:void(0)" class="has-submenu">
-                <span class="icon">
-                    <img src="{{ url_for('static', filename='Images/Mtto.png') }}" alt="MTTO">
-                </span>
-                <span class="text">Mantenimiento</span>
-            </a>
+                <!-- OPERACIONES-->
+                <a href="javascript:void(0)" class="has-submenu">
+                    <span class="icon">
+                        <img src="{{ url_for('static', filename='Images/Bus.png') }}" alt="Operaciones">
+                    </span>
+                    <span class="text">Operaciones</span>
+                </a>
+                <!-- SUB - OPERACIONES-->
+                <div class="submenu">
+                    {% if 'Ingresar_modulo__oper' in session.get('permisos', []) %}
+                    <a href="/Operaciones">Concepto operacional</a>
+                    {% endif %}
 
-            <!-- SUB - MANTENIMIENTO-->
-            <div class="submenu">
-            {% if 'Ingresar_modulo__mtto' in session.get('permisos', []) %}
-                <a href="/Mtto">Valoración daño</a>
-            {% endif %}
-            {% if 'Ingresar_captur_reparaciones' in session.get('permisos', []) %}    
-                <a href="/Capturador_rep">Cargar reparaciónes</a>
-            {% endif %}
-            {% if 'Ingresar_danos_vs_reparaciones' in session.get('permisos', []) %}  
-                <a href="/Historico_movil">Historico movil</a>
-            {% endif %}
-            </div>
-            
-            
-            <!-- SEGURIDAD VIAL-->
-            <a href="javascript:void(0)" class="has-submenu">
-                <span class="icon">
-                    <img src="{{ url_for('static', filename='Images/Svial.png') }}" alt="Svial">
-                </span>
-                <span class="text">Seguridad Vial</span>
-            </a>
-
-            <!-- SUB - SEGURIDAD VIAL-->
-            <div class="submenu">
-            {% if 'Ingresar_modulo__svial' in session.get('permisos', []) %}    
-                <a href="/Svial">Concepto S.vial</a>
-            {% endif %}
-            </div>            
-            
-            <!-- R. LABORALES-->
-            <a href="javascript:void(0)" class="has-submenu">
-                <span class="icon">
-                    <img src="{{ url_for('static', filename='Images/laboral.png') }}" alt="R. Laborales">
-                </span>
-                <span class="text">R. Laborales</span>
-            </a>
-
-            <!-- SUB - R. LABORALES-->
-            <div class="submenu">
-            {% if 'Ingresar_modulo__laboral' in session.get('permisos', []) %}    
-                <a href="/laboral">Seguimiento caso</a>
-            {% endif %}
-            </div>
-            
+                    {% if 'Ingresar_captur_danos' in session.get('permisos', []) %}
+                    <a href="/Capturador">Subir evento</a>
+                    {% endif %}
+                </div>
 
 
-            <!-- T.I -->
-            <a href="javascript:void(0)" class="has-submenu">
-                <span class="icon">
-                    <img src="{{ url_for('static', filename='Images/T_I.png') }}" alt="T_I">
-                </span>
-                <span class="text">Administración</span>
-            </a>
+                <!-- MANTENIMIENTO-->
+                <a href="javascript:void(0)" class="has-submenu">
+                    <span class="icon">
+                        <img src="{{ url_for('static', filename='Images/Mtto.png') }}" alt="MTTO">
+                    </span>
+                    <span class="text">Mantenimiento</span>
+                </a>
 
-            <!-- SUB - T.I-->
-            <div class="submenu">
-            {% if 'Ingresar_correcciones' in session.get('permisos', []) %}       
-                <a href="/Correcciones">Corregir información</a>
-            {% endif %}
-            {% if 'Ingresar_crear_usuario' in session.get('permisos', []) %} 
-                <a href="/Modulo_usuario">Crear usuario</a>
-            {% endif %}
-            {% if 'Ingresar_permisos' in session.get('permisos', []) %} 
-                <a href="/Modulo_permisos">Crear permiso</a>
-             {% endif %}
-            {% if 'Ingresar_asignar_permisos' in session.get('permisos', []) %} 
-                <a href="/Modulo_permisos_roles">Asignar permisos a usuarios</a>
-            {% endif %}
-            </div>
-        </nav>
-    </aside>
+                <!-- SUB - MANTENIMIENTO-->
+                <div class="submenu">
+                    {% if 'Ingresar_modulo__mtto' in session.get('permisos', []) %}
+                    <a href="/Mtto">Valoración daño</a>
+                    {% endif %}
+                    {% if 'Ingresar_captur_reparaciones' in session.get('permisos', []) %}
+                    <a href="/Capturador_rep">Cargar reparaciónes</a>
+                    {% endif %}
+                    {% if 'Ingresar_danos_vs_reparaciones' in session.get('permisos', []) %}
+                    <a href="/Historico_movil">Historico movil</a>
+                    {% endif %}
+                </div>
 
-    <main class="content">
-        {% block content %}{% endblock %}
-    </main>
-</div>
+
+                <!-- SEGURIDAD VIAL-->
+                <a href="javascript:void(0)" class="has-submenu">
+                    <span class="icon">
+                        <img src="{{ url_for('static', filename='Images/Svial.png') }}" alt="Svial">
+                    </span>
+                    <span class="text">Seguridad Vial</span>
+                </a>
+
+                <!-- SUB - SEGURIDAD VIAL-->
+                <div class="submenu">
+                    {% if 'Ingresar_modulo__svial' in session.get('permisos', []) %}
+                    <a href="/Svial">Concepto S.vial</a>
+                    {% endif %}
+                </div>
+
+                <!-- R. LABORALES-->
+                <a href="javascript:void(0)" class="has-submenu">
+                    <span class="icon">
+                        <img src="{{ url_for('static', filename='Images/laboral.png') }}" alt="R. Laborales">
+                    </span>
+                    <span class="text">R. Laborales</span>
+                </a>
+
+                <!-- SUB - R. LABORALES-->
+                <div class="submenu">
+                    {% if 'Ingresar_modulo__laboral' in session.get('permisos', []) %}
+                    <a href="/laboral">Seguimiento caso</a>
+                    {% endif %}
+                </div>
+
+
+
+                <!-- T.I -->
+                <a href="javascript:void(0)" class="has-submenu">
+                    <span class="icon">
+                        <img src="{{ url_for('static', filename='Images/T_I.png') }}" alt="T_I">
+                    </span>
+                    <span class="text">Administración</span>
+                </a>
+
+                <!-- SUB - T.I-->
+                <div class="submenu">
+                    {% if 'Ingresar_correcciones' in session.get('permisos', []) %}
+                    <a href="/Correcciones">Corregir información</a>
+                    {% endif %}
+                    {% if 'Ingresar_crear_usuario' in session.get('permisos', []) %}
+                    <a href="/Modulo_usuario">Crear usuario</a>
+                    {% endif %}
+                    {% if 'Ingresar_permisos' in session.get('permisos', []) %}
+                    <a href="/Modulo_permisos">Crear permiso</a>
+                    {% endif %}
+                    {% if 'Ingresar_asignar_permisos' in session.get('permisos', []) %}
+                    <a href="/Modulo_permisos_roles">Asignar permisos a usuarios</a>
+                    {% endif %}
+                </div>
+            </nav>
+        </aside>
+
+        <main class="content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
 
     <script src="{{ url_for('static', filename='Script/Script_interfaz.js') }}"></script>
-        <!-- 👇 BLOQUE JS DE LOS MÓDULOS -->
+    <!-- 👇 BLOQUE JS DE LOS MÓDULOS -->
     {% block extra_js %}{% endblock %}
 </body>
+
 </html>
