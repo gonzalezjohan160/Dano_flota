@@ -70,7 +70,6 @@ const DETAIL_CONFIG = {
 
     laboral_estado: [
         { key: "Tipo_cerrado", label: "TIPO DE CIERRE" },
-        { key: "Cerrado", label: "CERRADO" },
         { key: "Valor_conciliado", label: "VALOR CONCILIADO", formato: "moneda" }
     ]
 
@@ -493,12 +492,21 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         const filtroUF = document.getElementById("filtroUF")?.value || "todos";
+        const filtroEstado = document.getElementById("filtroEstado")?.value || "todos";
 
         const filtrados = registros.filter(registro => {
 
             if (filtroUF !== "todos" && String(registro.UF) !== filtroUF) {
                 return false;
             }
+
+            if (filtroEstado === "cerrados" && !registro.caso_cerrado) return false;
+            if (filtroEstado === "pendientes" && (
+                registro.caso_cerrado || (CFG.propia === "laboral" ? registro.tiene_laboral : registro.estado_modulo)
+            )) return false;
+            if (filtroEstado === "gestionados" && (
+                registro.caso_cerrado || !(CFG.propia === "laboral" ? registro.tiene_laboral : registro.estado_modulo)
+            )) return false;
 
             if (filtros["0"] &&
                 !String(registro.Id ?? "").toLowerCase().includes(filtros["0"])) {
@@ -547,6 +555,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         document
             .getElementById("filtroUF")
+            ?.addEventListener("change", filtrarTabla);
+        document
+            .getElementById("filtroEstado")
             ?.addEventListener("change", filtrarTabla);
     };
 
@@ -680,8 +691,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const propia = CFG.propia;
 
         if (propia === "laboral") {
-            if (registro.laboral_cerrado) {
-                return `<span class="badge badge-ok">Caso cerrado</span>`;
+            if (registro.caso_cerrado) {
+                return "";
             }
             return `<button class="btn btn-success" onclick="abrirModal('${registro.Id}')">
                         Añadir info
@@ -693,6 +704,22 @@ document.addEventListener("DOMContentLoaded", () => {
         // cerrarse (conciliación SI + Seguridad Vial finalizado), así
         // que "tiene_oper" no debe usarse aquí para ocultar el botón.
         if (propia === "oper") {
+            if (registro.caso_cerrado) {
+                const botonReabrir = CFG.puedeReabrirCaso
+                    ? ` <button class="btn btn-success" onclick="reabrirCaso('${registro.Id}')">Reabrir caso</button>`
+                    : "";
+                return botonReabrir;
+            }
+            return `<button class="btn btn-success" onclick="abrirModal('${registro.Id}')">
+                        Añadir info
+                    </button>`;
+        }
+
+        if (registro.caso_cerrado) {
+            return "";
+        }
+
+        if (propia === "mtto" || propia === "svial") {
             return `<button class="btn btn-success" onclick="abrirModal('${registro.Id}')">
                         Añadir info
                     </button>`;
@@ -709,7 +736,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 </button>`;
     }
 
-    renderTabla(registros);
+    filtrarTabla();
 
     window.renderTabla = renderTabla;
 
@@ -832,7 +859,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const operParaTabla = {
             ...oper,
-            CostoDelDanoOper: costoRegistradoPorOper ? mtto.Costo : null,
+            CostoDelDanoOper: oper.CostoDelDanoOper,
             ValorConciliadoOper: operRegistroConciliacion ? laboral.estado?.Valor_conciliado : null
         };
 
@@ -937,6 +964,223 @@ document.addEventListener("DOMContentLoaded", () => {
         console.log(`[Ver archivos] Mapa/geocodificación: ${(performance.now() - inicioMapa).toFixed(2)} ms`);
     }
 
+    //======================================================
+    // EDICIÓN DE INFORMACIÓN DEL EVENTO (solo gestionados)
+    //======================================================
+
+    let eventoEdicionActual = null;
+    const RUTAS_POR_UF = {
+        "10": ["CG147", "DG208", "CA127", "CH131", "CA129", "CA124", "TRANSITO A PATIO", "PATIO"],
+        "16": ["CL149", "CB144", "CG137", "CA134", "CB138", "CA151", "CF154", "CA153", "CB145", "TRANSITO A PATIO", "PATIO"]
+    };
+    const ZONAS_DANO = ["LATERAL IZQUIERDO", "LATERAL DERECHO", "FRONTAL", "POSTERIOR", "TECHO", "ESPEJOS", "PUERTAS", "VIDRIOS", "LLANTAS", "ITS", "SIRCI", "CARROCERÍA INTERNA", "TREN MOTRIZ", "CHASIS"];
+    const DANOS_OCASIONADOS = ["CONDUCTA OPERACIONAL", "INFRAESTRUCTURA PATIO", "INFRAESTRUCTURA VIAL", "VANDALISMO", "MECÁNICO", "SINIESTRO VIAL", "ALISTAMIENTO"];
+
+    function escaparHtml(valor) {
+        return String(valor ?? "").replace(/[&<>'"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[c]);
+    }
+
+    function opcionesSelect(valores, seleccionado) {
+        return valores.map(valor => `<option value="${escaparHtml(valor)}" ${String(valor) === String(seleccionado ?? "") ? "selected" : ""}>${escaparHtml(valor)}</option>`).join("");
+    }
+
+    const AREAS_ESPECIALES = {
+        "1": "MANTENIMIENTO", "2": "OPERACIONES", "3": "LAVADO",
+        "4": "CAPACITACION OBZ", "5": "TERCERO", "6": "TANQUEO", "7": "ADMINISTRATIVO"
+    };
+    const CENTROS_OPERACIONES = ["GAITANA", "SAN ÁNDRES", "BILBAO", "SAN BERNARDINO"];
+
+    function mostrarAccionesEdicion(editando) {
+        document.getElementById("seccionMotivoModificacion").style.display = editando ? "block" : "none";
+        document.getElementById("btn_editar_informacion").style.display = editando ? "none" : "inline-block";
+        document.getElementById("btn_eliminar_evento").style.display = editando ? "none" : "inline-block";
+        document.getElementById("btn_guardar_modificacion").style.display = editando ? "inline-block" : "none";
+        document.getElementById("btn_cancelar_modificacion").style.display = editando ? "inline-block" : "none";
+    }
+
+    function prepararEdicionEvento(registro, detalle, data) {
+        const habilitado = CFG.propia === "oper";
+        document.getElementById("accionesModificacion").style.display = habilitado ? "block" : "none";
+        if (!habilitado) return;
+        eventoEdicionActual = { registro, detalle, data };
+        mostrarAccionesEdicion(false);
+    }
+
+    function actualizarMovilYTipologia() {
+        const uf = document.getElementById("evento_uf").value;
+        const movil = document.getElementById("evento_movil");
+        const prefijo = uf === "10" ? "Z32-" : "Z34-";
+        const digitos = movil.value.replace(/^Z(?:32|34)-/i, "").replace(/\D/g, "").slice(0, 4);
+        movil.value = prefijo + digitos;
+        const primerDigito = digitos.charAt(0);
+        document.getElementById("evento_tipologia").value = primerDigito === "7" ? "PADRÓN" : primerDigito === "4" ? "BUSETÓN" : "";
+    }
+
+    async function actualizarOperador() {
+        const codigo = document.getElementById("evento_codigo").value.trim();
+        const area = document.getElementById("evento_area");
+        if (AREAS_ESPECIALES[codigo]) {
+            area.value = AREAS_ESPECIALES[codigo];
+            return;
+        }
+        area.value = "OBZ";
+        if (!codigo) return;
+        try {
+            const respuesta = await fetch(`/Operaciones/operador/${encodeURIComponent(codigo)}`);
+            const operador = await respuesta.json();
+            if (operador.existe) document.getElementById("evento_nombre").value = operador.nombre;
+        } catch (error) {
+            console.error("No se pudo consultar el operador:", error);
+        }
+    }
+
+    function entrarModoEdicionEvento() {
+        if (!eventoEdicionActual) return;
+        const { registro, detalle } = eventoEdicionActual;
+        const rutas = RUTAS_POR_UF[detalle.UF] || [];
+        const centroActual = CENTROS_OPERACIONES.includes(detalle.Centro_operaciones)
+            ? detalle.Centro_operaciones
+            : "";
+        document.getElementById("infoEventoBody").innerHTML = `
+            <tr><td>FECHA EVENTO</td><td><input type="date" id="evento_fecha" value="${escaparHtml(registro.fecha)}"></td></tr>
+            <tr><td>UF</td><td><select id="evento_uf">${opcionesSelect(["10", "16"], detalle.UF)}</select></td></tr>
+            <tr><td>MÓVIL</td><td><input id="evento_movil" inputmode="numeric" value="${escaparHtml(detalle.Movil)}"></td></tr>
+            <tr><td>CÓDIGO</td><td><input id="evento_codigo" value="${escaparHtml(detalle.Codigo)}"></td></tr>
+            <tr><td>NOMBRE</td><td><input id="evento_nombre" value="${escaparHtml(detalle.Nombre)}"></td></tr>
+            <tr><td>ÁREA</td><td><input id="evento_area" value="${escaparHtml(detalle.Area)}" readonly></td></tr>
+            <tr><td>RUTA</td><td><select id="evento_ruta">${opcionesSelect(rutas, detalle.Ruta)}</select></td></tr>
+            <tr><td>TIPOLOGÍA</td><td><input id="evento_tipologia" value="${escaparHtml(detalle.Tipologia)}" readonly></td></tr>
+            <tr><td>VERSIÓN LIBRE</td><td><input id="evento_version" value="${escaparHtml(detalle.Version_libre)}"></td></tr>
+            <tr><td>ZONA DEL DAÑO</td><td><select id="evento_zona">${opcionesSelect(ZONAS_DANO, detalle.Zona_dano)}</select></td></tr>
+            <tr><td>PARTE AFECTADA</td><td><input id="evento_parte" value="${escaparHtml(detalle.Parte_afectada)}"></td></tr>
+            <tr><td>DAÑO OCASIONADO POR</td><td><select id="evento_dano">${opcionesSelect(DANOS_OCASIONADOS, detalle.Dano_ocasionado)}</select></td></tr>
+            <tr><td>CENTRO OPERACIONAL</td><td><select id="evento_centro">${centroActual ? "" : '<option value="" selected disabled>Seleccione un centro</option>'}${opcionesSelect(CENTROS_OPERACIONES, centroActual)}</select></td></tr>
+            <tr><td>RESPONSABLE DILIGENCIAMIENTO</td><td>${escaparHtml(detalle.Registrador)}</td></tr>
+            <tr><td>FECHA REGISTRO</td><td>${escaparHtml(registro.fecha_r)}</td></tr>
+            <tr><td>DIRECCIÓN</td><td><input id="evento_direccion" value="${escaparHtml(detalle.Direccion)}"></td></tr>`;
+
+        document.getElementById("evento_uf").addEventListener("change", e => {
+            document.getElementById("evento_ruta").innerHTML = opcionesSelect(RUTAS_POR_UF[e.target.value] || [], "");
+            actualizarMovilYTipologia();
+        });
+        document.getElementById("evento_movil").addEventListener("input", actualizarMovilYTipologia);
+        document.getElementById("evento_codigo").addEventListener("change", actualizarOperador);
+        document.getElementById("evento_direccion").addEventListener("input", async e => {
+            const coords = await obtenerCoordsDesdeDireccion(e.target.value);
+            if (coords) actualizarMapaModal(coords);
+        });
+        actualizarMovilYTipologia();
+        actualizarOperador();
+        mostrarAccionesEdicion(true);
+    }
+
+    document.getElementById("btn_guardar_modificacion")?.addEventListener("click", async () => {
+        if (!eventoEdicionActual) return;
+        const motivo = document.getElementById("motivo_modificacion").value.trim();
+        if (!motivo) {
+            alert("El motivo del cambio es obligatorio.");
+            return;
+        }
+        const evento = {
+            Fecha_evento: document.getElementById("evento_fecha").value,
+            UF: document.getElementById("evento_uf").value,
+            Movil: document.getElementById("evento_movil").value,
+            Codigo: document.getElementById("evento_codigo").value,
+            Nombre: document.getElementById("evento_nombre").value,
+            Area: document.getElementById("evento_area").value,
+            Ruta: document.getElementById("evento_ruta").value,
+            Tipologia: document.getElementById("evento_tipologia").value,
+            Version_libre: document.getElementById("evento_version").value,
+            Zona_dano: document.getElementById("evento_zona").value,
+            Parte_afectada: document.getElementById("evento_parte").value,
+            Dano_ocasionado: document.getElementById("evento_dano").value,
+            Centro_operaciones: document.getElementById("evento_centro").value,
+            Direccion: document.getElementById("evento_direccion").value
+        };
+        const response = await fetch(`/${CFG.modulo}/actualizar_evento/${eventoEdicionActual.registro.Id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ evento, motivo_modificacion: motivo })
+        });
+        const resultado = await response.json();
+        alert(resultado.message);
+        if (resultado.status === "success") cerrarModalAdjuntos();
+    });
+
+    document.getElementById("btn_cancelar_modificacion")?.addEventListener("click", () => {
+        if (!eventoEdicionActual) return;
+        const { registro, data } = eventoEdicionActual;
+        renderDetalle(registro, data);
+        mostrarAccionesEdicion(false);
+    });
+
+    document.getElementById("btn_editar_informacion")?.addEventListener("click", entrarModoEdicionEvento);
+
+    document.getElementById("btn_eliminar_evento")?.addEventListener("click", async () => {
+        if (!eventoEdicionActual) return;
+        const motivo = (prompt("Motivo obligatorio de eliminación/cambio:") || "").trim();
+        if (!motivo) {
+            alert("El motivo del cambio es obligatorio.");
+            return;
+        }
+        if (!confirm("¿Confirma que desea eliminar este caso? Esta acción no se puede deshacer.")) return;
+        const response = await fetch(`/Operaciones/eliminar_evento/${eventoEdicionActual.registro.Id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ motivo_modificacion: motivo })
+        });
+        const resultado = await response.json();
+        alert(resultado.message);
+        if (resultado.status === "success") {
+            registros = registros.filter(registro => registro.Id != eventoEdicionActual.registro.Id);
+            filtrarTabla();
+            cerrarModalAdjuntos();
+        }
+    });
+
+    window.reabrirCaso = async function (id) {
+        const motivo = (prompt("Motivo obligatorio de reapertura:") || "").trim();
+        if (!motivo) {
+            alert("El motivo de reapertura es obligatorio.");
+            return;
+        }
+        if (!confirm("¿Confirma que desea reabrir este caso?")) return;
+        const response = await fetch(`/Operaciones/reabrir_evento/${id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ motivo_modificacion: motivo })
+        });
+        const resultado = await response.json();
+        alert(resultado.message);
+        if (resultado.status === "success") {
+            const registro = registros.find(registro => registro.Id == id);
+            if (registro) registro.caso_cerrado = false;
+            filtrarTabla();
+        }
+    };
+
+    document.getElementById("btn_reabrir_evento")?.addEventListener("click", async () => {
+        if (!eventoEdicionActual) return;
+        const motivo = (prompt("Motivo obligatorio de reapertura:") || "").trim();
+        if (!motivo) {
+            alert("El motivo de reapertura es obligatorio.");
+            return;
+        }
+        if (!confirm("¿Confirma que desea reabrir este caso?")) return;
+        const response = await fetch(`/Operaciones/reabrir_evento/${eventoEdicionActual.registro.Id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ motivo_modificacion: motivo })
+        });
+        const resultado = await response.json();
+        alert(resultado.message);
+        if (resultado.status === "success") {
+            eventoEdicionActual.registro.caso_cerrado = false;
+            filtrarTabla();
+            cerrarModalAdjuntos();
+        }
+    });
+
 
     //======================================================
     // RENDER GALERÍA
@@ -1015,9 +1259,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     return data;
                 });
             })
-            .then( data => {
+            .then(data => {
                 const inicioRender = performance.now();
                 renderDetalle(registro, data);
+                prepararEdicionEvento(registro, data.registro ?? {}, data);
 
                 // Junta los 4 conjuntos de archivos que puede ver el módulo
                 const todosArchivos = [
@@ -1065,6 +1310,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let modoCierreActivo = false;
     let envioOperacionesEnCurso = false;
     let reincidenciaBloqueada = false;
+    let modoCorreccionGestion = false;
 
     function configurarModoOperaciones(modoCierre) {
         if (CFG.propia !== "oper") return;
@@ -1130,6 +1376,35 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    async function precargarFormularioGestion(id) {
+        if (CFG.propia === "oper") return precargarFormularioOperaciones(id);
+        try {
+            const resp = await fetch(`/${CFG.modulo}/detalle/${id}`);
+            const data = await resp.json();
+            if (CFG.propia === "mtto") {
+                const mtto = data.mtto ?? {};
+                const costo = mtto.Costo ?? "";
+                document.getElementById("campo_principal").value = costo;
+                document.getElementById("campo_principal_costo_display").value = costo
+                    ? new Intl.NumberFormat("es-CO").format(Number(costo)) : "";
+                document.getElementById("observaciones").value = mtto.observaciones ?? "";
+                document.querySelectorAll("input[name='DanoAdicional']").forEach(r => {
+                    r.checked = r.value === (mtto.dano_adicional ?? "NO");
+                });
+            }
+            if (CFG.propia === "svial") {
+                const svial = data.svial ?? {};
+                document.getElementById("campo_principal").value = svial.Observaciones_svial ?? "";
+            }
+            if (CFG.propia === "laboral") {
+                const laboral = data.laboral?.estado ?? {};
+                document.getElementById("campo_principal").value = laboral.Observaciones_rrll ?? "";
+            }
+        } catch (error) {
+            console.error("No se pudo precargar la gestión:", error);
+        }
+    }
+
     window.abrirModal = function (id) {
 
         reincidenciaBloqueada = false;
@@ -1140,8 +1415,15 @@ document.addEventListener("DOMContentLoaded", () => {
         const modoCierre = esModoCierreOperaciones(id);
         configurarModoOperaciones(modoCierre);
 
-        if (modoCierre) {
-            precargarFormularioOperaciones(id);
+        const registro = registros.find(r => r.Id == id);
+        modoCorreccionGestion = !!registro && !registro.caso_cerrado && (
+            CFG.propia === "laboral" ? registro.tiene_laboral : registro.estado_modulo
+        );
+        document.getElementById("bloqueMotivoGestion").style.display = modoCorreccionGestion ? "block" : "none";
+        document.getElementById("motivo_gestion").value = "";
+
+        if (modoCorreccionGestion) {
+            precargarFormularioGestion(id);
         }
 
         if (CFG.propia === "svial") {
@@ -1168,6 +1450,7 @@ document.addEventListener("DOMContentLoaded", () => {
         movilSeleccionado = "";
         adjuntosSeleccionados = [];
         actualizarListaAdjuntos();
+        modoCorreccionGestion = false;
         limpiarFormulario();
     };
 
@@ -1467,10 +1750,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // cualquier otro caso el botón permanece oculto y solo existe
     // "Guardar información".
     function actualizarVisibilidadCerrarCaso() {
-        if (CFG.propia !== "oper") return;
+        // Operaciones ya no tiene cierre manual: el cierre es automático
+        // cuando finalizan las tres gestiones requeridas.
+        return;
 
         if (reincidenciaBloqueada) {
-            document.getElementById("btnCerrarCaso").style.display = "none";
+            document.getElementById("btnCerrarCaso")?.style && (document.getElementById("btnCerrarCaso").style.display = "none");
             return;
         }
 
@@ -1481,8 +1766,10 @@ document.addEventListener("DOMContentLoaded", () => {
             (responsabilidad?.value === "SI" && conciliacion?.value === "SI") ||
             responsabilidad?.value === "NO APLICA";
 
-        document.getElementById("btnCerrarCaso").style.display =
-            terminaEnOperaciones ? "inline-block" : "none";
+        const btnCerrarCaso = document.getElementById("btnCerrarCaso");
+        if (btnCerrarCaso) {
+            btnCerrarCaso.style.display = terminaEnOperaciones ? "inline-block" : "none";
+        }
     }
 
     // Pregunta 1: ¿el costo del daño supera $2.000.000?
@@ -1523,7 +1810,13 @@ document.addEventListener("DOMContentLoaded", () => {
             document.querySelectorAll("input[name='Conciliacion']").forEach(r => r.checked = false);
             actualizarVisibilidadCerrarCaso();
 
+            document.getElementById("lblValorConciliadoOper").textContent =
+                "VALOR CONCILIADO";
+
             if (radio.value === "NO APLICA") {
+                document.getElementById("lblValorConciliadoOper").textContent =
+                    "VALOR CONCILIADO CON TERCEROS";
+                bloqueValorConciliadoOper.style.display = "block";
                 return;
             }
 
@@ -1550,7 +1843,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         "El caso debe ser remitido a Relaciones Laborales.";
                     mensajeReincidencia.style.display = "block";
                     bloqueConciliacion.style.display = "none";
-                    document.getElementById("btnCerrarCaso").style.display = "none";
+                    document.getElementById("btnCerrarCaso")?.style && (document.getElementById("btnCerrarCaso").style.display = "none");
                 } else if (radio.value === "SI") {
                     // La pregunta de conciliación solo existe cuando la
                     // responsabilidad es SI; para NO el flujo continúa
@@ -1594,6 +1887,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         formData.append("Id_damage_to_fleet", movilSeleccionado);
         formData.append("Usuario_registro_oper", document.body.dataset.usuario);
+        if (modoCorreccionGestion) {
+            formData.append("Motivo_modificacion", document.getElementById("motivo_gestion").value.trim());
+        }
 
         const formulario = FORM_CONFIG[CFG.propia];
 
@@ -1610,7 +1906,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (CFG.propia === "laboral") {
                 formData.append(
-                    "Cerrado_input",
+                    "Tipo_cerrado_input",
                     revision === "SI" ? document.getElementById("motivo_cierre").value : ""
                 );
             }
@@ -1641,8 +1937,20 @@ document.addEventListener("DOMContentLoaded", () => {
                 const responsabilidad = document.querySelector("input[name='ResponsabilidadOperador']:checked");
                 formData.append("responsabilidad_operador", responsabilidad ? responsabilidad.value : "");
 
-                if (responsabilidad && responsabilidad.value === "SI" &&
-                    document.getElementById("bloqueConciliacion").style.display !== "none") {
+                if (responsabilidad && responsabilidad.value === "NO APLICA") {
+                    formData.append("conciliacion", "");
+
+                    formData.append(
+                        "valor_conciliado_oper",
+                        document.getElementById("valor_conciliado_oper").value
+                    );
+
+                } else if (
+                    responsabilidad &&
+                    responsabilidad.value === "SI" &&
+                    document.getElementById("bloqueConciliacion").style.display !== "none"
+                ) {
+
                     const conciliacion = document.querySelector("input[name='Conciliacion']:checked");
                     formData.append("conciliacion", conciliacion ? conciliacion.value : "");
 
@@ -1670,6 +1978,15 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!movilSeleccionado) {
             alert("Seleccione un registro.");
             return false;
+        }
+        if (modoCorreccionGestion) {
+            const motivoCambio = document.getElementById("motivo_gestion");
+
+            if (!motivoCambio || !motivoCambio.value.trim()) {
+                alert("El motivo del cambio es obligatorio.");
+                motivoCambio?.focus();
+                return false;
+            }
         }
 
         if (CFG.mostrarRevision) {
@@ -1757,29 +2074,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
         let debeOcultarse = false;
 
+        if (["oper", "mtto", "svial"].includes(CFG.propia)) {
+            registro["tiene_" + CFG.propia] = true;
+            registro.estado_modulo = true;
+            filtrarTabla();
+            return;
+        }
+
+
         if (CFG.propia === "laboral") {
             const revision = document.querySelector("input[name='Revinf']:checked")?.value;
             if (revision === "SI") {
-                registro.laboral_cerrado = true;
-                debeOcultarse = true;
+                registro.caso_cerrado = true;
+                registro.tiene_laboral = true;
+                // El filtro "Cerrados" debe mostrar inmediatamente el caso
+                // que RRLL acaba de cerrar; los otros filtros lo excluirán
+                // según estado_caso sin retirar su historial de la lista.
+                filtrarTabla();
+                return;
             }
-        } else if (CFG.propia === "oper") {
-            registro.tiene_oper = true;
-
-            // Si el caso termina en Operaciones (responsabilidad SI +
-            // conciliación SI), el registro debe seguir apareciendo como
-            // pendiente para poder cerrarse luego con "Cerrar caso". En
-            // cualquier otro escenario continúa el flujo hacia
-            // Relaciones Laborales exactamente como ya funciona hoy.
-            const responsabilidad = document.querySelector("input[name='ResponsabilidadOperador']:checked")?.value;
-            const conciliacion = document.querySelector("input[name='Conciliacion']:checked")?.value;
-            const terminaEnOperaciones =
-                !reincidenciaBloqueada && (
-                    (responsabilidad === "SI" && conciliacion === "SI") ||
-                    responsabilidad === "NO APLICA"
-                );
-
-            debeOcultarse = !terminaEnOperaciones;
         } else {
             registro["tiene_" + CFG.propia] = true;
             debeOcultarse = true;
@@ -1825,7 +2138,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (CFG.propia === "oper" && result.bloqueado_reincidencia) {
                     reincidenciaBloqueada = true;
                     bloqueConciliacion.style.display = "none";
-                    document.getElementById("btnCerrarCaso").style.display = "none";
+                    document.getElementById("btnCerrarCaso")?.style && (document.getElementById("btnCerrarCaso").style.display = "none");
                 }
                 alert(result.message);
                 actualizarEstadoLocal(idGuardado);

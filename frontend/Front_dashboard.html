@@ -93,7 +93,7 @@
         </div>
 
         <div class="card">
-            <div class="card-header">Total de casos vs casos cerrados RRLL</div>
+            <div class="card-header">Total de casos vs casos cerrados</div>
             <div class="card-body">
                 <canvas id="barChartRRLL"></canvas>
             </div>
@@ -162,7 +162,7 @@
 
         <div class="card">
             <div class="card-header">
-                Usuarios con más eventos
+                Usuarios con más eventos registrados
             </div>
 
             <div class="card-body table-scroll">
@@ -269,6 +269,7 @@
 <script id="costos-json" type="application/json">{{ costos | tojson }}</script>
 <script id="franjas-json" type="application/json">{{ franjas | tojson }}</script>
 <script id="valores-json" type="application/json">{{ valores | tojson }}</script>
+<script id="operaciones-json" type="application/json">{{ operaciones | tojson }}</script>
 <script id="rr-json" type="application/json">{{ rrll | tojson }}</script>
 <script id="heat-data-json" type="application/json">{{ heatdata | tojson }}</script>
 <script id="ultimos-eventos-json" type="application/json">

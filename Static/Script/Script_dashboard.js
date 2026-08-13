@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const registros = getJSON('registros-json');
     const costos = getJSON('costos-json');
     const valores = getJSON('valores-json');
+    const operaciones = getJSON('operaciones-json');
     const heatData = getJSON('heat-data-json');
     const rrll = getJSON('rr-json');
     const franjas = getJSON('franjas-json');
@@ -37,7 +38,8 @@ document.addEventListener('DOMContentLoaded', function () {
             data: {
                 labels: costos.map(c => `${c[0]}-${String(c[1]).padStart(2, '0')}`),
                 datasets: [
-                    { label: 'Costo Daños', data: costos.map(c => c[2]), borderColor: '#ef4444', fill: false, tension: 0.3 },
+                    { label: 'Costo Mantenimiento', data: costos.map(c => c[2]), borderColor: '#ef4444', fill: false, tension: 0.3 },
+                    { label: 'Costo Operaciones', data: operaciones.map(o => o[2]), borderColor: '#f59e0b', fill: false, tension: 0.3 },
                     { label: 'Valor Conciliado', data: valores.map(v => v[2]), borderColor: '#3b82f6', fill: false, tension: 0.3 }
                 ]
             },

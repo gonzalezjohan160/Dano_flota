@@ -66,7 +66,7 @@ def detalle(id_damage):
 
     # 🔹 Laboral único
     cursor.execute("""
-        SELECT Tipo_cerrado, Cerrado, Valor_conciliado, Fecha_registro, Usuario_registro_labora
+        SELECT Tipo_cerrado, Valor_conciliado, Fecha_registro, Usuario_registro_labora
         FROM table_info_labora
         WHERE Id_damage_to_fleet = ?
     """, (id_damage,))
@@ -193,7 +193,7 @@ def modificar(id_damage):
         "table_info_oper": ["Observaciones_operaciones", "rev_error", "Observaciones_correctivos"],
         "table_info_mtto": ["Costo", "dano_adicional", "Observaciones_mtto"],
         "table_info_svial": ["Observaciones_svial"],
-        "table_info_labora": ["Valor_conciliado", "Tipo_cerrado", "Cerrado"]
+        "table_info_labora": ["Valor_conciliado", "Tipo_cerrado"]
     }
 
     conn = connect()

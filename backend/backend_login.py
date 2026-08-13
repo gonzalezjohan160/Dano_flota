@@ -73,6 +73,7 @@ def login():
         if usuario:
             user_id, password_hash, uf = usuario
             if check_password_hash(password_hash, password):
+                
                 session['usuario'] = username
                 session['usuario_id'] = user_id
                 session.permanent = True

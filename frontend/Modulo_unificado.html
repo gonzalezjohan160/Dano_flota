@@ -11,7 +11,9 @@
     Todo va bajo #formModal.form-laboral.
 -->
 <style>
-    #formModal .card-seccion-header { display: none; }
+    #formModal .card-seccion-header {
+        display: none;
+    }
 
     #formModal.form-laboral .card-seccion {
         background: #f7f8fa;
@@ -131,14 +133,17 @@
         cursor: pointer;
     }
 
-    #formModal.form-laboral #lblEvidencia { display: none; }
+    #formModal.form-laboral #lblEvidencia {
+        display: none;
+    }
 
     /* Toggle NO/SÍ tipo pastilla, en vez del radio button plano */
     #formModal.form-laboral #bloqueRevision .radio-buttons {
         display: flex;
         gap: 10px;
         margin-bottom: 14px;
-        flex-direction: row-reverse; /* en RRLL se ve NO primero, luego SI */
+        flex-direction: row-reverse;
+        /* en RRLL se ve NO primero, luego SI */
     }
 
     #formModal.form-laboral #bloqueRevision .radio-buttons label {
@@ -256,6 +261,13 @@
         <option value="10">UF 10</option>
         <option value="16">UF 16</option>
     </select>
+    <label for="filtroEstado" style="margin-left:12px;">Estado:</label>
+    <select id="filtroEstado" class="btn">
+        <option value="pendientes" selected>Pendientes</option>
+        <option value="gestionados">Gestionados</option>
+        <option value="cerrados">Cerrados</option>
+        <option value="todos">Todos</option>
+    </select>
 </div>
 
 <div class="table-card">
@@ -372,7 +384,8 @@
                          monetario, así que se reemplaza
                          el textarea de arriba por este input con formato
                          de miles. -->
-                    <input type="text" id="campo_principal_costo_display" placeholder="Ingrese solo número" inputmode="numeric" style="width:100%; display:none;">
+                    <input type="text" id="campo_principal_costo_display" placeholder="Ingrese solo número"
+                        inputmode="numeric" style="width:100%; display:none;">
                 </div>
 
                 <div id="bloqueConciliadoFavor" style="display:none; margin-top:12px;">
@@ -393,13 +406,8 @@
                         VALOR CONCILIADO
                     </label>
 
-                    <input
-                    type="text"
-                    id="valor_conciliado_terceros"
-                    placeholder="Ingrese el valor"
-                    inputmode="numeric"
-                    disabled
-                    style="width:100%;">
+                    <input type="text" id="valor_conciliado_terceros" placeholder="Ingrese el valor" inputmode="numeric"
+                        disabled style="width:100%;">
 
                 </div>
 
@@ -459,7 +467,8 @@
                         </div>
                         <div class="form-group">
                             <label for="valor_conciliado_display">Valor conciliado</label>
-                            <input type="text" id="valor_conciliado_display" placeholder="Ingrese solo número" inputmode="numeric" disabled>
+                            <input type="text" id="valor_conciliado_display" placeholder="Ingrese solo número"
+                                inputmode="numeric" disabled>
                             <input type="hidden" id="valor_conciliado" value="">
                         </div>
                     </div>
@@ -492,7 +501,8 @@
                 <!-- Solo si CostoSupera2M = NO -->
                 <div id="bloqueCostoDano" style="display:none;">
                     <label for="costo_dano_display">COSTO DEL DAÑO</label>
-                    <input type="text" id="costo_dano_display" placeholder="Ingrese solo número" inputmode="numeric" style="width:100%;">
+                    <input type="text" id="costo_dano_display" placeholder="Ingrese solo número" inputmode="numeric"
+                        style="width:100%;">
                     <input type="hidden" id="costo_dano" value="">
                     <div id="msgCostoDano" style="display:none; color:#c00; font-size:13px; margin-top:4px;"></div>
                 </div>
@@ -517,7 +527,31 @@
                 </div>
 
                 <!-- Mensaje de bloqueo por reincidencia (3 eventos en 2 meses) -->
-                <div id="mensajeReincidencia" class="badge" style="display:none; background:#ffeaea; color:#b30000; padding:10px; border-radius:6px; margin-bottom:12px;"></div>
+                <div id="mensajeReincidencia" class="badge"
+                    style="display:none; background:#ffeaea; color:#b30000; padding:10px; border-radius:6px; margin-bottom:12px;">
+                </div>
+
+                <!-- si acepta responsabilidad = NO APLICA -->
+                <div id="bloqueValorConciliadoTerceros" style="display:none;">
+                    <label for="valor_conciliado_terceros_display">
+                        VALOR CONCILIADO CON TERCEROS
+                    </label>
+
+                    <input
+                        type="text"
+                        id="valor_conciliado_terceros_display"
+                        placeholder="Ingrese solo número"
+                        inputmode="numeric"
+                        style="width:100%;"
+                    >
+
+                    <input
+                        type="hidden"
+                        id="valor_conciliado_terceros"
+                        value=""
+                    >
+                </div>
+
 
                 <!-- Solo si responsabilidad = SI y no hay reincidencia -->
                 <div id="bloqueConciliacion" style="display:none;">
@@ -536,8 +570,18 @@
 
                 <!-- Solo si Conciliacion = SI -->
                 <div id="bloqueValorConciliadoOper" style="display:none;">
-                    <label for="valor_conciliado_oper_display">VALOR CONCILIADO</label>
-                    <input type="text" id="valor_conciliado_oper_display" placeholder="Ingrese solo número" inputmode="numeric" style="width:100%;">
+                    <label id="lblValorConciliadoOper" for="valor_conciliado_oper_display">
+                        VALOR CONCILIADO
+                    </label>
+
+                    <input
+                        type="text"
+                        id="valor_conciliado_oper_display"
+                        placeholder="Ingrese solo número"
+                        inputmode="numeric"
+                        style="width:100%;"
+                    >
+
                     <input type="hidden" id="valor_conciliado_oper" value="">
                 </div>
 
@@ -554,9 +598,13 @@
                 <div id="lista_adjuntos"></div>
             </div>
 
+            <div id="bloqueMotivoGestion" class="card-seccion" style="display:none;">
+                <label for="motivo_gestion">MOTIVO DEL CAMBIO</label>
+                <textarea id="motivo_gestion" rows="3" style="width:100%;"></textarea>
+            </div>
+
             <div style="text-align:right;">
                 <button id="btnGuardar" type="submit" class="btn btn-success">💾 Guardar información</button>
-                <button id="btnCerrarCaso" type="button" class="btn btn-success" style="display:none;">🔒 Cerrar caso</button>
             </div>
         </form>
     </div>
@@ -571,7 +619,9 @@
             <h3 style="text-align:center;">📝 INFORMACIÓN DEL EVENTO <span id="modal_registro1"></span></h3>
             <div class="tabla-estilo">
                 <table id="infoEvento">
-                    <thead><tr></tr></thead>
+                    <thead>
+                        <tr></tr>
+                    </thead>
                     <tbody id="infoEventoBody"></tbody>
                 </table>
             </div>
@@ -585,7 +635,9 @@
             <h3 style="text-align:center;">🛠️ INFORMACIÓN OPERACIONAL</h3>
             <div class="tabla-estilo">
                 <table id="info_oper">
-                    <thead><tr></tr></thead>
+                    <thead>
+                        <tr></tr>
+                    </thead>
                     <tbody id="infoEventooper"></tbody>
                 </table>
             </div>
@@ -595,7 +647,9 @@
             <h3 style="text-align:center;">👨‍🔧 INFORMACIÓN DE MANTENIMIENTO</h3>
             <div class="tabla-estilo">
                 <table id="info_mtto">
-                    <thead><tr></tr></thead>
+                    <thead>
+                        <tr></tr>
+                    </thead>
                     <tbody id="infoEventomtto"></tbody>
                 </table>
             </div>
@@ -605,7 +659,9 @@
             <h3 style="text-align:center;">👮‍♂️ INFORMACIÓN DE SEGURIDAD VÍAL</h3>
             <div class="tabla-estilo">
                 <table id="info_svial">
-                    <thead><tr></tr></thead>
+                    <thead>
+                        <tr></tr>
+                    </thead>
                     <tbody id="infoEventosvial"></tbody>
                 </table>
             </div>
@@ -615,7 +671,9 @@
             <h3 style="text-align:center;">⚖️ RELACIONES LABORALES</h3>
             <div class="tabla-estilo">
                 <table id="info_laboral">
-                    <thead><tr></tr></thead>
+                    <thead>
+                        <tr></tr>
+                    </thead>
                     <tbody id="infoEventolaboral"></tbody>
                 </table>
             </div>
@@ -623,6 +681,24 @@
 
         <h3 style="text-align:center;">📎 ARCHIVOS ADJUNTOS</h3>
         <div id="galeriaAdjuntos" class="galeria"></div>
+
+        <div id="accionesModificacion" style="text-align:center; margin-top:15px; display:none;">
+            <button id="btn_editar_informacion" type="button" class="btn btn-success">Editar información</button>
+            <button id="btn_eliminar_evento" type="button" class="btn" style="background:#c62828; color:#fff;">Eliminar caso</button>
+            <button id="btn_guardar_modificacion" type="button" class="btn btn-success" style="display:none;">Guardar información</button>
+            <button id="btn_cancelar_modificacion" type="button" class="btn" style="display:none;">Cancelar</button>
+        </div>
+
+        <!-- ================= MOTIVO DE LA MODIFICACIÓN ================= -->
+        <div id="seccionMotivoModificacion" style="display:none;">
+            <h3 style="text-align:center;">📝 Motivo de la modificación</h3>
+            <div class="form-group">
+                <label for="motivo_modificacion">Motivo de la modificación *</label>
+                <textarea id="motivo_modificacion" name="motivo_modificacion" rows="3" style="width:100%;"
+                    placeholder="Escriba el motivo por el cual está realizando esta modificación..."></textarea>
+            </div>
+        </div>
+
     </div>
 </div>
 

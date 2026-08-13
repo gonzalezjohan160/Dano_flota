@@ -43,18 +43,72 @@ def index():
         if fecha_fin - fecha_inicio > timedelta(days=62):
             return "El rango de fechas no puede superar 2 meses", 400
         
-    # Traemos los registros principales
-    query_main = """ 
+    filtro_uf = request.args.get('filtro_uf', 'todos')
+    filtro_estado = request.args.get('filtro_estado', 'todos')
+    filtros = {
+        'id': request.args.get('f_id', '').strip(),
+        'fecha': request.args.get('f_fecha', '').strip(),
+        'movil': request.args.get('f_movil', '').strip(),
+        'codigo': request.args.get('f_codigo', '').strip(),
+        'nombre': request.args.get('f_nombre', '').strip(),
+    }
+    try:
+        pagina = max(1, int(request.args.get('pagina', 1)))
+    except ValueError:
+        pagina = 1
+    registros_por_pagina = 30
+
+    filtros_sql = ["d.Fecha_evento BETWEEN ? AND ?"]
+    parametros = [fecha_inicio_str, fecha_fin_str]
+    if filtro_uf in ('10', '16'):
+        filtros_sql.append("d.UF = ?")
+        parametros.append(filtro_uf)
+    if filtro_estado == 'abiertos':
+        filtros_sql.append("d.estado_caso = 0")
+    elif filtro_estado == 'cerrados':
+        filtros_sql.append("d.estado_caso = 1")
+    if filtros['id']:
+        filtros_sql.append("CAST(d.Id AS varchar(20)) LIKE ?")
+        parametros.append(f"%{filtros['id']}%")
+    if filtros['fecha']:
+        filtros_sql.append("CAST(d.Fecha_evento AS date) = ?")
+        parametros.append(filtros['fecha'])
+    if filtros['movil']:
+        filtros_sql.append("d.Movil LIKE ?")
+        parametros.append(f"%{filtros['movil']}%")
+    if filtros['codigo']:
+        filtros_sql.append("d.Codigo LIKE ?")
+        parametros.append(f"%{filtros['codigo']}%")
+    if filtros['nombre']:
+        filtros_sql.append("d.Nombre LIKE ?")
+        parametros.append(f"%{filtros['nombre']}%")
+    where_sql = " AND ".join(filtros_sql)
+
+    cursor.execute(f"SELECT COUNT(*) FROM table_damage_to_fleet d WHERE {where_sql}", parametros)
+    total_registros = cursor.fetchone()[0]
+    total_paginas = max(1, (total_registros + registros_por_pagina - 1) // registros_por_pagina)
+    pagina = min(pagina, total_paginas)
+    desplazamiento = (pagina - 1) * registros_por_pagina
+
+    # Solo se recupera la página solicitada. Los filtros se aplican antes
+    # del OFFSET para no cargar todo el histórico en el navegador.
+    query_main = f"""
             SELECT 
                 d.Id, d.Fecha_evento, d.Movil, d.Fecha_registro, d.UF, d.Codigo, d.Nombre, d.Ruta,
                 d.Tipologia, d.Direccion, d.Version_libre, d.Parte_afectada, d.Dano_ocasionado,
                 d.Zona_dano, d.Registrador, d.Centro_operaciones, d.Area,
-                (SELECT COUNT(*) FROM table_damage_files f WHERE f.DamageId = d.Id) AS archivos_count          
+                (
+                    (SELECT COUNT(*) FROM table_damage_files f WHERE f.DamageId = d.Id) +
+                    (SELECT COUNT(*) FROM table_mtto_files f WHERE f.DamageToFleetId = d.Id) +
+                    (SELECT COUNT(*) FROM table_svial_files f WHERE f.DamageId = d.Id) +
+                    (SELECT COUNT(*) FROM table_laboral_files f WHERE f.DamageToFleetId = d.Id)
+                ) AS archivos_count
             FROM table_damage_to_fleet d
-            WHERE Fecha_evento BETWEEN ? AND ?
+            WHERE {where_sql}
             ORDER BY d.Id ASC
-    """ 
-    cursor.execute(query_main, (fecha_inicio_str, fecha_fin_str)) 
+            OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+    """
+    cursor.execute(query_main, parametros + [desplazamiento, registros_por_pagina])
     columns = [column[0] for column in cursor.description] 
     registros = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
@@ -122,7 +176,18 @@ def index():
         columnas_correcciones = [col[0] for col in cursor.description]
         r['correcciones'] = [dict(zip(columnas_correcciones, row)) for row in correcciones]
 
-    return render_template("Front_historico_danos.html", registros=registros)
+    conn.close()
+    return render_template(
+        "Front_historico_danos.html",
+        registros=registros,
+        pagina=pagina,
+        total_registros=total_registros,
+        fecha_inicio=fecha_inicio_str,
+        fecha_fin=fecha_fin_str,
+        filtro_uf=filtro_uf,
+        filtro_estado=filtro_estado,
+        filtros=filtros
+    )
     # Traemos todos los archivos
 
 
@@ -139,7 +204,9 @@ def detalle(id_damage):
 
     # OPERACIONES
     cursor.execute("""
-        SELECT Observaciones_operaciones, rev_error, Observaciones_correctivos, Fecha_registro, Usuario_registro_oper
+        SELECT Observaciones_operaciones, rev_error, Observaciones_correctivos,
+               responsabilidad_operador, conciliacion, costo_oper,
+               Fecha_registro, Usuario_registro_oper
         FROM table_info_oper
         WHERE Id_damage_to_fleet = ?
     """, (id_damage,))
@@ -149,7 +216,8 @@ def detalle(id_damage):
 
     # SEGURIDAD VIAL
     cursor.execute("""
-        SELECT Observaciones_svial, Fecha_registro, Usuario_registro_svial
+        SELECT Observaciones_svial, valor_conciliado_terceros, conciliado_a_favor,
+               Fecha_registro, Usuario_registro_svial
         FROM table_info_svial
         WHERE Id_damage_to_fleet = ?
     """, (id_damage,))
@@ -169,7 +237,7 @@ def detalle(id_damage):
 
     # LABORAL UNICO
     cursor.execute("""
-        SELECT Tipo_cerrado, Cerrado, Valor_conciliado, Fecha_registro, Usuario_registro_labora
+        SELECT Tipo_cerrado, Valor_conciliado, Fecha_registro, Usuario_registro_labora
         FROM table_info_labora
         WHERE Id_damage_to_fleet = ?
     """, (id_damage,))
@@ -316,17 +384,26 @@ def exportar_excel():
     if fecha_fin - fecha_inicio > timedelta(days=62):  # ~2 meses
         return "El rango de fechas no puede superar 2 meses", 400
 
+    filtro_estado = request.args.get('filtro_estado', 'todos')
+
     conn = connect()
     cursor = conn.cursor()
 
-    query = """
+    filtros_sql = ["Fecha_evento BETWEEN ? AND ?"]
+    parametros = [fecha_inicio_str, fecha_fin_str]
+    if filtro_estado == 'abiertos':
+        filtros_sql.append("estado_caso = 0")
+    elif filtro_estado == 'cerrados':
+        filtros_sql.append("estado_caso = 1")
+
+    query = f"""
         SELECT *
         FROM table_damage_to_fleet
-        WHERE Fecha_evento BETWEEN ? AND ?
+        WHERE {' AND '.join(filtros_sql)}
         ORDER BY Id ASC
     """
 
-    cursor.execute(query, (fecha_inicio_str, fecha_fin_str))
+    cursor.execute(query, parametros)
     columnas = [col[0] for col in cursor.description]
     registros = [dict(zip(columnas, row)) for row in cursor.fetchall()]
 
@@ -338,7 +415,8 @@ def exportar_excel():
         # ================= OPER =================
         cursor.execute("""
             SELECT Observaciones_operaciones, rev_error,
-                   Observaciones_correctivos, Fecha_registro,
+                   Observaciones_correctivos, costo_oper,
+                   responsabilidad_operador, conciliacion, Fecha_registro,
                    Usuario_registro_oper
             FROM table_info_oper
             WHERE Id_damage_to_fleet = ?
@@ -358,7 +436,8 @@ def exportar_excel():
 
         # ================= SVIAL =================
         cursor.execute("""
-            SELECT Observaciones_svial, Fecha_registro,
+            SELECT Observaciones_svial, valor_conciliado_terceros,
+                   conciliado_a_favor, Fecha_registro,
                    Usuario_registro_svial
             FROM table_info_svial
             WHERE Id_damage_to_fleet = ?
@@ -368,7 +447,7 @@ def exportar_excel():
 
         # ================= LABORAL ÚNICO =================
         cursor.execute("""
-            SELECT Tipo_cerrado, Cerrado, Valor_conciliado,
+            SELECT Tipo_cerrado, Valor_conciliado,
                    Fecha_registro, Usuario_registro_labora
             FROM table_info_labora
             WHERE Id_damage_to_fleet = ?
@@ -422,8 +501,13 @@ def exportar_excel():
             "FECHA REGISTRO OPERACIONES": oper.get("Fecha_registro"),
             "USUARIO OPERACIONES": oper.get("Usuario_registro_oper"),
 
+            "COSTO DEL DAÑO OPERACIONES": oper.get("costo_oper"),
+            "RESPONSABILIDAD DEL OPERADOR": oper.get("responsabilidad_operador"),
+            "CONCILIACIÓN OPERACIONES": oper.get("conciliacion"),
+
             # MTTO
             "COSTO": mtto.get("Costo"),
+            "COSTO DE MANTENIMIENTO": mtto.get("Costo"),
             "DAÑO ADICIONAL": mtto.get("dano_adicional"),
             "OBSERVACIONES MTTO": mtto.get("observaciones"),
             "FECHA REGISTRO COSTO": mtto.get("Fecha_registro"),
@@ -434,10 +518,12 @@ def exportar_excel():
             "FECHA REGISTRO S. VIAL": svial.get("Fecha_registro"),
             "USUARIO S. VIAL": svial.get("Usuario_registro_svial"),
 
+            "VALOR CONCILIADO TERCEROS": svial.get("valor_conciliado_terceros"),
+            "CONCILIADO A FAVOR DE": svial.get("conciliado_a_favor"),
+
             # LABORAL
             "VALOR CONCILIADO": laboral.get("Valor_conciliado"),
-            "CERRADO POR": laboral.get("Tipo_cerrado"),
-            "CERRADO": laboral.get("Cerrado"),
+            "TIPO DE CIERRE": laboral.get("Tipo_cerrado"),
             "FECHA REGISTRO DEBIDO PROCESO": laboral.get("Fecha_registro"),
             "USUARIO LABORAL": laboral.get("Usuario_registro_labora"),
             "PROCESO LABORAL MÚLTIPLE": proceso_texto.strip()

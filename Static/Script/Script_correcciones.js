@@ -68,7 +68,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 
                 
                 if (seccionCompleta) {
-                        if (laboral.Cerrado === "SI") {
+                        if (Number(registro.estado_caso) === 1) {
                             // Escondemos TODA la sección (título, recuadro, etc.)
                             seccionCompleta.style.setProperty("display", "none", "important");
                         } else {
@@ -110,7 +110,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
                 if (seccionCompleta1) {
-                        if (laboral.Cerrado === "SI") {
+                        if (Number(registro.estado_caso) === 1) {
                             // Escondemos TODA la sección (título, recuadro, etc.)
                             seccionCompleta1.style.setProperty("display", "none", "important");
                         } else {
@@ -125,7 +125,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }}
 
                 if (seccionCompleta2) {
-                        if (laboral.Cerrado === "SI") {
+                        if (Number(registro.estado_caso) === 1) {
                             // Escondemos TODA la sección (título, recuadro, etc.)
                             seccionCompleta2.style.setProperty("display", "none", "important");
                         } else {
@@ -158,7 +158,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
                 if (seccionCompleta3) {
-                        if (laboral.Cerrado === "SI") {
+                        if (Number(registro.estado_caso) === 1) {
                             // Escondemos TODA la sección (título, recuadro, etc.)
                             seccionCompleta3.style.setProperty("display", "none", "important");
                         } else {
@@ -188,8 +188,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 // 5. LABORAL (table_info_labora)
                 infolaboral.innerHTML = `
                     <tr><td>VALOR CONCILIADO</td><td>${formatoCOP(laboral.Valor_conciliado)}</td><td><input type="number" name="Valor_conciliado" value="${laboral.Valor_conciliado || ""}" data-original="${laboral.Valor_conciliado || ""}"></td></tr>
-                    <tr><td>CERRADO POR</td><td>${laboral.Tipo_cerrado || "-"}</td><td><input type="text" name="Tipo_cerrado" value="${laboral.Tipo_cerrado || ""}" data-original="${laboral.Tipo_cerrado || ""}"></td></tr>
-                    <tr><td>CERRADO</td><td>${laboral.Cerrado || "-"}</td><td><input type="text" name="Cerrado" value="${laboral.Cerrado || ""}" data-original="${laboral.Cerrado || ""}"></td></tr>
+                    <tr><td>TIPO DE CIERRE</td><td>${laboral.Tipo_cerrado || "-"}</td><td><input type="text" name="Tipo_cerrado" value="${laboral.Tipo_cerrado || ""}" data-original="${laboral.Tipo_cerrado || ""}"></td></tr>
                     <tr>
                         <td>MULTIMEDIA</td>
                         <td colspan="2">

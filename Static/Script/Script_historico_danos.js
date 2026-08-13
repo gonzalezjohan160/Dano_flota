@@ -47,8 +47,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        // Recarga la página con las fechas seleccionadas
-        window.location.href = `/Historico_danos/?fecha_inicio=${fecha_inicio}&fecha_fin=${fecha_fin}`;
+        aplicarFiltrosDesdeFormulario();
     });
 
     document.getElementById("btnExportar").addEventListener("click", function() {
@@ -68,30 +67,49 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        // Exporta con las mismas fechas de la tabla
-        window.location.href = `/Historico_danos/exportar_excel?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+        const filtroEstado = document.getElementById("filtroEstado").value;
+        window.location.href = `/Historico_danos/exportar_excel?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&filtro_estado=${encodeURIComponent(filtroEstado)}`;
     });
 
 
-    window.activarFiltros = function () {
-        document.querySelectorAll("thead th input").forEach(input => {
-            if (!input.disabled) {
-                input.addEventListener("input", filtrarTabla);
-                input.addEventListener("change", filtrarTabla);
-            }
+    const paginacion = JSON.parse(document.getElementById("paginacion-json").textContent);
+
+    function aplicarFiltrosDesdeFormulario(pagina = 1) {
+        const params = new URLSearchParams();
+        params.set("fecha_inicio", document.getElementById("fecha_inicio").value);
+        params.set("fecha_fin", document.getElementById("fecha_fin").value);
+        params.set("filtro_uf", document.getElementById("filtroUF").value);
+        params.set("filtro_estado", document.getElementById("filtroEstado").value);
+        document.querySelectorAll("thead th input[data-filtro]").forEach(input => {
+            if (input.value.trim()) params.set(input.dataset.filtro, input.value.trim());
+        });
+        params.set("pagina", pagina);
+        window.location.href = `/Historico_danos/?${params.toString()}`;
+    }
+
+    function configurarFiltrosYPaginacion() {
+        document.getElementById("filtroUF").addEventListener("change", () => aplicarFiltrosDesdeFormulario());
+        document.getElementById("filtroEstado").addEventListener("change", () => aplicarFiltrosDesdeFormulario());
+        document.querySelectorAll("thead th input[data-filtro]").forEach(input => {
+            input.addEventListener("change", () => aplicarFiltrosDesdeFormulario());
+            input.addEventListener("keydown", event => {
+                if (event.key === "Enter") aplicarFiltrosDesdeFormulario();
+            });
         });
 
-        const filtroUF = document.getElementById("filtroUF");
-        if (filtroUF) {
-            filtroUF.addEventListener("change", filtrarTabla);
-        }
-    };
+        const inicio = paginacion.total_registros ? ((paginacion.pagina - 1) * paginacion.por_pagina) + 1 : 0;
+        const fin = Math.min(paginacion.pagina * paginacion.por_pagina, paginacion.total_registros);
+        document.getElementById("paginacionInfo").textContent = `${inicio}–${fin} de ${paginacion.total_registros}`;
+        document.getElementById("btnPaginaAnterior").disabled = paginacion.pagina <= 1;
+        document.getElementById("btnPaginaSiguiente").disabled = fin >= paginacion.total_registros;
+        document.getElementById("btnPaginaAnterior").addEventListener("click", () => aplicarFiltrosDesdeFormulario(paginacion.pagina - 1));
+        document.getElementById("btnPaginaSiguiente").addEventListener("click", () => aplicarFiltrosDesdeFormulario(paginacion.pagina + 1));
+    }
 
     // ================= TABLA =================
     function renderTabla(lista) {
         const tbody = document.getElementById("tablaRegistros");
         tbody.innerHTML = "";
-        activarFiltros();
 
 
 
@@ -141,6 +159,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    configurarFiltrosYPaginacion();
     renderTabla(registros);
 
 
@@ -245,6 +264,9 @@ document.addEventListener("DOMContentLoaded", () => {
                         <tr><td>OBSERVACIÓNES TECNICAS CONTROL OPERACIONAL</td><td>${oper ? oper.Observaciones_operaciones : '-'}</td></tr>
                         <tr><td>LA INFORMACIÓN CARGADA ES CORRECTA?</td><td>${oper ? oper.rev_error : '-'}</td></tr>
                         <tr><td>OBSERVACIÓNES DE DILIGENCIAMIENTO ERRONEO</td><td>${oper ? oper.Observaciones_correctivos : '-'}</td></tr>
+                        <tr><td>RESPONSABILIDAD DEL OPERADOR</td><td>${oper?.responsabilidad_operador || '-'}</td></tr>
+                        <tr><td>CONCILIACIÓN</td><td>${oper?.conciliacion || '-'}</td></tr>
+                        <tr><td>COSTO DEL DAÑO</td><td>${formatoCOP(oper?.costo_oper)}</td></tr>
                         <tr><td>FECHA REGISTRO OPERACIONES</td><td>${ oper?.Fecha_registro ? formatoFechaHora(oper.Fecha_registro) : '-'}</td></tr>
                         <tr><td>USUARIO</td><td>${ oper ? oper.Usuario_registro_oper : '-'}</td></tr>
                     `;
@@ -259,14 +281,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
                     infosvial.innerHTML = `
                         <tr><td>OBSERVACIONES</td><td>${svial?.Observaciones_svial || "-"}</td></tr>
+                        <tr><td>CONCILIADO A FAVOR DE</td><td>${svial?.conciliado_a_favor || "-"}</td></tr>
+                        <tr><td>VALOR CONCILIADO</td><td>${formatoCOP(svial?.valor_conciliado_terceros)}</td></tr>
                         <tr><td>FECHA REGISTRO S. VIAL</td><td>${svial?.Fecha_registro ? formatoFechaHora(svial.Fecha_registro) : "-"}</td></tr>
                         <tr><td>USUARIO</td><td>${svial?.Usuario_registro_svial || "-"}</td></tr>
                     `;
 
                     infolaboral.innerHTML = `
                         <tr><td>VALOR CONCILIADO</td><td>${formatoCOP(laboral?.Valor_conciliado) || "-"}</td></tr>
-                        <tr><td>CERRADO POR:</td><td>${laboral?.Tipo_cerrado || "-"}</td></tr>
-                        <tr><td>CERRADO</td><td>${laboral?.Cerrado || "-"}</td></tr>
+                        <tr><td>TIPO DE CIERRE:</td><td>${laboral?.Tipo_cerrado || "-"}</td></tr>
                         <tr><td>FECHA REGISTRO DEBIDO PROCESO</td><td>${ laboral?.Fecha_registro ? formatoFechaHora(laboral.Fecha_registro) : "-"}</td></tr>
                         <tr><td>USUARIO</td><td>${laboral?.Usuario_registro_labora || "-"}</td></tr>
                         <tr><td>PROCESO</td><td>${observacionesHTML}</td></tr>

@@ -7,6 +7,12 @@
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     />
+    <style>
+        .paginacion-tabla { display:flex; align-items:center; justify-content:flex-end; gap:6px; padding:10px 4px; font-size:13px; color:#5f6368; }
+        .btn-paginacion { width:28px; height:28px; border:none; border-radius:50%; background:transparent; color:#5f6368; font-size:16px; cursor:pointer; }
+        .btn-paginacion:hover:not(:disabled) { background:#eee; }
+        .btn-paginacion:disabled { color:#ccc; cursor:not-allowed; }
+    </style>
 {% endblock %}
    
    
@@ -19,20 +25,29 @@
         <div class="filtro-inline">
             <label for="filtroUF">UF:</label>
             <select id="filtroUF" class="control-compacto">
-                <option value="todos">Todos</option>
-                <option value="10">10</option>
-                <option value="16">16</option>
+                <option value="todos" {% if filtro_uf == 'todos' %}selected{% endif %}>Todos</option>
+                <option value="10" {% if filtro_uf == '10' %}selected{% endif %}>10</option>
+                <option value="16" {% if filtro_uf == '16' %}selected{% endif %}>16</option>
+            </select>
+        </div>
+
+        <div class="filtro-inline">
+            <label for="filtroEstado">ESTADO:</label>
+            <select id="filtroEstado" class="control-compacto">
+                <option value="todos" {% if filtro_estado == 'todos' %}selected{% endif %}>Todos</option>
+                <option value="abiertos" {% if filtro_estado == 'abiertos' %}selected{% endif %}>Abiertos</option>
+                <option value="cerrados" {% if filtro_estado == 'cerrados' %}selected{% endif %}>Cerrados</option>
             </select>
         </div>
 
         <div class="filtro-inline">
             <label for="fecha_inicio">Inicio:</label>
-            <input type="date" id="fecha_inicio" name="fecha_inicio" class="control-compacto" value="{{ request.args.get('fecha_inicio', '') }}">
+            <input type="date" id="fecha_inicio" name="fecha_inicio" class="control-compacto" value="{{ fecha_inicio }}">
         </div>
 
         <div class="filtro-inline">
             <label for="fecha_fin">Fin:</label>
-            <input type="date" id="fecha_fin" name="fecha_fin" class="control-compacto" value="{{ request.args.get('fecha_fin', '') }}">
+            <input type="date" id="fecha_fin" name="fecha_fin" class="control-compacto" value="{{ fecha_fin }}">
         </div>
 
         <div class="acciones-inline">
@@ -48,23 +63,23 @@
                 <tr class="encabezado">
                     <th>
                         ID
-                        <input type="text" data-col="0" placeholder="F ID">
+                        <input type="text" data-col="0" data-filtro="f_id" value="{{ filtros.id }}" placeholder="F ID">
                     </th>
                     <th>
                         FECHA EVENTO
-                        <input type="date" data-col="1">
+                        <input type="date" data-col="1" data-filtro="f_fecha" value="{{ filtros.fecha }}">
                     </th>
                     <th>
                         MÓVIL
-                        <input type="text" data-col="2" placeholder="FILTRAR MÓVIL">
+                        <input type="text" data-col="2" data-filtro="f_movil" value="{{ filtros.movil }}" placeholder="FILTRAR MÓVIL">
                     </th>
                     <th>
                         CÓDIGO
-                        <input type="text" data-col="3" placeholder="FILTRAR CÓDIGO">
+                        <input type="text" data-col="3" data-filtro="f_codigo" value="{{ filtros.codigo }}" placeholder="FILTRAR CÓDIGO">
                     </th>
                     <th>
                         NOMBRE
-                        <input type="text" data-col="4" placeholder="FILTRAR NOMBRE">
+                        <input type="text" data-col="4" data-filtro="f_nombre" value="{{ filtros.nombre }}" placeholder="FILTRAR NOMBRE">
                     </th>
                     <th>
                         DURACIÓN DESDE REGISTRO
@@ -95,6 +110,11 @@
 
         <tbody id="tablaRegistros"></tbody>
         </table>
+        <div class="paginacion-tabla">
+            <span id="paginacionInfo"></span>
+            <button id="btnPaginaAnterior" type="button" class="btn-paginacion" title="Página anterior">&#8249;</button>
+            <button id="btnPaginaSiguiente" type="button" class="btn-paginacion" title="Página siguiente">&#8250;</button>
+        </div>
     </div>
 
 
@@ -131,7 +151,7 @@
                 </table>
             </div>            
 
-            <h3 style="text-align:center;">👨‍🔧 COSTO DEL DAÑO</h3>
+            <h3 style="text-align:center;">👨‍🔧 INFORMACIÓN DE MANTENIMIENTO</h3>
             <div class="tabla-estilo">
                 <table id="info_mtto">
                     <thead>
@@ -201,9 +221,12 @@
 
 {% block extra_js %}
         <!-- JSON de registros -->
-    <script id="registros-json" type="application/json">
+<script id="registros-json" type="application/json">
     {{ registros|tojson | safe }}
-    </script>
+</script>
+<script id="paginacion-json" type="application/json">
+    {{ {'pagina': pagina, 'total_registros': total_registros, 'por_pagina': 30}|tojson | safe }}
+</script>
 
     <!-- Leaflet JS -->
     <script

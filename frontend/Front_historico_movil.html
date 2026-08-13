@@ -23,6 +23,31 @@
         <button onclick="ejecutarBusqueda()" class="btn-verde-sm" >Consultar</button>
     </div>
 
+    <div class="barra-filtros-inline" id="barraFiltrosHistorico">
+        <label for="filtroTipo">TIPO:</label>
+        <select id="filtroTipo" class="control-compacto">
+            <option value="todos">Todos</option>
+            <option value="danos">Daños</option>
+            <option value="reparaciones">Reparaciones</option>
+        </select>
+
+        <label for="filtroFechaInicio">FECHA INICIO:</label>
+        <input type="date" id="filtroFechaInicio" class="control-compacto">
+
+        <label for="filtroFechaFin">FECHA FIN:</label>
+        <input type="date" id="filtroFechaFin" class="control-compacto">
+
+        <label for="filtroUF">UNIDAD FUNCIONAL:</label>
+        <select id="filtroUF" class="control-compacto">
+            <option value="todos">Todos</option>
+            <option value="10">10</option>
+            <option value="16">16</option>
+        </select>
+
+        <button onclick="aplicarFiltrosHistorico()" class="btn-verde-sm">Aplicar filtros</button>
+        <button onclick="descargarExcelHistorico()" class="btn-verde-sm">⬇️ Descargar Excel</button>
+    </div>
+
     <div class="table-card">
         <table id="tabla-registros">
             <thead>
@@ -54,6 +79,12 @@
 
         <tbody id="tablaRegistros"></tbody>
         </table>
+    </div>
+
+    <div class="barra-filtros-inline" id="paginacionHistorico">
+        <button id="btnPaginaAnterior" class="btn-verde-sm" onclick="irPaginaAnterior()">&laquo; Anterior</button>
+        <span id="infoPaginacion"></span>
+        <button id="btnPaginaSiguiente" class="btn-verde-sm" onclick="irPaginaSiguiente()">Siguiente &raquo;</button>
     </div>
 
 
@@ -172,6 +203,20 @@
     {{ registros|tojson | safe }}
     </script>
 
+    <!-- JSON de filtros y paginación actuales -->
+    <script id="estado-historico-json" type="application/json">
+    {{ {
+        "movil": movil_buscado,
+        "tipo": filtros.tipo if filtros else "todos",
+        "uf": filtros.uf if filtros else "todos",
+        "fecha_inicio": filtros.fecha_inicio if filtros else "",
+        "fecha_fin": filtros.fecha_fin if filtros else "",
+        "pagina_actual": pagina_actual,
+        "total_paginas": total_paginas,
+        "total_registros": total_registros
+    } | tojson | safe }}
+    </script>
+
     <!-- Leaflet JS -->
     <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
@@ -181,4 +226,3 @@
     <script src="{{ url_for('static', filename='Script/Script_historico_movil.js') }}"></script>
 
 {% endblock %}
-   

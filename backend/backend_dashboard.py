@@ -48,20 +48,15 @@ def index():
         query_pendientes = f"""
         SELECT 
             YEAR(d.Fecha_evento), MONTH(d.Fecha_evento),
-                    COUNT(DISTINCT CASE
-                         WHEN
-                             o.Id_damage_to_fleet IS NOT NULL
-                              AND t.Id_damage_to_fleet IS NOT NULL
-                              AND s.Id_damage_to_fleet IS NOT NULL
-                              AND (
-                                     l.Id_damage_to_fleet IS NULL
-                                     OR l.Cerrado <> 'SI'
-                              )
-                              THEN d.Id
-                            END) as Labora,
-            COUNT(DISTINCT CASE WHEN t.Id_damage_to_fleet IS NULL AND (l.Id_damage_to_fleet IS NULL OR l.Cerrado = 'NO') THEN d.Id END) as MTTO,
-            COUNT(DISTINCT CASE WHEN o.Id_damage_to_fleet IS NULL AND (l.Id_damage_to_fleet IS NULL OR l.Cerrado = 'NO') THEN d.Id END) as Oper,
-            COUNT(DISTINCT CASE WHEN s.Id_damage_to_fleet IS NULL AND (l.Id_damage_to_fleet IS NULL OR l.Cerrado = 'NO') THEN d.Id END) as Svial            
+            COUNT(DISTINCT CASE WHEN d.estado_caso = 0
+                AND o.estado_oper = 1 AND t.estado_mtto = 1 AND s.estado_svial = 1
+                THEN d.Id END) AS Labora,
+            COUNT(DISTINCT CASE WHEN d.estado_caso = 0
+                AND ISNULL(t.estado_mtto, 0) = 0 THEN d.Id END) AS MTTO,
+            COUNT(DISTINCT CASE WHEN d.estado_caso = 0
+                AND ISNULL(o.estado_oper, 0) = 0 THEN d.Id END) AS Oper,
+            COUNT(DISTINCT CASE WHEN d.estado_caso = 0
+                AND ISNULL(s.estado_svial, 0) = 0 THEN d.Id END) AS Svial
         FROM table_damage_to_fleet d
         LEFT JOIN table_info_labora l ON l.Id_damage_to_fleet = d.Id
         LEFT JOIN table_info_mtto t ON t.Id_damage_to_fleet = d.Id
@@ -71,8 +66,21 @@ def index():
         GROUP BY YEAR(d.Fecha_evento), MONTH(d.Fecha_evento)
         ORDER BY 1, 2
         """
+        print("========================================")
+        print("DEBUG DASHBOARD - QUERY PENDIENTES")
+        print("PARAMETROS:", params)
+        print(query_pendientes)
+        print("========================================")
+        
         cursor.execute(query_pendientes, params)
         rows_p = cursor.fetchall()
+        
+        print("========================================")
+        print("RESULTADO QUERY PENDIENTES")
+        print("FILAS:", len(rows_p))
+        for fila in rows_p:
+            print(fila)
+        print("========================================")
 
         # --- 2️⃣ CONSULTA: COSTOS MTTO (Gráfica 2 - Parte A) ---
         # Unimos con table_damage_to_fleet para poder filtrar por UF y Fecha_evento
@@ -94,8 +102,25 @@ def index():
             {where_clause}
             GROUP BY YEAR(l.Fecha_registro), MONTH(l.Fecha_registro)
         """
+        print("========================================")
+        print("DEBUG DASHBOARD - QUERY VALORES")
+        print("PARAMETROS:", params)
+        print(query_valores)
+        print("========================================")
+        
         cursor.execute(query_valores, params)
         rows_v = cursor.fetchall()
+
+        # --- 3️⃣.1 CONSULTA: COSTOS OPERACIONES (Gráfica 2 - Parte C) ---
+        query_costos_oper = f"""
+            SELECT YEAR(o.Fecha_registro), MONTH(o.Fecha_registro), SUM(ISNULL(o.costo_oper,0)) 
+            FROM table_info_oper o
+            JOIN table_damage_to_fleet d ON o.Id_damage_to_fleet = d.Id
+            {where_clause}
+            GROUP BY YEAR(o.Fecha_registro), MONTH(o.Fecha_registro)
+        """
+        cursor.execute(query_costos_oper, params)
+        rows_co = cursor.fetchall()
         
         # --- CONSULTA: INSPECTORES ---
         query_registradores = f"""
@@ -156,14 +181,13 @@ def index():
             franjas_final.append([franja, dict_franja.get(franja, 0)])
             
         
-        # --- 6️⃣ CONSULTA: TOTAL CASOS VS CERRADOS RRLL ---
+        # --- 6️⃣ CONSULTA: TOTAL CASOS VS CERRADOS ---
         query_rrll = f"""
             SELECT 
                 YEAR(d.Fecha_evento) AS Year, MONTH(d.Fecha_evento) AS Month,
                 COUNT(DISTINCT d.Id) AS Total_Casos,
-                COUNT(DISTINCT CASE WHEN l.Cerrado = 'SI' THEN d.Id END) AS Casos_Cerrados
+                COUNT(DISTINCT CASE WHEN d.estado_caso = 1 THEN d.Id END) AS Casos_Cerrados
             FROM table_damage_to_fleet d
-            LEFT JOIN table_info_labora l ON l.Id_damage_to_fleet = d.Id
             {where_clause}
             GROUP BY YEAR(d.Fecha_evento), MONTH(d.Fecha_evento)
             ORDER BY YEAR(d.Fecha_evento), MONTH(d.Fecha_evento)
@@ -234,21 +258,30 @@ def index():
         dict_fin = {}
         for r in rows_c:
             key = (int(r[0]), int(r[1]))
-            dict_fin[key] = {'costo': float(r[2]), 'valor': 0.0}
+            dict_fin[key] = {'costo': float(r[2]), 'valor': 0.0, 'oper': 0.0}
 
         for r in rows_v:
             key = (int(r[0]), int(r[1]))
             if key not in dict_fin:
-                dict_fin[key] = {'costo': 0.0, 'valor': float(r[2])}
+                dict_fin[key] = {'costo': 0.0, 'valor': float(r[2]), 'oper': 0.0}
             else:
                 dict_fin[key]['valor'] = float(r[2])
+
+        for r in rows_co:
+            key = (int(r[0]), int(r[1]))
+            if key not in dict_fin:
+                dict_fin[key] = {'costo': 0.0, 'valor': 0.0, 'oper': float(r[2])}
+            else:
+                dict_fin[key]['oper'] = float(r[2])
 
         sorted_keys = sorted(dict_fin.keys())
         costos_final = []
         valores_final = []
+        operaciones_final = []
         for k in sorted_keys:
             costos_final.append([k[0], k[1], dict_fin[k]['costo']])
             valores_final.append([k[0], k[1], dict_fin[k]['valor']])
+            operaciones_final.append([k[0], k[1], dict_fin[k]['oper']])
             
         rrll_final = []
         for r in rrll_data:
@@ -288,7 +321,7 @@ def index():
     except Exception as e:
         traceback.print_exc()
         print(e)
-        registros_final, costos_final, valores_final, ranking, heat_data, lista_uf, franjas_final, rrll_final, ultimos_eventos, ranking_rutas, ranking_registradores, vehiculos_final, zonas_final = [], [], [], [], [], [], [], [], [], [], [], [], []
+        registros_final, costos_final, valores_final, operaciones_final, ranking, heat_data, lista_uf, franjas_final, rrll_final, ultimos_eventos, ranking_rutas, ranking_registradores, vehiculos_final, zonas_final = [], [], [], [], [], [], [], [], [], [], [], [], [], []
     
     finally:
         cursor.close()
@@ -299,6 +332,7 @@ def index():
                            registros=registros_final, 
                            costos=costos_final, 
                            valores=valores_final, 
+                           operaciones=operaciones_final,
                            rrll=rrll_final,
                            franjas=franjas_final,
                            ranking=ranking,

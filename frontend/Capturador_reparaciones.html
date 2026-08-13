@@ -40,6 +40,7 @@
             <option value="CARROCERÍA INTERNA">CARROCERÍA INTERNA</option>
             <option value="TREN MOTRIZ">TREN MOTRIZ</option>
             <option value="CHASIS">CHASIS</option>
+            <option value="CHASIS">CARROCERÍA EXTERNA 360°</option>
         </select><br>
 
         <input type="text" id="parte_intervenida_input" name="Parte_intervenida"
@@ -49,7 +50,8 @@
             required>
         <input type="hidden" id="Costo_real" name="costo"><br>
 
-        <input type="text" name="Usuario" placeholder="USUARIO" value="{{ session.get('usuario', 'EM00084') }}" readonly required><br>
+        <input type="text" name="Usuario" placeholder="USUARIO" value="{{ session.get('usuario', 'EM00084') }}" readonly
+            required><br>
 
         <!-- Evidencias -->
         <label for="evidencia"><b>SUBA LAS EVIDENCIAS:</b></label><br>

@@ -207,7 +207,7 @@ def submit_form():
 
         def allowed_file(filename):
             ALLOWED_EXT = {'.jpg', '.jpeg', '.png', '.gif', '.mp4', '.avi', 
-                           '.mov', '.mp3', '.wav', '.pdf', '.ogg', '.webm'}
+                           '.mov', '.mp3', '.wav', '.pdf', '.ogg', '.webm','.opus'}
             return Path(filename).suffix.lower() in ALLOWED_EXT
 
         for key, f in all_files:

@@ -139,7 +139,7 @@ def submit_form():
         def allowed_file(filename):
                     ext = os.path.splitext(filename)[1].lower()
                     ALLOWED_EXT = {'.jpg', '.jpeg', '.png', '.gif', '.mp4', '.avi', 
-                                '.mov', '.mp3', '.wav', '.pdf', '.ogg', '.webm'}
+                                '.mov', '.mp3', '.wav', '.pdf', '.ogg', '.webm','.opus'}
                     return ext in ALLOWED_EXT
 
         # Iteramos sobre TODOS los archivos enviados en el request.files
