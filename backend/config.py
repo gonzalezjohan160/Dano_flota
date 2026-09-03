@@ -38,11 +38,22 @@ for carpeta in UPLOAD_FOLDERS.values():
 
 # 🔹 Función para crear la conexión a SQL Server
 # 🔹 Configuración SQL Server
+
+
+SQL_SERVER = '***REMOVED***'
+DATABASE = 'damage_to_fleet'
+DRIVER = '{ODBC Driver 18 for SQL Server}'
+usurname = '***REMOVED***'
+password = '***REMOVED***'
+
+"""
 SQL_SERVER = '127.0.0.1,1433'
 DATABASE = 'damage_to_fleet'
 DRIVER = '{ODBC Driver 18 for SQL Server}'
 usurname = '***REMOVED***'
 password = '***REMOVED***'
+"""
+
 
 def connect():
     conn_str = (
@@ -54,8 +65,5 @@ def connect():
         f'PWD={password};'
         'TrustServerCertificate=yes;'
     )
-
-    print("USUARIO:", usurname)
-    print("SERVIDOR:", SQL_SERVER)
 
     return pyodbc.connect(conn_str, timeout=10)

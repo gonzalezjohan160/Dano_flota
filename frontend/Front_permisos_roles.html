@@ -26,6 +26,13 @@
         color: #721c24;
         border: 1px solid #dc3545;
     }
+
+    .btn-eliminar-usuario {
+        margin-top: 10px;
+        background: #c82333 !important;
+        color: #fff !important;
+        border: 1px solid #bd2130 !important;
+    }
 </style>
 {% endblock %}
 
@@ -57,10 +64,19 @@
         <div class="form-row">
             <div class="form-group">
                 <label>Rol</label>
-                <select name="user" required>
+                <select name="user" id="usuario_permisos" required>
+                    <option value="" selected disabled>Seleccione un usuario</option>
                     {% for user in users %}
-                    <option value="{{ user[0] }}">{{ user[1] }}</option>
+                    <option value="{{ user[0] }}" data-activo="{{ 1 if user[2] else 0 }}">{{ user[1] }}</option>
                     {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="estado_usuario">Estado</label>
+                <select name="activo" id="estado_usuario" required>
+                    <option value="1">Activo</option>
+                    <option value="0">Inactivo</option>
                 </select>
             </div>
 
@@ -86,7 +102,53 @@
 
 
         <button type="submit">Asignar Permisos</button>
+        <button type="submit" class="btn-eliminar-usuario"
+                formaction="/Modulo_permisos_roles/eliminar_usuario"
+                formmethod="post" onclick="return confirmarEliminacionUsuario()">
+            Eliminar usuario
+        </button>
 
     </form>
 </div>
+
+<script>
+    const selectorUsuarioPermisos = document.getElementById('usuario_permisos');
+    const selectorEstadoUsuario = document.getElementById('estado_usuario');
+    const casillasPermisos = Array.from(document.querySelectorAll("input[name='permisos']"));
+
+    selectorUsuarioPermisos.addEventListener('change', async () => {
+        const userId = selectorUsuarioPermisos.value;
+        selectorEstadoUsuario.value = selectorUsuarioPermisos.selectedOptions[0].dataset.activo;
+        casillasPermisos.forEach(casilla => {
+            casilla.checked = false;
+        });
+
+        if (!userId) return;
+
+        try {
+            const respuesta = await fetch(`/Modulo_permisos_roles/permisos_usuario/${userId}`);
+            if (!respuesta.ok) throw new Error('No fue posible consultar los permisos.');
+
+            const datos = await respuesta.json();
+            // Si el usuario cambió mientras llegaba la respuesta, se descarta.
+            if (selectorUsuarioPermisos.value !== userId) return;
+
+            const permisosAsignados = new Set((datos.permisos || []).map(String));
+            casillasPermisos.forEach(casilla => {
+                casilla.checked = permisosAsignados.has(casilla.value);
+            });
+        } catch (error) {
+            console.error(error);
+            alert('No fue posible cargar los permisos del usuario seleccionado.');
+        }
+    });
+
+    function confirmarEliminacionUsuario() {
+        if (!selectorUsuarioPermisos.value) {
+            alert('Primero debe seleccionar un usuario.');
+            return false;
+        }
+        return confirm('¿Está seguro de que desea eliminar este usuario? Esta acción eliminará también todos los permisos asociados y no se puede deshacer.');
+    }
+</script>
 {% endblock %}

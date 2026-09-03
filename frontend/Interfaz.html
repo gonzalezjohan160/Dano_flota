@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <title>APP – Daño a flota</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='Images/favicon.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='Style/Style_interfaz.css') }}">
     <!-- 👇 BLOQUE CSS DE LOS MÓDULOS -->
     {% block extra_css %}{% endblock %}
@@ -152,9 +153,6 @@
 
                 <!-- SUB - T.I-->
                 <div class="submenu">
-                    {% if 'Ingresar_correcciones' in session.get('permisos', []) %}
-                    <a href="/Correcciones">Corregir información</a>
-                    {% endif %}
                     {% if 'Ingresar_crear_usuario' in session.get('permisos', []) %}
                     <a href="/Modulo_usuario">Crear usuario</a>
                     {% endif %}

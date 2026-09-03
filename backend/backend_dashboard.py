@@ -83,41 +83,34 @@ def index():
         print("========================================")
 
         # --- 2️⃣ CONSULTA: COSTOS MTTO (Gráfica 2 - Parte A) ---
-        # Unimos con table_damage_to_fleet para poder filtrar por UF y Fecha_evento
         query_costos = f"""
-            SELECT YEAR(m.Fecha_registro), MONTH(m.Fecha_registro), SUM(ISNULL(m.Costo,0)) 
+            SELECT YEAR(d.Fecha_evento), MONTH(d.Fecha_evento), SUM(ISNULL(m.Costo,0)) 
             FROM table_info_mtto m
             JOIN table_damage_to_fleet d ON m.Id_damage_to_fleet = d.Id
             {where_clause}
-            GROUP BY YEAR(m.Fecha_registro), MONTH(m.Fecha_registro)
+            GROUP BY YEAR(d.Fecha_evento), MONTH(d.Fecha_evento)
         """
         cursor.execute(query_costos, params)
         rows_c = cursor.fetchall()
 
         # --- 3️⃣ CONSULTA: VALORES LABORA (Gráfica 2 - Parte B) ---
         query_valores = f"""
-            SELECT YEAR(l.Fecha_registro), MONTH(l.Fecha_registro), SUM(ISNULL(l.Valor_conciliado,0)) 
+            SELECT YEAR(d.Fecha_evento), MONTH(d.Fecha_evento), SUM(ISNULL(l.Valor_conciliado,0)) 
             FROM table_info_labora l
             JOIN table_damage_to_fleet d ON l.Id_damage_to_fleet = d.Id
             {where_clause}
-            GROUP BY YEAR(l.Fecha_registro), MONTH(l.Fecha_registro)
+            GROUP BY YEAR(d.Fecha_evento), MONTH(d.Fecha_evento)
         """
-        print("========================================")
-        print("DEBUG DASHBOARD - QUERY VALORES")
-        print("PARAMETROS:", params)
-        print(query_valores)
-        print("========================================")
-        
         cursor.execute(query_valores, params)
         rows_v = cursor.fetchall()
 
         # --- 3️⃣.1 CONSULTA: COSTOS OPERACIONES (Gráfica 2 - Parte C) ---
         query_costos_oper = f"""
-            SELECT YEAR(o.Fecha_registro), MONTH(o.Fecha_registro), SUM(ISNULL(o.costo_oper,0)) 
+            SELECT YEAR(d.Fecha_evento), MONTH(d.Fecha_evento), SUM(ISNULL(o.costo_oper,0)) 
             FROM table_info_oper o
             JOIN table_damage_to_fleet d ON o.Id_damage_to_fleet = d.Id
             {where_clause}
-            GROUP BY YEAR(o.Fecha_registro), MONTH(o.Fecha_registro)
+            GROUP BY YEAR(d.Fecha_evento), MONTH(d.Fecha_evento)
         """
         cursor.execute(query_costos_oper, params)
         rows_co = cursor.fetchall()

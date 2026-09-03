@@ -96,7 +96,11 @@ def index():
             SELECT 
                 d.Id, d.Fecha_evento, d.Movil, d.Fecha_registro, d.UF, d.Codigo, d.Nombre, d.Ruta,
                 d.Tipologia, d.Direccion, d.Version_libre, d.Parte_afectada, d.Dano_ocasionado,
-                d.Zona_dano, d.Registrador, d.Centro_operaciones, d.Area,
+                d.Zona_dano, d.Registrador, d.Centro_operaciones, d.Area, ISNULL(d.estado_caso, 0) AS estado_caso,
+                CASE WHEN ISNULL(d.estado_caso, 0) = 1 THEN COALESCE(
+                    (SELECT MAX(l.Fecha_registro) FROM table_info_labora l WHERE l.Id_damage_to_fleet = d.Id),
+                    cierre_modulos.Fecha_cierre
+                ) END AS Fecha_cierre,
                 (
                     (SELECT COUNT(*) FROM table_damage_files f WHERE f.DamageId = d.Id) +
                     (SELECT COUNT(*) FROM table_mtto_files f WHERE f.DamageToFleetId = d.Id) +
@@ -104,6 +108,16 @@ def index():
                     (SELECT COUNT(*) FROM table_laboral_files f WHERE f.DamageToFleetId = d.Id)
                 ) AS archivos_count
             FROM table_damage_to_fleet d
+            OUTER APPLY (
+                SELECT MAX(fecha_registro) AS Fecha_cierre
+                FROM (
+                    SELECT o.Fecha_registro FROM table_info_oper o WHERE o.Id_damage_to_fleet = d.Id
+                    UNION ALL
+                    SELECT m.Fecha_registro FROM table_info_mtto m WHERE m.Id_damage_to_fleet = d.Id
+                    UNION ALL
+                    SELECT s.Fecha_registro FROM table_info_svial s WHERE s.Id_damage_to_fleet = d.Id
+                ) AS fechas_modulos
+            ) AS cierre_modulos
             WHERE {where_sql}
             ORDER BY d.Id ASC
             OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
@@ -132,6 +146,19 @@ def index():
         else:
             r['fecha_r'] = None
         del r['Fecha_registro']
+
+        fecha_cierre = r.get('Fecha_cierre')
+        if isinstance(fecha_cierre, datetime):
+            r['fecha_cierre'] = fecha_cierre.strftime("%d/%m/%Y %H:%M:%S")
+        elif isinstance(fecha_cierre, str):
+            try:
+                fecha_obj_cierre = datetime.fromisoformat(fecha_cierre.split('.')[0])
+                r['fecha_cierre'] = fecha_obj_cierre.strftime("%d/%m/%Y %H:%M:%S")
+            except:
+                r['fecha_cierre'] = None
+        else:
+            r['fecha_cierre'] = None
+        del r['Fecha_cierre']
 
 
 
@@ -384,33 +411,138 @@ def exportar_excel():
     if fecha_fin - fecha_inicio > timedelta(days=62):  # ~2 meses
         return "El rango de fechas no puede superar 2 meses", 400
 
+    filtro_uf = request.args.get('filtro_uf', 'todos')
     filtro_estado = request.args.get('filtro_estado', 'todos')
+    es_exportacion_laboral = request.args.get('modulo') == 'laboral'
 
     conn = connect()
     cursor = conn.cursor()
 
-    filtros_sql = ["Fecha_evento BETWEEN ? AND ?"]
+    filtros_sql = ["d.Fecha_evento >= ?", "d.Fecha_evento < DATEADD(day, 1, ?)"]
     parametros = [fecha_inicio_str, fecha_fin_str]
-    if filtro_estado == 'abiertos':
-        filtros_sql.append("estado_caso = 0")
-    elif filtro_estado == 'cerrados':
-        filtros_sql.append("estado_caso = 1")
+    if filtro_uf in ('10', '16'):
+        filtros_sql.append("d.UF = ?")
+        parametros.append(filtro_uf)
 
-    query = f"""
-        SELECT *
-        FROM table_damage_to_fleet
-        WHERE {' AND '.join(filtros_sql)}
-        ORDER BY Id ASC
-    """
+    if es_exportacion_laboral:
+        # Mismo universo de RRLL que backend_unificado.index(): casos con
+        # entrada registrada en RRLL o candidatos pendientes del flujo actual.
+        # Se usan EXISTS para no duplicar un caso con varias gestiones RRLL.
+        filtros_sql.append("""(
+        NOT (
+            ISNULL(d.estado_caso, 0) = 0
+            AND EXISTS (
+                SELECT 1 FROM table_info_oper o_terminal
+                WHERE o_terminal.Id_damage_to_fleet = d.Id
+                  AND (
+                      o_terminal.responsabilidad_operador = 'NO APLICA'
+                      OR (
+                          o_terminal.responsabilidad_operador = 'SI'
+                          AND o_terminal.conciliacion = 'SI'
+                          AND o_terminal.costo_oper IS NOT NULL
+                      )
+                  )
+            )
+        )
+        AND (
+            EXISTS (
+                SELECT 1 FROM table_info_laboral_mult lm
+                WHERE lm.Id_damage_to_fleet = d.Id
+            ) OR (
+                EXISTS (SELECT 1 FROM table_info_oper o WHERE o.Id_damage_to_fleet = d.Id)
+                AND EXISTS (SELECT 1 FROM table_info_svial s WHERE s.Id_damage_to_fleet = d.Id)
+                AND ISNULL(d.estado_caso, 0) = 0
+                AND (
+                    EXISTS (
+                        SELECT 1 FROM table_info_mtto m2
+                        WHERE m2.Id_damage_to_fleet = d.Id
+                          AND m2.Usuario_registro_mtto IS NOT NULL
+                    )
+                    OR EXISTS (
+                        SELECT 1 FROM table_info_oper o3
+                        WHERE o3.Id_damage_to_fleet = d.Id
+                          AND o3.responsabilidad_operador = 'NO'
+                    )
+                    OR EXISTS (
+                        SELECT 1 FROM table_info_oper o4
+                        WHERE o4.Id_damage_to_fleet = d.Id
+                          AND o4.responsabilidad_operador = 'SI'
+                          AND (o4.conciliacion IS NULL OR o4.conciliacion = 'NO')
+                    )
+                )
+            )
+        ))""")
+    else:
+        if filtro_estado == 'abiertos':
+            filtros_sql.append("d.estado_caso = 0")
+        elif filtro_estado == 'cerrados':
+            filtros_sql.append("d.estado_caso = 1")
+
+    if es_exportacion_laboral:
+        query = f"""
+            SELECT d.*,
+                   (SELECT COUNT(*) FROM table_info_labora l
+                    WHERE l.Id_damage_to_fleet = d.Id) AS tiene_laboral,
+                   ISNULL(d.estado_caso, 0) AS caso_cerrado,
+                   CASE WHEN EXISTS (
+                       SELECT 1 FROM table_info_laboral_mult lm
+                       WHERE lm.Id_damage_to_fleet = d.Id
+                   ) AND EXISTS (
+                       SELECT 1 FROM table_info_labora l
+                       WHERE l.Id_damage_to_fleet = d.Id
+                   ) THEN 1 ELSE 0 END AS cerrado_por_laboral
+            FROM table_damage_to_fleet d
+            WHERE {' AND '.join(filtros_sql)}
+            ORDER BY d.Id ASC
+        """
+    else:
+        query = f"""
+            SELECT d.*
+            FROM table_damage_to_fleet d
+            WHERE {' AND '.join(filtros_sql)}
+            ORDER BY Id ASC
+        """
 
     cursor.execute(query, parametros)
     columnas = [col[0] for col in cursor.description]
     registros = [dict(zip(columnas, row)) for row in cursor.fetchall()]
 
+    def estado_rrll(registro):
+        """Replica los predicados de filtro de Script_oper.js para RRLL."""
+        caso_cerrado = bool(registro.get("caso_cerrado"))
+        tiene_laboral = bool(registro.get("tiene_laboral"))
+        cerrado_por_laboral = bool(registro.get("cerrado_por_laboral"))
+
+        if caso_cerrado and cerrado_por_laboral:
+            return "CERRADO"
+        if not caso_cerrado and tiene_laboral:
+            return "GESTIONADO"
+        if not caso_cerrado and not tiene_laboral:
+            return "PENDIENTE"
+        return None
+
+    if es_exportacion_laboral:
+        for registro in registros:
+            registro["estado_excel"] = estado_rrll(registro)
+
+        estado_por_filtro = {
+            "pendientes": "PENDIENTE",
+            "gestionados": "GESTIONADO",
+            "cerrados": "CERRADO",
+        }
+        estado_solicitado = estado_por_filtro.get(filtro_estado)
+        if estado_solicitado:
+            registros = [
+                registro for registro in registros
+                if registro["estado_excel"] == estado_solicitado
+            ]
+
     filas_excel = []
 
     for r in registros:
         registro_id = r["Id"]
+
+        estado_excel = r.get("estado_excel") if es_exportacion_laboral else None
 
         # ================= OPER =================
         cursor.execute("""
@@ -506,7 +638,6 @@ def exportar_excel():
             "CONCILIACIÓN OPERACIONES": oper.get("conciliacion"),
 
             # MTTO
-            "COSTO": mtto.get("Costo"),
             "COSTO DE MANTENIMIENTO": mtto.get("Costo"),
             "DAÑO ADICIONAL": mtto.get("dano_adicional"),
             "OBSERVACIONES MTTO": mtto.get("observaciones"),
@@ -522,12 +653,16 @@ def exportar_excel():
             "CONCILIADO A FAVOR DE": svial.get("conciliado_a_favor"),
 
             # LABORAL
-            "VALOR CONCILIADO": laboral.get("Valor_conciliado"),
+            "VALOR CONCILIADO CON OPERADOR": laboral.get("Valor_conciliado"),
             "TIPO DE CIERRE": laboral.get("Tipo_cerrado"),
             "FECHA REGISTRO DEBIDO PROCESO": laboral.get("Fecha_registro"),
             "USUARIO LABORAL": laboral.get("Usuario_registro_labora"),
             "PROCESO LABORAL MÚLTIPLE": proceso_texto.strip()
         }
+
+        # ESTADO se agrega únicamente al archivo solicitado desde RRLL.
+        if es_exportacion_laboral:
+            fila["ESTADO"] = estado_excel
 
         filas_excel.append(fila)
 

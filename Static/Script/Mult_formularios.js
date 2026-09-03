@@ -11,16 +11,43 @@
     /***********************
      * LIGHTBOX
      ***********************/
-    window.abrirLightbox = (url) => {
+    let imagenesLightbox = [];
+    let indiceImagenLightbox = -1;
+
+    function actualizarLightbox() {
         const lightbox = document.getElementById('lightbox');
         const img = document.getElementById('lightbox-img');
-        img.src = url;
+        const anterior = document.getElementById('lightbox-anterior');
+        const siguiente = document.getElementById('lightbox-siguiente');
+        img.src = imagenesLightbox[indiceImagenLightbox];
+        anterior.style.display = indiceImagenLightbox > 0 ? '' : 'none';
+        siguiente.style.display = indiceImagenLightbox < imagenesLightbox.length - 1 ? '' : 'none';
         lightbox.style.display = 'flex';
     }
+
+    window.abrirLightbox = (url) => {
+        imagenesLightbox = Array.from(document.querySelectorAll('.galeria img')).map(img => img.src);
+        indiceImagenLightbox = imagenesLightbox.indexOf(new URL(url, window.location.origin).href);
+        if (indiceImagenLightbox < 0) {
+            imagenesLightbox = [url];
+            indiceImagenLightbox = 0;
+        }
+        actualizarLightbox();
+    }
+
+    window.navegarLightbox = (direccion) => {
+        const siguienteIndice = indiceImagenLightbox + direccion;
+        if (siguienteIndice < 0 || siguienteIndice >= imagenesLightbox.length) return;
+        indiceImagenLightbox = siguienteIndice;
+        actualizarLightbox();
+    }
+
     window.cerrarLightbox = () => {
         const lightbox = document.getElementById('lightbox');
         const img = document.getElementById('lightbox-img');
         img.src = '';
+        imagenesLightbox = [];
+        indiceImagenLightbox = -1;
         lightbox.style.display = 'none';
     }
 
@@ -290,22 +317,29 @@
         let duracionEvento = "Desconocida";
         let t = null;
 
+        const convertirFechaRegistro = (fecha) => {
+            const [fechaParte, horaParte] = fecha.split(" ");
+            const [dia, mes, anio] = fechaParte.split("/");
+            return new Date(`${anio}-${mes}-${dia}T${horaParte || "00:00:00"}`);
+        };
+
         if (registro?.fecha_r) {
             try {
-                const [fechaParte, horaParte] = registro.fecha_r.split(" ");
-                const [dia, mes, anio] = fechaParte.split("/");
-                const fechaISO = `${anio}-${mes}-${dia}T${horaParte || "00:00:00"}`;
-                const fechaInicio = new Date(fechaISO);
+                const fechaInicio = convertirFechaRegistro(registro.fecha_r);
+                const casoCerrado = Number(registro.estado_caso) === 1;
+                const fechaFinal = casoCerrado
+                    ? convertirFechaRegistro(registro.fecha_cierre || "")
+                    : new Date();
 
-                if (!isNaN(fechaInicio)) {
-                    t = calcularDuracionHabil(fechaInicio, new Date());
+                if (!isNaN(fechaInicio) && !isNaN(fechaFinal)) {
+                    t = calcularDuracionHabil(fechaInicio, fechaFinal);
                     duracion = `${t.dias}d ${t.horas}h`;
                 }
 
                 if (registro.fecha) {
                     const fechaEvento = new Date(registro.fecha + "T00:00:00");
-                    if (!isNaN(fechaEvento)) {
-                        const tEvento = calcularDuracionHabil(fechaEvento, new Date());
+                    if (!isNaN(fechaEvento) && !isNaN(fechaFinal)) {
+                        const tEvento = calcularDuracionHabil(fechaEvento, fechaFinal);
                         duracionEvento = `${tEvento.dias}d ${tEvento.horas}h`;
                     }
                 }

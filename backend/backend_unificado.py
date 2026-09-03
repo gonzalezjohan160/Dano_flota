@@ -10,6 +10,7 @@ from flask import (
 import traceback
 import os
 import time
+import json
 from mimetypes import guess_type
 from datetime import datetime
 from pathlib import Path
@@ -172,6 +173,47 @@ def filas_a_lista(cursor, filas):
     return [dict(zip(columnas, fila)) for fila in filas]
 
 
+PROCESOS_PENDIENTES_RRLL = (
+    "MANTENIMIENTO",
+    "OPERACIONES",
+    "SEGURIDAD VIAL",
+    "COMPLETO",
+)
+
+
+def normalizar_procesos_pendientes(valor, validar=True):
+    """Normaliza la selección múltiple de Pendiente_proceso y valida COMPLETO."""
+    procesos = {
+        parte.strip().upper()
+        for parte in (valor or "").split(",")
+        if parte.strip()
+    }
+    if validar:
+        desconocidos = procesos.difference(PROCESOS_PENDIENTES_RRLL)
+        if desconocidos:
+            raise ValueError("El proceso pendiente seleccionado no es válido.")
+        if "COMPLETO" in procesos and len(procesos) > 1:
+            raise ValueError("COMPLETO no puede combinarse con otros procesos pendientes.")
+
+    return ", ".join(proceso for proceso in PROCESOS_PENDIENTES_RRLL if proceso in procesos), procesos
+
+
+def evento_pendiente_para_modulo(evento, modulo):
+    """Indica si un evento RRLL debe mostrarse al módulo pendiente indicado."""
+    proceso_modulo = {
+        "Operaciones": "OPERACIONES",
+        "Mtto": "MANTENIMIENTO",
+        "Svial": "SEGURIDAD VIAL",
+    }.get(modulo)
+    if not proceso_modulo:
+        return False
+
+    _, procesos = normalizar_procesos_pendientes(
+        evento.get("Pendiente_proceso"), validar=False
+    )
+    return "COMPLETO" in procesos or proceso_modulo in procesos
+
+
 def cerrar_caso_automaticamente(cursor, codigo, usuario):
     """Cierra el caso cuando hayan finalizado todas las gestiones requeridas."""
     cursor.execute("""
@@ -181,6 +223,7 @@ def cerrar_caso_automaticamente(cursor, codigo, usuario):
                CASE WHEN EXISTS (
                    SELECT 1 FROM table_info_labora l
                    WHERE l.Id_damage_to_fleet = o.Id_damage_to_fleet
+                     AND NULLIF(LTRIM(RTRIM(l.Tipo_cerrado)), '') IS NOT NULL
                ) THEN 1 ELSE 0 END
         FROM table_info_oper o
         LEFT JOIN table_info_mtto m ON m.Id_damage_to_fleet = o.Id_damage_to_fleet
@@ -221,7 +264,10 @@ def config_publica_modulo(modulo):
         "seccionesVisibles": cfg["secciones_visibles"],
         "mostrarRevision": cfg["mostrar_revision"],
         "mostrarObservaciones": cfg["mostrar_observaciones"],
-        "puedeReabrirCaso": modulo == "Operaciones" and "reabrir caso" in session.get("permisos", []),
+        "puedeReabrirCaso": {
+            "Operaciones": "Reabrir_caso_oper",
+            "laboral": "Reabrir_caso_rr_ll",
+        }.get(modulo) in session.get("permisos", []),
     }
 
 
@@ -269,29 +315,49 @@ def index(modulo):
     FILTRO_PENDIENTE_MODULO = {
         # Operaciones, Mantenimiento y Seguridad Vial muestran ambas
         # bandejas; el filtro Estado del cliente decide si se ven los
-        # pendientes o los gestionados. Relaciones Laborales conserva su
-        # flujo actual sin cambios.
+        # pendientes o los gestionados. 
         "Operaciones": "1 = 1",
         "Mtto": "1 = 1",
         "Svial": "1 = 1",
         "laboral": """
-            estado_caso = 1
-            OR (
-                tiene_oper = 1 AND tiene_svial = 1 AND estado_caso = 0
-                AND (
-                    EXISTS (
-                        SELECT 1 FROM table_info_mtto m2
-                        WHERE m2.Id_damage_to_fleet = base.Id AND m2.Usuario_registro_mtto IS NOT NULL
+            NOT (
+                estado_caso = 0
+                AND EXISTS (
+                    SELECT 1 FROM table_info_oper o_terminal
+                    WHERE o_terminal.Id_damage_to_fleet = base.Id
+                      AND (
+                          o_terminal.responsabilidad_operador = 'NO APLICA'
+                          OR (
+                              o_terminal.responsabilidad_operador = 'SI'
+                              AND o_terminal.conciliacion = 'SI'
+                              -- costo_oper solo se guarda cuando no_supera es verdadero.
+                              AND o_terminal.costo_oper IS NOT NULL
+                          )
+                      )
                     )
-                    OR EXISTS (
-                        SELECT 1 FROM table_info_oper o3
-                        WHERE o3.Id_damage_to_fleet = base.Id AND o3.responsabilidad_operador = 'NO'
-                    )
-                    OR EXISTS (
-                        SELECT 1 FROM table_info_oper o4
-                        WHERE o4.Id_damage_to_fleet = base.Id
-                          AND o4.responsabilidad_operador = 'SI'
-                          AND (o4.conciliacion IS NULL OR o4.conciliacion = 'NO')
+            )
+            AND (
+                EXISTS (
+                    SELECT 1 FROM table_info_laboral_mult lm
+                    WHERE lm.Id_damage_to_fleet = base.Id
+                )
+                OR (
+                    tiene_oper = 1 AND tiene_svial = 1 AND estado_caso = 0
+                    AND (
+                        EXISTS (
+                            SELECT 1 FROM table_info_mtto m2
+                            WHERE m2.Id_damage_to_fleet = base.Id AND m2.Usuario_registro_mtto IS NOT NULL
+                        )
+                        OR EXISTS (
+                            SELECT 1 FROM table_info_oper o3
+                            WHERE o3.Id_damage_to_fleet = base.Id AND o3.responsabilidad_operador = 'NO'
+                        )
+                        OR EXISTS (
+                            SELECT 1 FROM table_info_oper o4
+                            WHERE o4.Id_damage_to_fleet = base.Id
+                              AND o4.responsabilidad_operador = 'SI'
+                              AND (o4.conciliacion IS NULL OR o4.conciliacion = 'NO')
+                        )
                     )
                 )
             )
@@ -322,6 +388,11 @@ def index(modulo):
                 ISNULL((SELECT TOP 1 estado_mtto FROM table_info_mtto m WHERE m.Id_damage_to_fleet = d.Id), 0) AS estado_mtto,
                 ISNULL((SELECT TOP 1 estado_svial FROM table_info_svial s WHERE s.Id_damage_to_fleet = d.Id), 0) AS estado_svial,
                 ISNULL(d.estado_caso, 0) AS caso_cerrado,
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM table_info_laboral_mult lm WHERE lm.Id_damage_to_fleet = d.Id
+                ) AND EXISTS (
+                    SELECT 1 FROM table_info_labora l WHERE l.Id_damage_to_fleet = d.Id
+                ) THEN 1 ELSE 0 END AS cerrado_por_laboral,
 
                 -- Fecha R. Laborales: la más reciente de las 3 fechas de
                 -- registro (Operaciones, Mtto, S.Vial). Solo tiene sentido
@@ -366,6 +437,7 @@ def index(modulo):
         r["tiene_svial"] = bool(r["tiene_svial"])
         r["tiene_laboral"] = bool(r["tiene_laboral"])
         r["caso_cerrado"] = bool(r["caso_cerrado"])
+        r["cerrado_por_laboral"] = bool(r["cerrado_por_laboral"])
         campo_estado = {"Operaciones": "estado_oper", "Mtto": "estado_mtto", "Svial": "estado_svial"}.get(modulo)
         r["estado_modulo"] = bool(r[campo_estado]) if campo_estado else None
 
@@ -497,6 +569,10 @@ def detalle(modulo, id):
     t_etapa = time.perf_counter()
     cursor.nextset()
     laboral_eventos = filas_a_lista(cursor, cursor.fetchall())
+    laboral_pendientes = [
+        evento for evento in laboral_eventos
+        if evento_pendiente_para_modulo(evento, modulo)
+    ]
     print(f"[DETALLE] fetch laboral: {(time.perf_counter() - t_etapa) * 1000:.2f} ms")
 
     t_etapa = time.perf_counter()
@@ -529,7 +605,8 @@ def detalle(modulo, id):
         "svial": svial,
         "laboral": {
             "eventos": laboral_eventos,
-            "estado": laboral_estado
+            "estado": laboral_estado,
+            "pendientes": laboral_pendientes,
         },
         "archivos": archivos,
         "archivos_mtto": archivos_mtto,
@@ -568,6 +645,14 @@ def actualizar_evento(modulo, id):
         abort(404)
 
     datos = request.get_json(silent=True) or {}
+    if not datos:
+        try:
+            datos = {
+                "evento": json.loads(request.form.get("evento", "{}")),
+                "motivo_modificacion": request.form.get("motivo_modificacion", "")
+            }
+        except json.JSONDecodeError:
+            return jsonify({"status": "error", "message": "Los datos del evento no son válidos."}), 400
     cambios = datos.get("evento") or {}
     motivo = (datos.get("motivo_modificacion") or "").strip()
     if not motivo:
@@ -579,7 +664,8 @@ def actualizar_evento(modulo, id):
         "Zona_dano", "Centro_operaciones"
     }
     cambios = {campo: valor for campo, valor in cambios.items() if campo in campos_permitidos}
-    if not cambios:
+    tiene_archivos = any(archivo.filename for archivo in request.files.getlist("archivos"))
+    if not cambios and not tiene_archivos:
         return jsonify({"status": "success", "message": "No hay cambios para guardar."})
 
     conn = connect()
@@ -645,6 +731,7 @@ def actualizar_evento(modulo, id):
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (id, "table_damage_to_fleet", campo, str(actual.get(campo) or ""),
                   str(valor or ""), usuario, datetime.now(), motivo))
+        guardar_archivos(cursor, id, "table_damage_files", "DamageId", UPLOAD_FOLDERS["Operaciones"])
         conn.commit()
         return jsonify({"status": "success", "message": "Información del evento actualizada.", "cambios": len(cambios_reales)})
     except Exception as error:
@@ -709,12 +796,9 @@ def eliminar_evento(id):
         conn.close()
 
 
-@Modulo_unificado.route("/Operaciones/reabrir_evento/<int:id>", methods=["POST"])
-@login_required
-@requiere_permiso("reabrir caso")
-def reabrir_evento(id):
+def reabrir_caso(id, modulo):
     """Reabre un caso cerrado sin alterar las gestiones ya registradas."""
-    verificar_acceso_modulo("Operaciones")
+    verificar_acceso_modulo(modulo)
     datos = request.get_json(silent=True) or {}
     motivo = (datos.get("motivo_modificacion") or "").strip()
     if not motivo:
@@ -723,12 +807,28 @@ def reabrir_evento(id):
     conn = connect()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT estado_caso FROM table_damage_to_fleet WHERE Id = ?", [id])
+        if modulo == "laboral":
+            cursor.execute("""
+                SELECT d.estado_caso,
+                       CASE WHEN EXISTS (
+                           SELECT 1 FROM table_info_laboral_mult lm
+                           WHERE lm.Id_damage_to_fleet = d.Id
+                       ) AND EXISTS (
+                           SELECT 1 FROM table_info_labora l
+                           WHERE l.Id_damage_to_fleet = d.Id
+                       ) THEN 1 ELSE 0 END
+                FROM table_damage_to_fleet d
+                WHERE d.Id = ?
+            """, [id])
+        else:
+            cursor.execute("SELECT estado_caso, 1 FROM table_damage_to_fleet WHERE Id = ?", [id])
         caso = cursor.fetchone()
         if not caso:
             return jsonify({"status": "error", "message": "No se encontró el evento."}), 404
         if not caso[0]:
             return jsonify({"status": "error", "message": "El caso ya se encuentra abierto."}), 409
+        if modulo == "laboral" and not caso[1]:
+            return jsonify({"status": "error", "message": "El caso no fue cerrado por Relaciones Laborales."}), 409
 
         usuario = session.get("usuario", "")
         cursor.execute("UPDATE table_damage_to_fleet SET estado_caso = 0 WHERE Id = ?", [id])
@@ -746,6 +846,20 @@ def reabrir_evento(id):
         return jsonify({"status": "error", "message": str(error)}), 500
     finally:
         conn.close()
+
+
+@Modulo_unificado.route("/Operaciones/reabrir_evento/<int:id>", methods=["POST"])
+@login_required
+@requiere_permiso("Reabrir_caso_oper")
+def reabrir_evento(id):
+    return reabrir_caso(id, "Operaciones")
+
+
+@Modulo_unificado.route("/laboral/reabrir_evento/<int:id>", methods=["POST"])
+@login_required
+@requiere_permiso("Reabrir_caso_rr_ll")
+def reabrir_evento_laboral(id):
+    return reabrir_caso(id, "laboral")
 
 
 # ==========================================================
@@ -1022,7 +1136,12 @@ def agregar_relaciones_laborales():
         observaciones_1 = request.form.get("observaciones_1")
         usuario = request.form.get("Usuario_registro_oper")
         fecha_presentacion = request.form.get("Fecha_presentacion_input")
-        estado_caso = request.form.get("Estado_caso")
+        try:
+            pendiente_proceso, procesos_pendientes = normalizar_procesos_pendientes(
+                request.form.get("Estado_caso")
+            )
+        except ValueError as error:
+            return jsonify({"status": "error", "message": str(error)}), 400
         motivo_modificacion = (request.form.get("Motivo_modificacion") or "").strip()
 
         rev_inf = request.form.get("Revinf", "NO")
@@ -1040,7 +1159,22 @@ def agregar_relaciones_laborales():
                 (Id_damage_to_fleet, Fecha_presentacion, Pendiente_proceso,
                  Observaciones_rrll, Usuario_registro_laboral, Fecha_registro)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (codigo, fecha_presentacion, estado_caso, observaciones_1, usuario, datetime.now()))
+        """, (codigo, fecha_presentacion, pendiente_proceso, observaciones_1, usuario, datetime.now()))
+
+        # Un caso puede quedar pendiente por varios procesos. Solo se
+        # restablecen los estados de los módulos expresamente seleccionados;
+        # COMPLETO equivale a seleccionar los tres.
+        estados_por_proceso = {
+            "MANTENIMIENTO": ("table_info_mtto", "estado_mtto"),
+            "OPERACIONES": ("table_info_oper", "estado_oper"),
+            "SEGURIDAD VIAL": ("table_info_svial", "estado_svial"),
+        }
+        for proceso, (tabla, campo_estado) in estados_por_proceso.items():
+            if "COMPLETO" in procesos_pendientes or proceso in procesos_pendientes:
+                cursor.execute(
+                    f"UPDATE {tabla} SET {campo_estado} = 0 WHERE Id_damage_to_fleet = ?",
+                    (codigo,)
+                )
 
         if rev_inf == "SI":
             cursor.execute(
@@ -1081,9 +1215,13 @@ def agregar_relaciones_laborales():
                     VALUES (?, ?, ?, ?)
                 """, (codigo, tipo_cerrado, costo, usuario))
 
-            # El estado general se cierra únicamente si también terminaron
-            # Operaciones, Mantenimiento y Seguridad Vial.
-            cerrar_caso_automaticamente(cursor, codigo, usuario)
+            # En Relaciones Laborales, Tipo_cerrado confirma que esta es la
+            # gestión final del caso.
+            if tipo_cerrado:
+                cursor.execute(
+                    "UPDATE table_damage_to_fleet SET estado_caso = 1 WHERE Id = ?",
+                    [codigo]
+                )
 
         conn.commit()
 
@@ -1124,6 +1262,7 @@ def agregar_operaciones():
         responsabilidad_operador = request.form.get("responsabilidad_operador")  # SI / NO / NO APLICA
         conciliacion = request.form.get("conciliacion")  # SI / NO (solo si responsabilidad = SI y no hay reincidencia)
         valor_conciliado_oper = request.form.get("valor_conciliado_oper")  # solo si conciliacion = SI
+        motivo_cierre_oper = request.form.get("motivo_cierre_oper", "")
         if valor_conciliado_oper:
             valor_conciliado_oper = int(
             valor_conciliado_oper.replace(".", "").replace(",", "")
@@ -1131,16 +1270,13 @@ def agregar_operaciones():
 
         if not codigo or not observaciones_1 or not usuario:
             return jsonify({"status": "error", "message": "Faltan datos obligatorios."}), 400
-        if not motivo_modificacion:
-            return jsonify({
-                "status": "error",
-                "message": "El motivo del cambio es obligatorio."
-            }), 400
 
         no_supera = (costo_supera_2m == "NO")
 
         if responsabilidad_operador == "NO APLICA":
             conciliacion = None
+            if motivo_cierre_oper not in ("RETIRO", "EXONERACIÓN"):
+                return jsonify({"status": "error", "message": "Completa este campo"}), 400
 
         conn = None
         conn = connect()
@@ -1168,6 +1304,13 @@ def agregar_operaciones():
             WHERE Id_damage_to_fleet = ?
         """, [codigo])
         registro_oper_anterior = cursor.fetchone()
+
+        if registro_oper_anterior and not motivo_modificacion:
+            conn.close()
+            return jsonify({
+                "status": "error",
+                "message": "El motivo del cambio es obligatorio."
+            }), 400
 
         valores_oper = (
             observaciones_1,
@@ -1225,7 +1368,7 @@ def agregar_operaciones():
         )
         
         if responsabilidad_operador == "NO APLICA":
-            tipo_cerrado = "EXONERACIÓN"
+            tipo_cerrado = motivo_cierre_oper
         else:
             tipo_cerrado = "CONCILIACIÓN"
 
@@ -1249,7 +1392,43 @@ def agregar_operaciones():
                 """, (codigo, tipo_cerrado, valor_conciliado_oper, usuario))
 
         guardar_archivos(cursor, codigo, "table_damage_files", "DamageId", UPLOAD_FOLDERS["Operaciones"])
-        cerrar_caso_automaticamente(cursor, codigo, usuario)
+        if termina_en_operaciones:
+            cerrar_caso_automaticamente(cursor, codigo, usuario)
+        else:
+            # Al reabrir y modificar Operaciones, una decisión nueva que
+            # requiere RRLL no puede reutilizar un cierre histórico de
+            # table_info_labora. Si ese registro provino de un cierre previo
+            # de Operaciones (sin historial en RRLL), se retira para que el
+            # caso ingrese como pendiente; la eliminación queda auditada.
+            cursor.execute("""
+                SELECT Tipo_cerrado, Valor_conciliado
+                FROM table_info_labora l
+                WHERE l.Id_damage_to_fleet = ?
+                  AND NOT EXISTS (
+                      SELECT 1 FROM table_info_laboral_mult lm
+                      WHERE lm.Id_damage_to_fleet = l.Id_damage_to_fleet
+                  )
+            """, [codigo])
+            cierre_operaciones_anterior = cursor.fetchone()
+            if cierre_operaciones_anterior:
+                cursor.execute("""
+                    INSERT INTO table_auditoria_correcciones
+                    (Id_damage, Tabla_Afectada, Campo_Modificado, Valor_Anterior, Valor_Nuevo,
+                     Usuario_Modifica, Fecha_Modificacion, Motivo_modificacion)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    codigo, "table_info_labora", "Cierre previo de Operaciones",
+                    f"Tipo: {cierre_operaciones_anterior[0] or ''}; Valor: {cierre_operaciones_anterior[1] or ''}",
+                    "", usuario, datetime.now(), motivo_modificacion
+                ))
+                cursor.execute("DELETE FROM table_info_labora WHERE Id_damage_to_fleet = ?", [codigo])
+
+            # Se preservan los demás registros; solo se mantiene abierto el
+            # caso para que el filtro vigente de RRLL evalúe los datos nuevos.
+            cursor.execute(
+                "UPDATE table_damage_to_fleet SET estado_caso = 0 WHERE Id = ?",
+                [codigo]
+            )
 
         conn.commit()
         conn.close()

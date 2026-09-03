@@ -155,10 +155,12 @@
     </div>
 
     <!-- Lightbox para imágenes -->
-    <div id="lightbox" class="lightbox">
-        <span class="close" onclick="cerrarLightbox()">&times;</span>
-        <img id="lightbox-img" src="" alt="Vista ampliada">
-    </div>
+<div id="lightbox" class="lightbox">
+    <span class="close" onclick="cerrarLightbox()">&times;</span>
+    <button id="lightbox-anterior" class="lightbox-nav lightbox-nav-anterior" type="button" onclick="navegarLightbox(-1)">&lt;</button>
+    <img id="lightbox-img" src="" alt="Vista ampliada">
+    <button id="lightbox-siguiente" class="lightbox-nav lightbox-nav-siguiente" type="button" onclick="navegarLightbox(1)">&gt;</button>
+</div>
 
 
     <!-- Modal de reparaciones -->
@@ -190,7 +192,9 @@
     <!-- Lightbox para imágenes -->
     <div id="lightbox" class="lightbox">
         <span class="close" onclick="cerrarLightbox()">&times;</span>
+        <button id="lightbox-anterior" class="lightbox-nav lightbox-nav-anterior" type="button" onclick="navegarLightbox(-1)">&lt;</button>
         <img id="lightbox-img" src="" alt="Vista ampliada">
+        <button id="lightbox-siguiente" class="lightbox-nav lightbox-nav-siguiente" type="button" onclick="navegarLightbox(1)">&gt;</button>
     </div>
 
 

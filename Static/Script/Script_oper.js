@@ -292,6 +292,24 @@ document.addEventListener("DOMContentLoaded", () => {
         return partes.map(p => TEXTO_ESTADO_CASO[p] || p).join(", ");
     }
 
+    function construirAvisosPendienteLaboral(eventos) {
+        if (!eventos?.length) return "";
+
+        return eventos.map(ev => `
+            <tr>
+                <td colspan="2"><strong>Relaciones Laborales — caso ${formatearEstadoCaso(ev.Pendiente_proceso)}</strong></td>
+            </tr>
+            <tr>
+                <td>Fecha presentación</td>
+                <td>${ev.Fecha_presentacion ?? "-"}</td>
+            </tr>
+            <tr>
+                <td>Observaciones de Relaciones Laborales</td>
+                <td>${ev.Observaciones_rrll ?? "-"}</td>
+            </tr>
+        `).join("<tr><td colspan='2'><hr></td></tr>");
+    }
+
     function construirTabla(datos, campos) {
         return campos.map(campo => {
             let valor = datos?.[campo.key];
@@ -493,6 +511,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const filtroUF = document.getElementById("filtroUF")?.value || "todos";
         const filtroEstado = document.getElementById("filtroEstado")?.value || "todos";
+        const fechaDesde = document.getElementById("filtroFechaDesde")?.value || "";
+        const fechaHasta = document.getElementById("filtroFechaHasta")?.value || "";
 
         const filtrados = registros.filter(registro => {
 
@@ -500,7 +520,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 return false;
             }
 
-            if (filtroEstado === "cerrados" && !registro.caso_cerrado) return false;
+            // En RRLL el rango se aplica exclusivamente a Fecha_evento.
+            const fechaEvento = String(registro.fecha ?? "").slice(0, 10);
+            if (fechaDesde && (!fechaEvento || fechaEvento < fechaDesde)) return false;
+            if (fechaHasta && (!fechaEvento || fechaEvento > fechaHasta)) return false;
+
+            if (filtroEstado === "cerrados" && (
+                !registro.caso_cerrado || (CFG.propia === "laboral" && !registro.cerrado_por_laboral)
+            )) return false;
             if (filtroEstado === "pendientes" && (
                 registro.caso_cerrado || (CFG.propia === "laboral" ? registro.tiene_laboral : registro.estado_modulo)
             )) return false;
@@ -559,6 +586,35 @@ document.addEventListener("DOMContentLoaded", () => {
         document
             .getElementById("filtroEstado")
             ?.addEventListener("change", filtrarTabla);
+        document
+            .getElementById("filtroFechaDesde")
+            ?.addEventListener("change", filtrarTabla);
+        document
+            .getElementById("filtroFechaHasta")
+            ?.addEventListener("change", filtrarTabla);
+
+        document.getElementById("btnExportarLaboral")?.addEventListener("click", () => {
+            const fechaInicio = document.getElementById("filtroFechaDesde").value;
+            const fechaFin = document.getElementById("filtroFechaHasta").value;
+
+            if (!fechaInicio || !fechaFin) {
+                alert("Seleccione Fecha desde y Fecha hasta para exportar.");
+                return;
+            }
+            if (fechaInicio > fechaFin) {
+                alert("La Fecha desde no puede ser posterior a la Fecha hasta.");
+                return;
+            }
+
+            const params = new URLSearchParams({
+                fecha_inicio: fechaInicio,
+                fecha_fin: fechaFin,
+                filtro_uf: document.getElementById("filtroUF").value,
+                filtro_estado: document.getElementById("filtroEstado").value,
+                modulo: "laboral"
+            });
+            window.location.href = `/Historico_danos/exportar_excel?${params.toString()}`;
+        });
     };
 
 
@@ -692,7 +748,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (propia === "laboral") {
             if (registro.caso_cerrado) {
-                return "";
+                return registro.cerrado_por_laboral && CFG.puedeReabrirCaso
+                    ? ` <button class="btn btn-success" onclick="reabrirCaso('${registro.Id}')">Reabrir caso</button>`
+                    : "";
             }
             return `<button class="btn btn-success" onclick="abrirModal('${registro.Id}')">
                         Añadir info
@@ -747,7 +805,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let mapaModal = null;
     let markerModal = null;
+    let edicionUbicacionMapaActiva = false;
     const cacheCoordsDireccion = {};
+    let solicitudDetalleActual = 0;
 
     // Geocodifica una dirección de texto a lat, lng 
     async function obtenerCoordsDesdeDireccion(direccion) {
@@ -796,6 +856,19 @@ document.addEventListener("DOMContentLoaded", () => {
             attribution: "&copy; OpenStreetMap contributors",
             maxZoom: 19
         }).addTo(mapaModal);
+
+        // Reutiliza el formato de Capturador: la ubicación manual se guarda
+        // como "latitud,longitud" en Direccion, sin crear nuevas columnas.
+        mapaModal.on("click", evento => {
+            if (!edicionUbicacionMapaActiva) return;
+
+            const { lat, lng } = evento.latlng;
+            const direccion = document.getElementById("evento_direccion");
+            if (!direccion) return;
+
+            direccion.value = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+            actualizarMapaModal({ lat, lng });
+        });
     }
 
     function actualizarMapaModal(coords) {
@@ -819,11 +892,23 @@ document.addEventListener("DOMContentLoaded", () => {
     async function renderDetalle(registro, data) {
 
         const inicioProcesamiento = performance.now();
-        const registroDetalle = data.registro ?? {};
+        const registroDetalle = data.registro ?? {};    
         const oper = data.oper ?? {};
         const mtto = data.mtto ?? {};
         const svial = data.svial ?? {};
         const laboral = data.laboral ?? { eventos: [], estado: {} };
+        const laboralPendientes = laboral.pendientes ?? [];
+        const seccionLaboralPendiente = document.getElementById("seccionLaboralPendiente");
+        const detalleLaboralPendiente = document.getElementById("infoEventoLaboralPendiente");
+        const hayPendienteLaboral = laboralPendientes.length > 0;
+
+        seccionLaboralPendiente.style.display = hayPendienteLaboral ? "" : "none";
+        detalleLaboralPendiente.innerHTML = hayPendienteLaboral
+            ? construirAvisosPendienteLaboral(laboralPendientes)
+            : "";
+
+        const modalRegistro = document.getElementById("modal_registro1");
+        if (modalRegistro) {modalRegistro.textContent = ` #${registro.Id}`;}
         console.log(`[Ver archivos] Procesar JSON: ${(performance.now() - inicioProcesamiento).toFixed(2)} ms`);
 
         //--------------------------------------------------
@@ -969,6 +1054,7 @@ document.addEventListener("DOMContentLoaded", () => {
     //======================================================
 
     let eventoEdicionActual = null;
+    let archivosEdicionSeleccionados = [];
     const RUTAS_POR_UF = {
         "10": ["CG147", "DG208", "CA127", "CH131", "CA129", "CA124", "TRANSITO A PATIO", "PATIO"],
         "16": ["CL149", "CB144", "CG137", "CA134", "CB138", "CA151", "CF154", "CA153", "CB145", "TRANSITO A PATIO", "PATIO"]
@@ -991,11 +1077,57 @@ document.addEventListener("DOMContentLoaded", () => {
     const CENTROS_OPERACIONES = ["GAITANA", "SAN ÁNDRES", "BILBAO", "SAN BERNARDINO"];
 
     function mostrarAccionesEdicion(editando) {
+        edicionUbicacionMapaActiva = editando && CFG.propia === "oper";
+
+        const mensajeMapaEdicion = document.getElementById("mensajeMapaEdicion");
+        if (mensajeMapaEdicion) {
+            mensajeMapaEdicion.style.display = edicionUbicacionMapaActiva ? "block" : "none";
+        }
         document.getElementById("seccionMotivoModificacion").style.display = editando ? "block" : "none";
-        document.getElementById("btn_editar_informacion").style.display = editando ? "none" : "inline-block";
-        document.getElementById("btn_eliminar_evento").style.display = editando ? "none" : "inline-block";
-        document.getElementById("btn_guardar_modificacion").style.display = editando ? "inline-block" : "none";
-        document.getElementById("btn_cancelar_modificacion").style.display = editando ? "inline-block" : "none";
+
+        const casoCerrado = Boolean(eventoEdicionActual?.registro?.caso_cerrado);
+
+        document.getElementById("btn_editar_informacion").style.display =
+        !editando && !casoCerrado ? "inline-block" : "none";
+
+        document.getElementById("btn_eliminar_evento").style.display =
+            editando ? "inline-block" : "none";
+
+        document.getElementById("btn_guardar_modificacion").style.display =
+            editando ? "inline-block" : "none";
+
+        document.getElementById("btn_elegir_archivos_edicion").style.display =
+            editando ? "inline-block" : "none";
+
+        document.getElementById("btn_cancelar_modificacion").style.display =
+            editando ? "inline-block" : "none";
+    }
+
+    function actualizarListaArchivosEdicion() {
+        const lista = document.getElementById("lista_archivos_edicion");
+        lista.innerHTML = "";
+        lista.style.display = archivosEdicionSeleccionados.length ? "block" : "none";
+
+        archivosEdicionSeleccionados.forEach((archivo, indice) => {
+            const item = document.createElement("div");
+            item.style.cssText = "display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid #ddd;";
+
+            const nombre = document.createElement("span");
+            nombre.textContent = `📄 ${archivo.name}`;
+            nombre.style.flex = "1";
+
+            const eliminar = document.createElement("button");
+            eliminar.type = "button";
+            eliminar.className = "btn";
+            eliminar.textContent = "❌";
+            eliminar.onclick = () => {
+                archivosEdicionSeleccionados.splice(indice, 1);
+                actualizarListaArchivosEdicion();
+            };
+
+            item.append(nombre, eliminar);
+            lista.appendChild(item);
+        });
     }
 
     function prepararEdicionEvento(registro, detalle, data) {
@@ -1069,18 +1201,26 @@ document.addEventListener("DOMContentLoaded", () => {
             const coords = await obtenerCoordsDesdeDireccion(e.target.value);
             if (coords) actualizarMapaModal(coords);
         });
+        const inputArchivos = document.getElementById("archivos_edicion");
+        archivosEdicionSeleccionados = [];
+        inputArchivos.value = "";
+        inputArchivos.onchange = () => {
+            archivosEdicionSeleccionados.push(...inputArchivos.files);
+            inputArchivos.value = "";
+            actualizarListaArchivosEdicion();
+        };
+        actualizarListaArchivosEdicion();
         actualizarMovilYTipologia();
         actualizarOperador();
         mostrarAccionesEdicion(true);
+        setTimeout(() => mapaModal?.invalidateSize(), 100);
     }
 
     document.getElementById("btn_guardar_modificacion")?.addEventListener("click", async () => {
         if (!eventoEdicionActual) return;
-        const motivo = document.getElementById("motivo_modificacion").value.trim();
-        if (!motivo) {
-            alert("El motivo del cambio es obligatorio.");
-            return;
-        }
+        const campoMotivo = document.getElementById("motivo_modificacion");
+        if (!campoMotivo.reportValidity()) return;
+        const motivo = campoMotivo.value.trim();
         const evento = {
             Fecha_evento: document.getElementById("evento_fecha").value,
             UF: document.getElementById("evento_uf").value,
@@ -1097,20 +1237,32 @@ document.addEventListener("DOMContentLoaded", () => {
             Centro_operaciones: document.getElementById("evento_centro").value,
             Direccion: document.getElementById("evento_direccion").value
         };
+        const formData = new FormData();
+        formData.append("evento", JSON.stringify(evento));
+        formData.append("motivo_modificacion", motivo);
+        archivosEdicionSeleccionados.forEach(archivo => {
+            formData.append("archivos", archivo);
+        });
         const response = await fetch(`/${CFG.modulo}/actualizar_evento/${eventoEdicionActual.registro.Id}`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ evento, motivo_modificacion: motivo })
+            body: formData
         });
         const resultado = await response.json();
         alert(resultado.message);
-        if (resultado.status === "success") cerrarModalAdjuntos();
+        if (resultado.status === "success"){
+            archivosEdicionSeleccionados = [];
+            document.getElementById("archivos_edicion").value = "";
+            actualizarListaArchivosEdicion();
+            mostrarAccionesEdicion(false);
+            cerrarModalAdjuntos()} ;
     });
 
     document.getElementById("btn_cancelar_modificacion")?.addEventListener("click", () => {
         if (!eventoEdicionActual) return;
         const { registro, data } = eventoEdicionActual;
         renderDetalle(registro, data);
+        archivosEdicionSeleccionados = [];
+        actualizarListaArchivosEdicion();
         mostrarAccionesEdicion(false);
     });
 
@@ -1118,11 +1270,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.getElementById("btn_eliminar_evento")?.addEventListener("click", async () => {
         if (!eventoEdicionActual) return;
-        const motivo = (prompt("Motivo obligatorio de eliminación/cambio:") || "").trim();
-        if (!motivo) {
-            alert("El motivo del cambio es obligatorio.");
-            return;
-        }
+        const campoMotivo = document.getElementById("motivo_modificacion");
+        if (!campoMotivo.reportValidity()) return;
+        const motivo = campoMotivo.value.trim();
         if (!confirm("¿Confirma que desea eliminar este caso? Esta acción no se puede deshacer.")) return;
         const response = await fetch(`/Operaciones/eliminar_evento/${eventoEdicionActual.registro.Id}`, {
             method: "POST",
@@ -1145,7 +1295,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         if (!confirm("¿Confirma que desea reabrir este caso?")) return;
-        const response = await fetch(`/Operaciones/reabrir_evento/${id}`, {
+        const response = await fetch(`/${CFG.modulo}/reabrir_evento/${id}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ motivo_modificacion: motivo })
@@ -1167,7 +1317,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         if (!confirm("¿Confirma que desea reabrir este caso?")) return;
-        const response = await fetch(`/Operaciones/reabrir_evento/${eventoEdicionActual.registro.Id}`, {
+        const response = await fetch(`/${CFG.modulo}/reabrir_evento/${eventoEdicionActual.registro.Id}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ motivo_modificacion: motivo })
@@ -1236,50 +1386,104 @@ document.addEventListener("DOMContentLoaded", () => {
     // MODAL ADJUNTOS
     //======================================================
 
-    window.mostrarAdjuntos = function (id) {
+    window.mostrarAdjuntos = async function (id) {
 
         const inicioTotal = performance.now();
+        // Si el usuario abre otro evento, la carga anterior queda invalidada.
+        const solicitudActual = ++solicitudDetalleActual;
+
         const registro = registros.find(r => r.Id == id);
         if (!registro) return;
 
         movilSeleccionado = id;
 
         const inicioModal = performance.now();
-        document.getElementById("modalAdjuntos").style.display = "block";
-        document.getElementById("modal_registro1").textContent = id;
-        console.log(`[Ver archivos] Abrir modal: ${(performance.now() - inicioModal).toFixed(2)} ms`);
+        const modal = document.getElementById("modalAdjuntos");
+        const tituloRegistro = document.getElementById("modal_registro1");
 
-        const inicioFetch = performance.now();
-        fetch(`/${CFG.modulo}/detalle/${id}`)
-            .then(r => {
-                console.log(`[Ver archivos] Fetch: ${(performance.now() - inicioFetch).toFixed(2)} ms (HTTP ${r.status})`);
-                const inicioJson = performance.now();
-                return r.json().then(data => {
-                    console.log(`[Ver archivos] response.json(): ${(performance.now() - inicioJson).toFixed(2)} ms`);
-                    return data;
-                });
-            })
-            .then(data => {
-                const inicioRender = performance.now();
-                renderDetalle(registro, data);
-                prepararEdicionEvento(registro, data.registro ?? {}, data);
+        if (!modal) {
+            console.error("[Ver archivos] No existe #modalAdjuntos en el DOM");
+            return;
+        }
 
-                // Junta los 4 conjuntos de archivos que puede ver el módulo
-                const todosArchivos = [
-                    ...(data.archivos ?? []),
-                    ...(SECCIONES_VISIBLES.has("mtto") ? (data.archivos_mtto ?? []) : []),
-                    ...(SECCIONES_VISIBLES.has("svial") ? (data.archivos_svial ?? []) : []),
-                    ...(SECCIONES_VISIBLES.has("laboral") ? (data.archivos_laboral ?? []) : [])
-                ];
+        if (!tituloRegistro) {
+            console.error("[Ver archivos] No existe #modal_registro1 en el DOM");
+            return;
+        }
 
-                renderGaleria(todosArchivos);
-                console.log(`[Ver archivos] Preparar JSON y disparar render: ${(performance.now() - inicioRender).toFixed(2)} ms`);
-                console.log(`[Ver archivos] Total hasta render inicial: ${(performance.now() - inicioTotal).toFixed(2)} ms`);
-            })
-            .catch(error => {
-                console.error(error);
-                alert("Error cargando el evento.");
-            });
+        modal.style.display = "block";
+        tituloRegistro.textContent = `#${registro.Id}`;
+
+
+        console.log(`[Ver archivos] Abrir modal: ${id}:${(performance.now() - inicioModal).toFixed(2)} ms`);
+
+        try {
+            const inicioFetch = performance.now();
+            const response = await fetch(`/${CFG.modulo}/detalle/${id}`);
+
+            console.log(
+            `[Ver archivos] Fetch #${id}: ${(performance.now() - inicioFetch).toFixed(2)} ms (HTTP ${response.status})`);
+            
+            if(!response.ok){throw new Error(`HTTP ${response.status}`);}
+            const inicioJson = performance.now();
+            const data = await response.json();
+
+            console.log(`[Ver archivos] response.json() #${id}: ${(performance.now() - inicioJson).toFixed(2)} ms`);
+
+            //Si mientras esperábamos la respuesta el usuario
+            // abrió otro evento, esta respuesta ya no sirve.
+            
+            if (solicitudActual !== solicitudDetalleActual){console.log(`[Ver archivos] Respuesta ignorada. ` + `Evento #${id} ya no es el evento activo.`);
+            return;
+            }
+            const inicioRender = performance.now();
+
+             // renderDetalle es async, por lo tanto debemos esperar
+            // a que termine antes de continuar.
+            await renderDetalle(registro, data);
+
+            // Volvemos a comprobar porque renderDetalle()
+            // contiene operaciones asíncronas (geocodificación).
+            if (solicitudActual !== solicitudDetalleActual){console.log(`[Ver archivos] Render ignorado. ` + `Evento #${id} ya no es el evento activo.`);
+            return;
+            }
+            prepararEdicionEvento(registro,data.registro ?? {},data);
+
+            // Junta los 4 conjuntos de archivos que puede ver el módulo
+
+            const todosArchivos = [
+            ...(data.archivos ?? []),
+            ...(SECCIONES_VISIBLES.has("mtto")
+                ? (data.archivos_mtto ?? [])
+                : []),
+            ...(SECCIONES_VISIBLES.has("svial")
+                ? (data.archivos_svial ?? [])
+                : []),
+            ...(SECCIONES_VISIBLES.has("laboral")
+                ? (data.archivos_laboral ?? [])
+                : [])
+            ];
+
+            renderGaleria(todosArchivos);
+
+            console.log(
+            `[Ver archivos] Render completo #${id}: ` +
+            `${(performance.now() - inicioRender).toFixed(2)} ms`
+            );
+
+            console.log(
+            `[Ver archivos] Total #${id}: ` +
+            `${(performance.now() - inicioTotal).toFixed(2)} ms`
+            );
+
+        } catch (error) {
+            if (solicitudActual !== solicitudDetalleActual) {
+            console.log(`[Ver archivos] Error de solicitud anterior ignorado para #${id}`);
+            return;
+            }  
+            console.error( `[Ver archivos] Error cargando evento #${id}:`,error);
+            alert("Error cargando el evento.");
+        }
     };
 
     window.cerrarModalAdjuntos = function () {
@@ -1337,24 +1541,47 @@ document.addEventListener("DOMContentLoaded", () => {
                 r.checked = r.value === (oper.rev_error ?? "SI");
             });
 
-            // Este caso solo puede reaparecer en la bandeja si el costo
-            // NO superó $2.000.000.
+            // Se conserva la respuesta ya guardada. Un costo vacío en
+            // table_info_oper representa el camino que supera el límite,
+            // porque solo se almacena costo_oper cuando no lo supera.
+            const noSupera = oper.CostoDelDanoOper != null;
             document.querySelectorAll("input[name='CostoSupera2M']").forEach(r => {
-                r.checked = r.value === "NO";
+                r.checked = r.value === (noSupera ? "NO" : "SI");
             });
-            bloqueCostoDano.style.display = "block";
-            bloqueResponsabilidad.style.display = "block";
+            bloqueCostoDano.style.display = noSupera ? "block" : "none";
+            bloqueResponsabilidad.style.display = noSupera ? "block" : "none";
 
-            if (mtto.Costo != null) {
-                costoDanoDisplay.value = new Intl.NumberFormat("es-CO").format(Number(mtto.Costo));
-                costoDanoHidden.value = mtto.Costo;
+            if (noSupera) {
+                costoDanoDisplay.value = new Intl.NumberFormat("es-CO").format(Number(oper.CostoDelDanoOper));
+                costoDanoHidden.value = oper.CostoDelDanoOper;
+                document.querySelectorAll("input[name='ResponsabilidadOperador']").forEach(r => {
+                    r.checked = r.value === oper.responsabilidad_operador;
+                });
+            } else {
+                document.querySelectorAll("input[name='ResponsabilidadOperador']").forEach(r => {
+                    r.checked = false;
+                });
+                document.querySelectorAll("input[name='Conciliacion']").forEach(r => {
+                    r.checked = false;
+                });
             }
 
-            document.querySelectorAll("input[name='ResponsabilidadOperador']").forEach(r => {
-                r.checked = r.value === oper.responsabilidad_operador;
-            });
+            if (noSupera && oper.responsabilidad_operador === "NO APLICA") {
+                bloqueValorConciliadoOper.style.display = "block";
+                document.getElementById("lblValorConciliadoOper").textContent =
+                    "VALOR CONCILIADO CON TERCEROS";
+                bloqueMotivoCierreOper.style.display = "block";
+                motivoCierreOper.required = true;
+                motivoCierreOper.value = laboral.Tipo_cerrado ?? "";
 
-            if (oper.responsabilidad_operador === "SI" && oper.conciliacion === "SI") {
+                if (laboral.Valor_conciliado != null) {
+                    valorConciliadoOperDisplay.value =
+                        new Intl.NumberFormat("es-CO").format(Number(laboral.Valor_conciliado));
+                    valorConciliadoOperHidden.value = laboral.Valor_conciliado;
+                }
+            }
+
+            if (noSupera && oper.responsabilidad_operador === "SI" && oper.conciliacion === "SI") {
                 bloqueConciliacion.style.display = "block";
 
                 document.querySelectorAll("input[name='Conciliacion']").forEach(r => {
@@ -1417,10 +1644,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const registro = registros.find(r => r.Id == id);
         modoCorreccionGestion = !!registro && !registro.caso_cerrado && (
-            CFG.propia === "laboral" ? registro.tiene_laboral : registro.estado_modulo
+            CFG.propia === "oper" ? registro.tiene_oper :
+                CFG.propia === "laboral" ? registro.tiene_laboral : registro.estado_modulo
         );
         document.getElementById("bloqueMotivoGestion").style.display = modoCorreccionGestion ? "block" : "none";
-        document.getElementById("motivo_gestion").value = "";
+        const motivoGestion = document.getElementById("motivo_gestion");
+        motivoGestion.value = "";
+        motivoGestion.required = modoCorreccionGestion;
 
         if (modoCorreccionGestion) {
             precargarFormularioGestion(id);
@@ -1451,6 +1681,7 @@ document.addEventListener("DOMContentLoaded", () => {
         adjuntosSeleccionados = [];
         actualizarListaAdjuntos();
         modoCorreccionGestion = false;
+        document.getElementById("motivo_gestion").required = false;
         limpiarFormulario();
     };
 
@@ -1486,8 +1717,11 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("mensajeReincidencia").textContent = "";
             document.getElementById("bloqueConciliacion").style.display = "none";
             document.getElementById("bloqueValorConciliadoOper").style.display = "none";
+            document.getElementById("bloqueMotivoCierreOper").style.display = "none";
             document.getElementById("valor_conciliado_oper_display").value = "";
             document.getElementById("valor_conciliado_oper").value = "";
+            document.getElementById("motivo_cierre_oper").value = "";
+            document.getElementById("motivo_cierre_oper").required = false;
             const msgCosto = document.getElementById("msgCostoDano");
             if (msgCosto) { msgCosto.style.display = "none"; msgCosto.textContent = ""; }
         }
@@ -1562,6 +1796,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function sincronizarEstadoCaso() {
         if (!estadoCasoOpciones) return;
+
+        const completo = estadoCasoOpciones.querySelector("input[value='COMPLETO']");
+        const procesosIndividuales = Array.from(
+            estadoCasoOpciones.querySelectorAll("input[type='checkbox']:not([value='COMPLETO'])")
+        );
+
+        if (completo?.checked) {
+            procesosIndividuales.forEach(cb => {
+                cb.checked = false;
+                cb.disabled = true;
+            });
+        } else {
+            procesosIndividuales.forEach(cb => {
+                cb.disabled = false;
+            });
+        }
 
         const marcados = Array.from(
             estadoCasoOpciones.querySelectorAll("input[type='checkbox']:checked")
@@ -1665,6 +1915,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const bloqueValorConciliadoOper = document.getElementById("bloqueValorConciliadoOper");
     const valorConciliadoOperDisplay = document.getElementById("valor_conciliado_oper_display");
     const valorConciliadoOperHidden = document.getElementById("valor_conciliado_oper");
+    const bloqueMotivoCierreOper = document.getElementById("bloqueMotivoCierreOper");
+    const motivoCierreOper = document.getElementById("motivo_cierre_oper");
     const bloqueConciliacionTercerosSvial = document.getElementById("bloqueConciliadoFavor");
     const conciliadoAFavor = document.getElementById("conciliado_a_favor");
     const valorConciliadoTercerosSvial = document.getElementById("valor_conciliado_terceros");
@@ -1739,8 +1991,11 @@ document.addEventListener("DOMContentLoaded", () => {
         mensajeReincidencia.textContent = "";
         bloqueConciliacion.style.display = "none";
         bloqueValorConciliadoOper.style.display = "none";
+        bloqueMotivoCierreOper.style.display = "none";
         valorConciliadoOperDisplay.value = "";
         valorConciliadoOperHidden.value = "";
+        motivoCierreOper.value = "";
+        motivoCierreOper.required = false;
         actualizarVisibilidadCerrarCaso();
     }
 
@@ -1805,8 +2060,11 @@ document.addEventListener("DOMContentLoaded", () => {
             mensajeReincidencia.textContent = "";
             bloqueConciliacion.style.display = "none";
             bloqueValorConciliadoOper.style.display = "none";
+            bloqueMotivoCierreOper.style.display = "none";
             valorConciliadoOperDisplay.value = "";
             valorConciliadoOperHidden.value = "";
+            motivoCierreOper.value = "";
+            motivoCierreOper.required = false;
             document.querySelectorAll("input[name='Conciliacion']").forEach(r => r.checked = false);
             actualizarVisibilidadCerrarCaso();
 
@@ -1817,6 +2075,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 document.getElementById("lblValorConciliadoOper").textContent =
                     "VALOR CONCILIADO CON TERCEROS";
                 bloqueValorConciliadoOper.style.display = "block";
+                bloqueMotivoCierreOper.style.display = "block";
+                motivoCierreOper.required = true;
                 return;
             }
 
@@ -1939,6 +2199,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 if (responsabilidad && responsabilidad.value === "NO APLICA") {
                     formData.append("conciliacion", "");
+                    formData.append("motivo_cierre_oper", motivoCierreOper.value);
 
                     formData.append(
                         "valor_conciliado_oper",
@@ -1982,11 +2243,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (modoCorreccionGestion) {
             const motivoCambio = document.getElementById("motivo_gestion");
 
-            if (!motivoCambio || !motivoCambio.value.trim()) {
-                alert("El motivo del cambio es obligatorio.");
-                motivoCambio?.focus();
-                return false;
-            }
+            if (!motivoCambio.reportValidity()) return false;
         }
 
         if (CFG.mostrarRevision) {
@@ -2040,6 +2297,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 const responsabilidad = document.querySelector("input[name='ResponsabilidadOperador']:checked");
                 if (!responsabilidad) {
                     alert("Responda si el operador acepta la responsabilidad.");
+                    return false;
+                }
+
+                if (responsabilidad.value === "NO APLICA" && !motivoCierreOper.reportValidity()) {
                     return false;
                 }
 
@@ -2325,13 +2586,38 @@ document.addEventListener("DOMContentLoaded", () => {
     // LIGHTBOX
     //======================================================
 
+    let imagenesLightbox = [];
+    let indiceImagenLightbox = -1;
+
+    function actualizarLightbox() {
+        document.getElementById("lightbox-img").src = imagenesLightbox[indiceImagenLightbox];
+        document.getElementById("lightbox-anterior").style.display = indiceImagenLightbox > 0 ? "" : "none";
+        document.getElementById("lightbox-siguiente").style.display = indiceImagenLightbox < imagenesLightbox.length - 1 ? "" : "none";
+        document.getElementById("lightbox").style.display = "flex";
+    }
+
     window.abrirLightbox = function (url) {
-        document.getElementById("lightbox").style.display = "block";
-        document.getElementById("lightbox-img").src = url;
+        imagenesLightbox = Array.from(document.querySelectorAll(".galeria img")).map(img => img.src);
+        indiceImagenLightbox = imagenesLightbox.indexOf(new URL(url, window.location.origin).href);
+        if (indiceImagenLightbox < 0) {
+            imagenesLightbox = [url];
+            indiceImagenLightbox = 0;
+        }
+        actualizarLightbox();
+    };
+
+    window.navegarLightbox = function (direccion) {
+        const siguienteIndice = indiceImagenLightbox + direccion;
+        if (siguienteIndice < 0 || siguienteIndice >= imagenesLightbox.length) return;
+        indiceImagenLightbox = siguienteIndice;
+        actualizarLightbox();
     };
 
     window.cerrarLightbox = function () {
         document.getElementById("lightbox").style.display = "none";
+        document.getElementById("lightbox-img").src = "";
+        imagenesLightbox = [];
+        indiceImagenLightbox = -1;
     };
 
 

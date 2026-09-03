@@ -18,5 +18,5 @@ First run pip install -r requirements.txt
 2. Adicionar al modulo de rrll imegenes de mtto y svial
 3. Adicionar la funcion descargar archivos (xlsx) y llamar de acuerdo a los filtros
 4. Mejorar la sidebar de interfaz
-5. Crear modulo de correcciones
+5. Las correcciones se realizan directamente desde cada módulo
 

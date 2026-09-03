@@ -1,6 +1,6 @@
 import os
 from flask import Blueprint, request, session, render_template, jsonify, send_from_directory,send_file, abort
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from mimetypes import guess_type
 from config import connect
 import pyodbc
@@ -12,6 +12,7 @@ from pathlib import Path
 from flask import Flask
 from config import BASE_DIR
 from config import UPLOAD_FOLDERS
+from backend_historico_movil import parse_fecha
 
 
 Capturador = Blueprint(
@@ -93,7 +94,7 @@ def get_conductor():
 def get_flota():
     No_interno = request.args.get('No_interno', '').strip()
     if not No_interno:
-        return jsonify({"Tipologia_interno": None})
+        return jsonify({"Tipologia_interno": None, "movil_valido": False})
     try:
         conn = connect()
         cursor = conn.cursor()
@@ -101,10 +102,13 @@ def get_flota():
         row = cursor.fetchone()
         cursor.close()
         conn.close()
-        return jsonify({"Tipologia_interno": row[0] if row else None})
+        return jsonify({
+            "Tipologia_interno": row[0] if row else None,
+            "movil_valido": bool(row)
+        })
     except Exception:
         print(traceback.format_exc())
-        return jsonify({"Tipologia_interno": None})
+        return jsonify({"Tipologia_interno": None, "movil_valido": False})
 
 @Capturador.route('/validarDuplicado')
 def validar_duplicado():
@@ -184,9 +188,35 @@ def submit_form():
         direccion_completa = f"{lat},{lon}" if lat and lon else ""
         fecha_registro = datetime.now()
 
+
+        # 1. Obtener la fecha de hoy
+        hoy = date.today()
+
+        # 2. Definir cuántos días se quieren restar
+        dias_a_restar = timedelta(days=62)
+
+        # 3. Restar los días
+        fecha_pasada = hoy - dias_a_restar
+        
+        try:
+            fecha_evento_dt = parse_fecha(fecha_evento)
+        except ValueError:
+            return jsonify({"error": "Fecha de evento inválida"}), 400
+
+        if not fecha_evento_dt >= fecha_pasada:
+            return jsonify({"error": "La fecha ingresada es superior a 2 meses."}), 400
+            
+
         # --- 4. INSERTAR EN DB (REGISTRO PRINCIPAL) ---
         conn = connect()
         cursor = conn.cursor()
+
+        cursor.execute("SELECT 1 FROM table_Moviles WHERE No_Movil = ?", (Movil,))
+        if not cursor.fetchone():
+            cursor.close()
+            conn.close()
+            return jsonify({"error": "El número de vehículo ingresado no es válido."}), 400
+
         cursor.execute("""
             INSERT INTO table_damage_to_fleet 
             (Fecha_evento, UF, Movil, Codigo, Nombre, Area, Ruta, Tipologia, Direccion, 

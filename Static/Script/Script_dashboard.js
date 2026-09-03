@@ -32,15 +32,45 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // GRÁFICA 2: LÍNEAS (FINANCIERA)
-    if (costos.length > 0) {
+    if (costos.length > 0 || operaciones.length > 0 || valores.length > 0) {
+
+        // Helper: arma un mapa "YYYY-MM" -> valor a partir de las filas [año, mes, valor]
+        const buildMap = (rows) => {
+            const map = new Map();
+            rows.forEach(r => {
+                const key = `${r[0]}-${String(r[1]).padStart(2, '0')}`;
+                map.set(key, r[2]);
+            });
+            return map;
+        };
+
+        const mapCostos = buildMap(costos);
+        const mapOperaciones = buildMap(operaciones);
+        const mapValores = buildMap(valores);
+
+        // Unión de todas las claves año-mes presentes en cualquiera de las 3 series
+        const allKeys = new Set([
+            ...mapCostos.keys(),
+            ...mapOperaciones.keys(),
+            ...mapValores.keys()
+        ]);
+
+        // Ordenamos cronológicamente
+        const labels = Array.from(allKeys).sort();
+
+        // Cada serie se rellena con 0 (o null si prefieres un hueco visual) donde falte el mes
+        const dataCostos = labels.map(k => mapCostos.get(k) ?? 0);
+        const dataOperaciones = labels.map(k => mapOperaciones.get(k) ?? 0);
+        const dataValores = labels.map(k => mapValores.get(k) ?? 0);
+
         new Chart(document.getElementById('barChart2'), {
             type: 'line',
             data: {
-                labels: costos.map(c => `${c[0]}-${String(c[1]).padStart(2, '0')}`),
+                labels: labels,
                 datasets: [
-                    { label: 'Costo Mantenimiento', data: costos.map(c => c[2]), borderColor: '#ef4444', fill: false, tension: 0.3 },
-                    { label: 'Costo Operaciones', data: operaciones.map(o => o[2]), borderColor: '#f59e0b', fill: false, tension: 0.3 },
-                    { label: 'Valor Conciliado', data: valores.map(v => v[2]), borderColor: '#3b82f6', fill: false, tension: 0.3 }
+                    { label: 'Costo Mantenimiento', data: dataCostos, borderColor: '#ef4444', fill: false, tension: 0.3 },
+                    { label: 'Costo Operaciones', data: dataOperaciones, borderColor: '#f59e0b', fill: false, tension: 0.3 },
+                    { label: 'Valor Conciliado', data: dataValores, borderColor: '#3b82f6', fill: false, tension: 0.3 }
                 ]
             },
             options: {
@@ -51,7 +81,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
-
+    
     // GRÁFICA 3: BARRAS (RRLL)
 
     if (rrll.length > 0) {

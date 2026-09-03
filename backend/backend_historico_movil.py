@@ -49,6 +49,15 @@ def _leer_filtros():
         'page': page,
     }
 
+def parse_fecha(valor):
+    if not valor:
+        return None
+    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y'):
+        try:
+            return datetime.strptime(valor, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(f"Formato de fecha no reconocido: {valor}")
 
 def _subquery_danos(filtros):
     """Arma el SELECT de daños con sus filtros. Devuelve (sql, params)."""
@@ -85,9 +94,14 @@ def _subquery_danos(filtros):
         sql += " AND d.UF = ? "
         params.append(filtros['uf'])
 
-    if filtros['fecha_inicio']:
-        sql += " AND d.Fecha_evento >= ? "
-        params.append(filtros['fecha_inicio'])
+    
+    if filtros.get('fecha_inicio'):
+        try:
+            fecha_inicio = parse_fecha(filtros['fecha_inicio'])
+            sql += " AND d.Fecha_evento >= ? "
+            params.append(fecha_inicio)
+        except ValueError:
+            return jsonify({"error": "Fecha de inicio inválida"}), 400    
 
     if filtros['fecha_fin']:
         fin = datetime.strptime(
@@ -132,9 +146,13 @@ def _subquery_reparaciones(filtros):
         sql += " AND p.UF = ? "
         params.append(filtros['uf'])
 
-    if filtros['fecha_inicio']:
-        sql += " AND p.Fecha_registro >= ? "
-        params.append(filtros['fecha_inicio'])
+    if filtros.get('fecha_inicio'):
+        try:
+            fecha_inicio = parse_fecha(filtros['fecha_inicio'])    
+            sql += " AND p.Fecha_registro >= ? "
+            params.append(fecha_inicio)
+        except ValueError:
+            return jsonify({"error": "Fecha de inicio inválida"}), 400    
 
     if filtros['fecha_fin']:
         fin = datetime.strptime(

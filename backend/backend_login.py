@@ -65,14 +65,17 @@ def login():
 
         conn = connect()
         cursor = conn.cursor()
-        cursor.execute("SELECT  Username, PasswordHash, UF  FROM Table_usuarios WHERE Username = ?", username)
+        cursor.execute("SELECT Username, PasswordHash, UF, Activo FROM Table_usuarios WHERE Username = ?", username)
         usuario = cursor.fetchone()
         conn.close()
         print(f"DEBUG: Datos traídos de la DB: {usuario}")
 
         if usuario:
-            user_id, password_hash, uf = usuario
+            user_id, password_hash, uf, activo = usuario
             if check_password_hash(password_hash, password):
+                if not activo:
+                    flash('El usuario se encuentra inactivo. No tiene permitido ingresar al aplicativo.', 'error')
+                    return render_template('Front_login.html')
                 
                 session['usuario'] = username
                 session['usuario_id'] = user_id

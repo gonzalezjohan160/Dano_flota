@@ -234,6 +234,21 @@ form select {
     cursor: pointer;
 }
 
+.lightbox-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    font-size: 42px;
+    cursor: pointer;
+    padding: 4px 14px;
+}
+
+.lightbox-nav-anterior { left: 30px; }
+.lightbox-nav-siguiente { right: 30px; }
+
 /* Estilo del encabezado con filtros integrados */
 thead th {
     background: #007BFF;           /* color azul */

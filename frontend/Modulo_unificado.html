@@ -235,6 +235,46 @@
         color: #ccc;
         cursor: not-allowed;
     }
+
+    .filtros-fecha-rrll {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        margin-left: 12px;
+    }
+
+    .filtros-fecha-rrll label {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #303030;
+    }
+
+    .filtros-fecha-rrll input[type="date"] {
+        width: 190px;
+        height: 48px;
+        padding: 0 14px;
+        border: 1px solid #c8c8c8;
+        border-radius: 8px;
+        background: #fff;
+        color: #202124;
+        font-size: 16px;
+        box-sizing: border-box;
+    }
+
+    #btnExportarLaboral {
+        margin-left: 12px;
+        padding: 12px 22px;
+        border-radius: 6px;
+        background: #28a745;
+        color: #fff;
+        font-size: 18px;
+        font-weight: 700;
+    }
+
+    #btnExportarLaboral:hover {
+        background: #218838;
+    }
 </style>
 {% endblock %}
 
@@ -268,6 +308,15 @@
         <option value="cerrados">Cerrados</option>
         <option value="todos">Todos</option>
     </select>
+    {% if modulo == 'laboral' %}
+    <span class="filtros-fecha-rrll">
+        <label for="filtroFechaDesde">Inicio:</label>
+        <input type="date" id="filtroFechaDesde">
+        <label for="filtroFechaHasta">Fin:</label>
+        <input type="date" id="filtroFechaHasta">
+    </span>
+    <button id="btnExportarLaboral" type="button" class="btn">Excel</button>
+    {% endif %}
 </div>
 
 <div class="table-card">
@@ -585,6 +634,15 @@
                     <input type="hidden" id="valor_conciliado_oper" value="">
                 </div>
 
+                <div id="bloqueMotivoCierreOper" style="display:none;">
+                    <label for="motivo_cierre_oper">MOTIVO DE CIERRE</label>
+                    <select id="motivo_cierre_oper" style="width:100%;">
+                        <option value="" selected disabled>Seleccione el motivo</option>
+                        <option value="RETIRO">RETIRO</option>
+                        <option value="EXONERACIÓN">EXONERACIÓN</option>
+                    </select>
+                </div>
+
                 <!-- Solo si ResponsabilidadOperador = NO APLICA. Reutiliza
                      exactamente el mismo campo oculto (#valor_conciliado_oper)
                      que "Valor conciliado", ya que ambos se guardan en la
@@ -615,8 +673,20 @@
 <div id="modalAdjuntos" class="modal">
     <div class="modal-content" style="max-width: 80%;">
         <span class="close" onclick="cerrarModalAdjuntos()">&times;</span>
+        <div id="seccionLaboralPendiente" style="display:none;">
+            <h3 style="text-align:center;">⚖️ RELACIONES LABORALES</h3>
+            <div class="tabla-estilo">
+                <table id="info_laboral_pendiente">
+                    <thead>
+                        <tr></tr>
+                    </thead>
+                    <tbody id="infoEventoLaboralPendiente"></tbody>
+                </table>
+            </div>
+            <hr>
+        </div>
         <div id="seccionGeneral">
-            <h3 style="text-align:center;">📝 INFORMACIÓN DEL EVENTO <span id="modal_registro1"></span></h3>
+            <h3 id="tituloInformacionEvento" style="text-align:center;">📝 INFORMACIÓN DEL EVENTO <span id="modal_registro1"></span></h3>
             <div class="tabla-estilo">
                 <table id="infoEvento">
                     <thead>
@@ -629,6 +699,9 @@
 
         <!-- MAPA -->
         <h3 style="text-align:center;">🗺️ UBICACIÓN DEL EVENTO</h3>
+        <p id="mensajeMapaEdicion" style="display:none; text-align:center; margin:0 0 10px; color:#356a3e;">
+            Haga clic en el mapa para establecer la ubicación manual del evento.
+        </p>
         <div id="map"></div>
 
         <div id="seccionOper" data-seccion="oper">
@@ -686,16 +759,19 @@
             <button id="btn_editar_informacion" type="button" class="btn btn-success">Editar información</button>
             <button id="btn_eliminar_evento" type="button" class="btn" style="background:#c62828; color:#fff;">Eliminar caso</button>
             <button id="btn_guardar_modificacion" type="button" class="btn btn-success" style="display:none;">Guardar información</button>
+            <label id="btn_elegir_archivos_edicion" for="archivos_edicion" class="btn" style="display:none; background:#e0e0e0; color:#333;">Elegir archivos</label>
+            <input type="file" id="archivos_edicion" accept="image/*,video/*,audio/*,.pdf" multiple style="display:none;">
             <button id="btn_cancelar_modificacion" type="button" class="btn" style="display:none;">Cancelar</button>
         </div>
+        <div id="lista_archivos_edicion" style="display:none; margin-top:12px;"></div>
 
         <!-- ================= MOTIVO DE LA MODIFICACIÓN ================= -->
         <div id="seccionMotivoModificacion" style="display:none;">
-            <h3 style="text-align:center;">📝 Motivo de la modificación</h3>
+            <h3 style="text-align:center;">📝 Motivo de la modificación o eliminación</h3>
             <div class="form-group">
-                <label for="motivo_modificacion">Motivo de la modificación *</label>
+                <label for="motivo_modificacion">Motivo de la modificación o eliminación *</label>
                 <textarea id="motivo_modificacion" name="motivo_modificacion" rows="3" style="width:100%;"
-                    placeholder="Escriba el motivo por el cual está realizando esta modificación..."></textarea>
+                    placeholder="Escriba el motivo por el cual está realizando esta modificación o eliminación..." required></textarea>
             </div>
         </div>
 
@@ -705,7 +781,9 @@
 <!-- Lightbox para imágenes -->
 <div id="lightbox" class="lightbox">
     <span class="close" onclick="cerrarLightbox()">&times;</span>
+    <button id="lightbox-anterior" class="lightbox-nav lightbox-nav-anterior" type="button" onclick="navegarLightbox(-1)">&lt;</button>
     <img id="lightbox-img" src="" alt="Vista ampliada">
+    <button id="lightbox-siguiente" class="lightbox-nav lightbox-nav-siguiente" type="button" onclick="navegarLightbox(1)">&gt;</button>
 </div>
 
 

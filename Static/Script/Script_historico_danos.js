@@ -67,8 +67,9 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+        const filtroUF = document.getElementById("filtroUF").value;
         const filtroEstado = document.getElementById("filtroEstado").value;
-        window.location.href = `/Historico_danos/exportar_excel?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&filtro_estado=${encodeURIComponent(filtroEstado)}`;
+        window.location.href = `/Historico_danos/exportar_excel?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&filtro_uf=${encodeURIComponent(filtroUF)}&filtro_estado=${encodeURIComponent(filtroEstado)}`;
     });
 
 

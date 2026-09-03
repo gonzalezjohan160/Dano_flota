@@ -42,7 +42,7 @@ movil_Input.addEventListener('change', async () => {
         const res = await fetch(`/Capturador/getFlota?No_interno=${No_interno}`);
         const data = await res.json();
 
-        if (!data || !data.Tipologia_interno) {
+        if (!data || !data.movil_valido) {
             TiplogiaInput.value = '';
             alert('⚠️ No se encontró ningún móvil con ese número interno.');
             return;
@@ -638,18 +638,31 @@ function validarDuplicado() {
         return; // Detiene el envío
     }    
     
-    fetch(`/Capturador/validarDuplicado?fecha=${encodeURIComponent(fecha)}&movil=${encodeURIComponent(movil)}&codigo=${encodeURIComponent(codigo)}&zona_dano=${encodeURIComponent(zona_dano)}`)
+    fetch(`/Capturador/getFlota?No_interno=${encodeURIComponent(movil)}`)
         .then(res => res.json())
         .then(data => {
-            if (data.duplicado) {
-                mostrarModalDuplicado(fecha, movil, codigo, zona_dano);
-            } else {
-                enviarFormulario(); // Si no hay duplicado, procede al envío
+            if (!data || !data.movil_valido) {
+                alert("El número de vehículo ingresado no es válido.");
+                return;
             }
+
+            fetch(`/Capturador/validarDuplicado?fecha=${encodeURIComponent(fecha)}&movil=${encodeURIComponent(movil)}&codigo=${encodeURIComponent(codigo)}&zona_dano=${encodeURIComponent(zona_dano)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.duplicado) {
+                        mostrarModalDuplicado(fecha, movil, codigo, zona_dano);
+                    } else {
+                        enviarFormulario(); // Si no hay duplicado, procede al envío
+                    }
+                })
+                .catch(err => {
+                    console.error("Error validando:", err);
+                    enviarFormulario(); // En caso de error de red, intentamos enviar de todos modos
+                });
         })
         .catch(err => {
-            console.error("Error validando:", err);
-            enviarFormulario(); // En caso de error de red, intentamos enviar de todos modos
+            console.error("Error validando móvil:", err);
+            alert("❌ Error al consultar la base de datos.");
         });
 }
 

@@ -13,7 +13,6 @@ from backend_historico_movil import Historico_movil
 from backend_capturador import Capturador
 from backend_reparaciones import Capturador_rep
 from backend_historico_danos import Historico_danos
-from backend_correcciones import Correcciones
 from backend_profile import Profile
 from pathlib import Path
 from datetime import timedelta
@@ -67,9 +66,6 @@ Interfaz.register_blueprint(Capturador_rep, url_prefix='/Capturador_rep')
 # Registrar Historico de daños como Blueprint
 Interfaz.register_blueprint(Historico_danos, url_prefix='/Historico_danos')
 
-# Registrar Correcciones como Blueprint
-Interfaz.register_blueprint(Correcciones, url_prefix='/Correcciones')
-
 @Interfaz.route('/interfaz')
 def index():
     """Redirige a Dashboard al cargar la página raíz"""
@@ -94,4 +90,3 @@ if __name__ == "__main__":
         print(Interfaz.url_map)
        #Interfaz.run(host="0.0.0.0", port=5000, debug=True, ssl_context=None)
         Interfaz.run(host="0.0.0.0", port=5000, ssl_context='adhoc', debug=True)
-        
