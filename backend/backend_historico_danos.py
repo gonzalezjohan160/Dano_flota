@@ -130,8 +130,8 @@ def index():
     for r in registros:
         # Fecha evento
         fecha = r.get('Fecha_evento')
-        r['fecha'] = fecha.strftime("%Y-%m-%d") if fecha else None
-        del r['Fecha_evento']
+        r['fecha'] = fecha.strftime("%Y-%m-%d %H:%M:%S") if fecha else None
+        r['fecha_datetime'] = fecha
 
         # Fecha registro
         fecha_r = r.get('Fecha_registro')

@@ -109,6 +109,7 @@ def get_flota():
     except Exception:
         print(traceback.format_exc())
         return jsonify({"Tipologia_interno": None, "movil_valido": False})
+      
 
 @Capturador.route('/validarDuplicado')
 def validar_duplicado():
@@ -120,6 +121,7 @@ def validar_duplicado():
     try:
         conn = connect()
         cursor = conn.cursor()
+        fecha_dt = datetime.strptime(fecha, '%Y-%m-%dT%H:%M')  
 
         cursor.execute("""
             SELECT COUNT(*)
@@ -128,7 +130,7 @@ def validar_duplicado():
             AND Movil = ?
             AND Codigo = ?
             AND Zona_dano = ?
-        """, (fecha, movil, codigo, zona_dano))
+        """, (fecha_dt, movil, codigo, zona_dano))
 
         existe = cursor.fetchone()[0] > 0
         cursor.close()
@@ -190,7 +192,7 @@ def submit_form():
 
 
         # 1. Obtener la fecha de hoy
-        hoy = date.today()
+        hoy = datetime.today()
 
         # 2. Definir cuántos días se quieren restar
         dias_a_restar = timedelta(days=62)
@@ -198,8 +200,13 @@ def submit_form():
         # 3. Restar los días
         fecha_pasada = hoy - dias_a_restar
         
+        print("FECHA EVENTO RECIBIDA:", repr(fecha_evento))
+        
         try:
-            fecha_evento_dt = parse_fecha(fecha_evento)
+            fecha_evento_dt = datetime.strptime(fecha_evento, '%Y-%m-%dT%H:%M')
+            print("FECHA ORIGINAL:", repr(fecha_evento))
+            print("FECHA CONVERTIDA:", repr(fecha_evento_dt))
+            print("TIPO:", type(fecha_evento_dt))
         except ValueError:
             return jsonify({"error": "Fecha de evento inválida"}), 400
 
@@ -224,7 +231,7 @@ def submit_form():
              Centro_operaciones, Fecha_registro)
             OUTPUT INSERTED.Id 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (fecha_evento, UF, Movil, codigo, nombre, Area, ruta, tipologia,
+        """, (fecha_evento_dt, UF, Movil, codigo, nombre, Area, ruta, tipologia,
               direccion_completa, Version_libre, parte_afectada, dano_ocasionado,
               Zona_dano, registrador, centro_operaciones, fecha_registro))
 

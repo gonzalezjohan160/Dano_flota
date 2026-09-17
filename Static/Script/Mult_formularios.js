@@ -337,7 +337,7 @@
                 }
 
                 if (registro.fecha) {
-                    const fechaEvento = new Date(registro.fecha + "T00:00:00");
+                    const fechaEvento = new Date(registro.fecha);
                     if (!isNaN(fechaEvento) && !isNaN(fechaFinal)) {
                         const tEvento = calcularDuracionHabil(fechaEvento, fechaFinal);
                         duracionEvento = `${tEvento.dias}d ${tEvento.horas}h`;
@@ -358,12 +358,20 @@
         window.formatearFechaRegistro = (fecha) => {
         if (!fecha) return "Sin fecha";
 
-        try {
-            const [anio, mes, dia] = fecha.split("-");
-            return `${dia}/${mes}/${anio}`;
-        } catch {
-            return "Sin fecha";
+        const str = String(fecha).trim();    
+
+        // Formato DD/MM/YYYY o DD/MM/YYYY HH:mm:ss
+        if (/^\d{2}\/\d{2}\/\d{4}/.test(str)) {
+            return str.substring(0, 10);
         }
+         
+        // Formato YYYY-MM-DD o YYYY-MM-DD HH:mm:ss
+        const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+        if (m) {
+            return `${m[3]}/${m[2]}/${m[1]}`;
+        }
+        return "Sin fecha";
     };
 
         /***********************

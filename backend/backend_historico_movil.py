@@ -52,9 +52,9 @@ def _leer_filtros():
 def parse_fecha(valor):
     if not valor:
         return None
-    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y'):
+    for fmt in ('%Y-%m-%dT%H:%M'):
         try:
-            return datetime.strptime(valor, fmt).date()
+            return datetime.strptime(valor, fmt)
         except ValueError:
             continue
     raise ValueError(f"Formato de fecha no reconocido: {valor}")

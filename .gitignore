@@ -1,5 +1,6 @@
 # Entorno virtual
 venv/
+.venv/
 
 # Archivos cargados por usuarios
 Files/
@@ -19,3 +20,6 @@ __pycache__/
 .vs/
 *.suo
 *.user
+
+# Logs
+*.log

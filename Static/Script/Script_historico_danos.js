@@ -116,6 +116,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         lista.forEach(registro => {
 
+            console.log("FECHA PARA FORMATEAR:", registro.fecha);
+
             const fechaFormateada =
                     window.formatearFechaRegistro(registro.fecha);
 
@@ -244,8 +246,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     const formatoCOP = v =>
                         v ? new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(v) : "-";
 
+                    console.log("FECHA registro:", registro.fecha);
+                    console.log("FECHA registroDetalle:", registroDetalle.Fecha_evento);
+
                     infoBody.innerHTML = `
-                        <tr><td>FECHA EVENTO</td><td>${registro.fecha || "-"}</td></tr>
+                        <tr><td>FECHA EVENTO</td><td>${formatoFechaHora(registroDetalle.Fecha_evento) || "-"}</td></tr>
                         <tr><td>MÓVIL</td><td>${registroDetalle.Movil || "-"}</td></tr>
                         <tr><td>CÓDIGO</td><td>${registroDetalle.Codigo || "-"}</td></tr>
                         <tr><td>NOMBRE</td><td>${registroDetalle.Nombre || "-"}</td></tr>

@@ -156,9 +156,6 @@
                     {% if 'Ingresar_crear_usuario' in session.get('permisos', []) %}
                     <a href="/Modulo_usuario">Crear usuario</a>
                     {% endif %}
-                    {% if 'Ingresar_permisos' in session.get('permisos', []) %}
-                    <a href="/Modulo_permisos">Crear permiso</a>
-                    {% endif %}
                     {% if 'Ingresar_asignar_permisos' in session.get('permisos', []) %}
                     <a href="/Modulo_permisos_roles">Asignar permisos a usuarios</a>
                     {% endif %}

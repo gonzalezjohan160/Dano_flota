@@ -313,6 +313,21 @@ document.addEventListener("DOMContentLoaded", () => {
     function construirTabla(datos, campos) {
         return campos.map(campo => {
             let valor = datos?.[campo.key];
+
+            if (campo.key === "fecha" && valor) {
+                const d = new Date(valor);
+
+                if (!isNaN(d.getTime())) {
+                    valor =
+                    `${String(d.getDate()).padStart(2, "0")}/` +
+                    `${String(d.getMonth() + 1).padStart(2, "0")}/` +
+                    `${d.getFullYear()} ` +
+                    `${String(d.getHours()).padStart(2, "0")}:` +
+                    `${String(d.getMinutes()).padStart(2, "0")}:` +
+                    `${String(d.getSeconds()).padStart(2, "0")}`;
+                }
+            }            
+
             if (campo.formato === "moneda") {
                 valor = formatoCOP(valor);
             }
@@ -329,10 +344,37 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!valor) return null;
 
         const str = String(valor).trim();
-
-        let m = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        let m = str.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);
         if (m) {
-            return new Date(+m[1], +m[2] - 1, +m[3]);
+            return new Date(
+            +m[1],
+            +m[2] - 1,
+            +m[3],
+            +m[4],
+            +m[5],
+            +(m[6] || 0)
+            );
+        }
+        
+        m = str.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+        if (m) {
+            return new Date(
+                +m[1],
+                +m[2] - 1,
+                +m[3],
+                +m[4],
+                +m[5],
+                +(m[6] || 0)
+            );
+        }        
+        
+        m = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (m) {
+        return new Date(
+            +m[1],
+            +m[2] - 1,
+            +m[3]
+            );
         }
 
         m = str.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
@@ -340,8 +382,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
         }
 
-        const fallback = new Date(str);
-        return isNaN(fallback.getTime()) ? null : fallback;
+         return null;
     }
 
     function formatearFechaRegistro(fecha) {
@@ -456,12 +497,20 @@ document.addEventListener("DOMContentLoaded", () => {
         return { dias, horas, minutos };
     }
 
-    function calcularDiferencia(fechaValor) {
+    function calcularDiferencia(fechaValor, fechaFin = null) {
         const inicio = parseFechaBackend(fechaValor);
         if (!inicio) return null;
 
-        const ahora = new Date();
-        const { dias, horas, minutos } = calcularDuracionHabil(inicio, ahora > inicio ? ahora : inicio);
+        const fin = fechaFin
+        ? parseFechaBackend(fechaFin)
+        : new Date();
+        
+        if (!fin) return null;
+
+        const fechaFinal = fin > inicio ? fin : inicio;
+
+        const { dias, horas, minutos } =
+        calcularDuracionHabil(inicio, fechaFinal);
 
         let texto;
         if (dias > 0) texto = `${dias} d ${horas} h`;
@@ -472,15 +521,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Duración desde que se registró el evento y desde que ocurrió el evento en si. 
-    function calcularDuracionesRegistro(registro) {
-        const tRegistro = calcularDiferencia(registro.fecha_r);
-        const tEvento = calcularDiferencia(registro.fecha);
-
+    function calcularDuracionesRegistro(registro) { const tRegistro = calcularDiferencia(registro.fecha_r);
+        let tEvento;
+        if (Number(registro.estado_caso) === 1 && registro.fecha_cierre) {
+            // Caso cerrado: el contador termina en la fecha real de cierre
+            tEvento = calcularDiferencia(
+                registro.fecha,
+                registro.fecha_cierre
+            );
+        }else {
+            // Caso abierto: el contador continúa hasta ahora
+            tEvento = calcularDiferencia(registro.fecha);
+        }
         return {
             duracion: tRegistro ? tRegistro.texto : "-",
             duracionEvento: tEvento ? tEvento.texto : "-",
             t: tEvento
-        };
+        };        
     }
     window.calcularDuracionesRegistro = calcularDuracionesRegistro;
 
@@ -528,11 +585,17 @@ document.addEventListener("DOMContentLoaded", () => {
             if (filtroEstado === "cerrados" && (
                 !registro.caso_cerrado || (CFG.propia === "laboral" && !registro.cerrado_por_laboral)
             )) return false;
+
             if (filtroEstado === "pendientes" && (
-                registro.caso_cerrado || (CFG.propia === "laboral" ? registro.tiene_laboral : registro.estado_modulo)
+                registro.caso_cerrado || (CFG.propia === "laboral"
+            ? String(registro.pendiente_proceso_actual ?? "").trim().toUpperCase() === "COMPLETO"
+            : registro.estado_modulo)
             )) return false;
+
             if (filtroEstado === "gestionados" && (
-                registro.caso_cerrado || !(CFG.propia === "laboral" ? registro.tiene_laboral : registro.estado_modulo)
+                registro.caso_cerrado || (CFG.propia === "laboral"
+                ? String(registro.pendiente_proceso_actual ?? "").trim().toUpperCase() !== "COMPLETO"
+                : !registro.estado_modulo)
             )) return false;
 
             if (filtros["0"] &&
@@ -656,6 +719,9 @@ document.addEventListener("DOMContentLoaded", () => {
         aplicarVisibilidadColumnas();
 
         paginaDatos.forEach(registro => {
+
+            console.log("FECHA ORIGINAL:", registro.fecha);
+            console.log("REGISTRO MODULO:", registro);
 
             const fechaFormateada =
                 window.formatearFechaRegistro(registro.fecha);
@@ -965,9 +1031,8 @@ document.addEventListener("DOMContentLoaded", () => {
         // MANTENIMIENTO
         //--------------------------------------------------
 
-        // Si el costo fue registrado por Operaciones, ya se muestra en su
-        // propia sección -- no se duplica aquí.
-        const mttoParaTabla = costoRegistradoPorOper ? { ...mtto, Costo: null } : mtto;
+    
+        const mttoParaTabla = mtto;
 
         if (SECCIONES_VISIBLES.has("mtto")) {
             const inicioMtto = performance.now();
@@ -1174,7 +1239,7 @@ document.addEventListener("DOMContentLoaded", () => {
             ? detalle.Centro_operaciones
             : "";
         document.getElementById("infoEventoBody").innerHTML = `
-            <tr><td>FECHA EVENTO</td><td><input type="date" id="evento_fecha" value="${escaparHtml(registro.fecha)}"></td></tr>
+            <tr><td>FECHA EVENTO</td><td><input type="datetime-local" id="evento_fecha" value="${escaparHtml(registro.fecha)}"></td></tr>
             <tr><td>UF</td><td><select id="evento_uf">${opcionesSelect(["10", "16"], detalle.UF)}</select></td></tr>
             <tr><td>MÓVIL</td><td><input id="evento_movil" inputmode="numeric" value="${escaparHtml(detalle.Movil)}"></td></tr>
             <tr><td>CÓDIGO</td><td><input id="evento_codigo" value="${escaparHtml(detalle.Codigo)}"></td></tr>
@@ -2240,7 +2305,7 @@ document.addEventListener("DOMContentLoaded", () => {
             alert("Seleccione un registro.");
             return false;
         }
-        if (modoCorreccionGestion) {
+        if (modoCorreccionGestion && CFG.propia !== "laboral") {
             const motivoCambio = document.getElementById("motivo_gestion");
 
             if (!motivoCambio.reportValidity()) return false;
@@ -2345,12 +2410,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (CFG.propia === "laboral") {
             const revision = document.querySelector("input[name='Revinf']:checked")?.value;
+            const pendienteProceso = document.getElementById("estado_caso")?.value?.trim() || "";
+
+            registro.pendiente_proceso_actual = pendienteProceso;
+            registro.tiene_laboral = true;
+
+            const procesosPendientes = pendienteProceso   
+              .split(",")
+              .map(proceso => proceso.trim().toUpperCase())
+              .filter(Boolean); 
+
+            if (procesosPendientes.includes("MANTENIMIENTO")) {
+                registro.estado_mtto = false;
+            }
+            if (procesosPendientes.includes("OPERACIONES")) {
+                registro.estado_oper = false;
+            }
+            if (procesosPendientes.includes("SEGURIDAD VIAL")) {
+                registro.estado_svial = false;
+            }
+
             if (revision === "SI") {
                 registro.caso_cerrado = true;
-                registro.tiene_laboral = true;
+
+            
+                
                 // El filtro "Cerrados" debe mostrar inmediatamente el caso
-                // que RRLL acaba de cerrar; los otros filtros lo excluirán
-                // según estado_caso sin retirar su historial de la lista.
+                // que RRLL acaba de cerrar.
                 filtrarTabla();
                 return;
             }

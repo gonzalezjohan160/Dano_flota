@@ -49,7 +49,7 @@ MODULOS = {
         "permiso": "Ingresar_modulo__mtto",
         "campo_principal_label": "COSTO DEL DAÑO",
         "propia": "mtto",
-        "secciones_visibles": ["oper", "svial"],
+        "secciones_visibles": ["oper","mtto", "svial"],
         "mostrar_revision": False,
         "mostrar_observaciones": False,
     },
@@ -60,7 +60,7 @@ MODULOS = {
         "permiso": "Ingresar_modulo__svial",
         "campo_principal_label": "OBSERVACIONES SEGURIDAD VIAL",
         "propia": "svial",
-        "secciones_visibles": ["oper", "mtto"],
+        "secciones_visibles": ["oper", "mtto","svial"],
         "mostrar_revision": False,
         "mostrar_observaciones": False,
     },
@@ -211,7 +211,7 @@ def evento_pendiente_para_modulo(evento, modulo):
     _, procesos = normalizar_procesos_pendientes(
         evento.get("Pendiente_proceso"), validar=False
     )
-    return "COMPLETO" in procesos or proceso_modulo in procesos
+    return proceso_modulo in procesos
 
 
 def cerrar_caso_automaticamente(cursor, codigo, usuario):
@@ -384,6 +384,14 @@ def index(modulo):
                 (SELECT COUNT(*) FROM table_info_mtto m WHERE m.Id_damage_to_fleet = d.Id) AS tiene_mtto,
                 (SELECT COUNT(*) FROM table_info_svial s WHERE s.Id_damage_to_fleet = d.Id) AS tiene_svial,
                 (SELECT COUNT(*) FROM table_info_labora l WHERE l.Id_damage_to_fleet = d.Id) AS tiene_laboral,
+                
+                (
+                    SELECT TOP 1 lm.Pendiente_proceso
+                    FROM table_info_laboral_mult lm
+                    WHERE lm.Id_damage_to_fleet = d.Id
+                    ORDER BY lm.Fecha_registro DESC
+                ) AS pendiente_proceso_actual,
+                
                 ISNULL((SELECT TOP 1 estado_oper FROM table_info_oper o WHERE o.Id_damage_to_fleet = d.Id), 0) AS estado_oper,
                 ISNULL((SELECT TOP 1 estado_mtto FROM table_info_mtto m WHERE m.Id_damage_to_fleet = d.Id), 0) AS estado_mtto,
                 ISNULL((SELECT TOP 1 estado_svial FROM table_info_svial s WHERE s.Id_damage_to_fleet = d.Id), 0) AS estado_svial,
@@ -412,6 +420,14 @@ def index(modulo):
         )
         SELECT * FROM base
         WHERE {filtro_modulo}
+            AND (
+                '{modulo}' != 'laboral'
+                OR (
+                estado_oper = 1
+                AND estado_mtto = 1
+                AND estado_svial = 1
+            )
+        )
         ORDER BY Id DESC
     """
 
@@ -422,7 +438,7 @@ def index(modulo):
     for r in registros:
 
         fecha = r.get("Fecha_evento")
-        r["fecha"] = fecha.strftime("%Y-%m-%d") if fecha else None
+        r["fecha"] = fecha.strftime("%Y-%m-%dT%H:%M") if fecha else None
         del r["Fecha_evento"]
 
         fecha_r = r.get("Fecha_registro")
@@ -723,6 +739,13 @@ def actualizar_evento(modulo, id):
         }
         usuario = session.get("usuario", "")
         for campo, valor in cambios_reales.items():
+            print(">>> CAMPO:", campo)
+            print(">>> VALOR:", repr(valor))
+            print(">>> TIPO:", type(valor))
+            
+            if campo == "Fecha_evento" and isinstance(valor, str):
+                valor = datetime.strptime(valor, "%Y-%m-%dT%H:%M")
+            
             cursor.execute(f"UPDATE table_damage_to_fleet SET {campo} = ? WHERE Id = ?", (valor, id))
             cursor.execute("""
                 INSERT INTO table_auditoria_correcciones
@@ -731,6 +754,8 @@ def actualizar_evento(modulo, id):
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (id, "table_damage_to_fleet", campo, str(actual.get(campo) or ""),
                   str(valor or ""), usuario, datetime.now(), motivo))
+            
+            
         guardar_archivos(cursor, id, "table_damage_files", "DamageId", UPLOAD_FOLDERS["Operaciones"])
         conn.commit()
         return jsonify({"status": "success", "message": "Información del evento actualizada.", "cambios": len(cambios_reales)})
@@ -1163,14 +1188,14 @@ def agregar_relaciones_laborales():
 
         # Un caso puede quedar pendiente por varios procesos. Solo se
         # restablecen los estados de los módulos expresamente seleccionados;
-        # COMPLETO equivale a seleccionar los tres.
+        # COMPLETO equivale a todo bien
         estados_por_proceso = {
             "MANTENIMIENTO": ("table_info_mtto", "estado_mtto"),
             "OPERACIONES": ("table_info_oper", "estado_oper"),
             "SEGURIDAD VIAL": ("table_info_svial", "estado_svial"),
         }
         for proceso, (tabla, campo_estado) in estados_por_proceso.items():
-            if "COMPLETO" in procesos_pendientes or proceso in procesos_pendientes:
+            if proceso in procesos_pendientes:
                 cursor.execute(
                     f"UPDATE {tabla} SET {campo_estado} = 0 WHERE Id_damage_to_fleet = ?",
                     (codigo,)
@@ -1247,6 +1272,7 @@ def agregar_relaciones_laborales():
 
 def agregar_operaciones():
     try:
+        print(">>> ENTRE A AGREGAR_OPERACIONES")
         codigo = request.form.get("Id_damage_to_fleet")
         observaciones_1 = request.form.get("observaciones_1")
         usuario = request.form.get("Usuario_registro_oper")
@@ -1390,8 +1416,11 @@ def agregar_operaciones():
                         (Id_damage_to_fleet, Tipo_cerrado, Valor_conciliado, Usuario_registro_labora)
                     VALUES (?, ?, ?, ?)
                 """, (codigo, tipo_cerrado, valor_conciliado_oper, usuario))
-
+        print(">>> ANTES DE GUARDAR ARCHIVOS")
+        
         guardar_archivos(cursor, codigo, "table_damage_files", "DamageId", UPLOAD_FOLDERS["Operaciones"])
+        
+        print(">>> DESPUÉS DE GUARDAR ARCHIVOS")
         if termina_en_operaciones:
             cerrar_caso_automaticamente(cursor, codigo, usuario)
         else:

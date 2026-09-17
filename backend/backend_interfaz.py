@@ -2,11 +2,10 @@ from flask import Flask, app, render_template, request, jsonify, send_from_direc
 import os
 from mimetypes import guess_type
 from config import connect
-from datetime import datetime
+from datetime import datetime,timedelta
 from backend_unificado import Modulo_unificado
 from backend_dashboard import Front_dashboard
 from backend_usuarios import Modulo_usuario
-from backend_permisos import Modulo_permisos
 from backend_permisos_roles import Modulo_permisos_roles
 from backend_login import Modulo_login
 from backend_historico_movil import Historico_movil
@@ -15,7 +14,7 @@ from backend_reparaciones import Capturador_rep
 from backend_historico_danos import Historico_danos
 from backend_profile import Profile
 from pathlib import Path
-from datetime import timedelta
+from sincronizar_operadores import sincronizar_operadores
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -47,12 +46,8 @@ Interfaz.register_blueprint(Modulo_unificado, url_prefix='')
 # Registrar Dashboard como Blueprint
 Interfaz.register_blueprint(Front_dashboard, url_prefix='/Dashboard')
 
-# Registrar Permisos como Blueprint
-Interfaz.register_blueprint(Modulo_permisos, url_prefix='/Modulo_permisos')
-
 # Registrar Usuarios como Blueprint
 Interfaz.register_blueprint(Modulo_usuario, url_prefix='/Modulo_usuario')
-
 
 # Registrar roles como Blueprint
 Interfaz.register_blueprint(Modulo_permisos_roles, url_prefix='/Modulo_permisos_roles')
@@ -84,9 +79,14 @@ def page_not_found(e):
         return redirect(url_for('Modulo_login.login'))
 
 
+
 if __name__ == "__main__":
         # Ejemplo: Limitar a 16 Megabytes el total de la petición
         Interfaz.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
         print(Interfaz.url_map)
+        
+       
+        #sincronizar_operadores()
+        
        #Interfaz.run(host="0.0.0.0", port=5000, debug=True, ssl_context=None)
         Interfaz.run(host="0.0.0.0", port=5000, ssl_context='adhoc', debug=True)
