@@ -45,27 +45,58 @@ def index():
             params.append(uf_filtro)
 
         # --- 1️⃣ CONSULTA: PENDIENTES (Gráfica 1) ---
+        
         query_pendientes = f"""
-        SELECT 
+        
+                SELECT 
             YEAR(d.Fecha_evento), MONTH(d.Fecha_evento),
+
             COUNT(DISTINCT CASE WHEN d.estado_caso = 0
-                AND o.estado_oper = 1 AND t.estado_mtto = 1 AND s.estado_svial = 1
+                AND o.estado_oper = 1
+                AND t.estado_mtto = 1
+                AND s.estado_svial = 1
+                AND mf.DamageToFleetId IS NOT NULL
                 THEN d.Id END) AS Labora,
+
             COUNT(DISTINCT CASE WHEN d.estado_caso = 0
-                AND ISNULL(t.estado_mtto, 0) = 0 THEN d.Id END) AS MTTO,
+                AND ISNULL(t.estado_mtto, 0) = 0
+                THEN d.Id END) AS MTTO,
+
             COUNT(DISTINCT CASE WHEN d.estado_caso = 0
-                AND ISNULL(o.estado_oper, 0) = 0 THEN d.Id END) AS Oper,
+                AND ISNULL(o.estado_oper, 0) = 0
+                THEN d.Id END) AS Oper,
+
             COUNT(DISTINCT CASE WHEN d.estado_caso = 0
-                AND ISNULL(s.estado_svial, 0) = 0 THEN d.Id END) AS Svial
+                AND ISNULL(s.estado_svial, 0) = 0
+                THEN d.Id END) AS Svial
+
         FROM table_damage_to_fleet d
-        LEFT JOIN table_info_labora l ON l.Id_damage_to_fleet = d.Id
-        LEFT JOIN table_info_mtto t ON t.Id_damage_to_fleet = d.Id
-        LEFT JOIN table_info_oper o ON o.Id_damage_to_fleet = d.Id
-        LEFT JOIN table_info_svial s ON s.Id_damage_to_fleet = d.Id
+
+        LEFT JOIN table_info_labora l
+            ON l.Id_damage_to_fleet = d.Id
+
+        LEFT JOIN table_info_mtto t
+            ON t.Id_damage_to_fleet = d.Id
+
+        LEFT JOIN table_info_oper o
+            ON o.Id_damage_to_fleet = d.Id
+
+        LEFT JOIN table_info_svial s
+            ON s.Id_damage_to_fleet = d.Id
+
+        LEFT JOIN (
+            SELECT DISTINCT DamageToFleetId
+            FROM table_mtto_files
+        ) mf
+            ON mf.DamageToFleetId = d.Id
+
         {where_clause}
+
         GROUP BY YEAR(d.Fecha_evento), MONTH(d.Fecha_evento)
-        ORDER BY 1, 2
+
+        ORDER BY 1, 2  
         """
+        
         print("========================================")
         print("DEBUG DASHBOARD - QUERY PENDIENTES")
         print("PARAMETROS:", params)

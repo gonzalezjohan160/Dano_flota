@@ -479,7 +479,7 @@ def index(modulo):
         r["requiere_laboral"] = r["tiene_oper"] and requiere_relaciones_laborales(
             r.pop("responsabilidad_operador"), r.pop("conciliacion")
         )
-        r["pendiente_ot"] = r["requiere_laboral"] and not bool(r["estado_mtto"])
+        r["pendiente_ot"] = r["requiere_laboral"] and not r["tiene_ot"]
         r["caso_cerrado"] = bool(r["caso_cerrado"])
         r["cerrado_por_laboral"] = bool(r["cerrado_por_laboral"])
         campo_estado = {"Operaciones": "estado_oper", "Mtto": "estado_mtto", "Svial": "estado_svial"}.get(modulo)
