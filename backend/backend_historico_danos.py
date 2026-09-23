@@ -481,20 +481,75 @@ def exportar_excel():
     if es_exportacion_laboral:
         query = f"""
             SELECT d.*,
-                   (SELECT COUNT(*) FROM table_info_labora l
-                    WHERE l.Id_damage_to_fleet = d.Id) AS tiene_laboral,
-                   ISNULL(d.estado_caso, 0) AS caso_cerrado,
-                   CASE WHEN EXISTS (
-                       SELECT 1 FROM table_info_laboral_mult lm
-                       WHERE lm.Id_damage_to_fleet = d.Id
-                   ) AND EXISTS (
-                       SELECT 1 FROM table_info_labora l
-                       WHERE l.Id_damage_to_fleet = d.Id
-                   ) THEN 1 ELSE 0 END AS cerrado_por_laboral
-            FROM table_damage_to_fleet d
-            WHERE {' AND '.join(filtros_sql)}
-            ORDER BY d.Id ASC
-        """
+
+               (SELECT COUNT(*)
+                FROM table_info_labora l
+                WHERE l.Id_damage_to_fleet = d.Id) AS tiene_laboral,
+
+               ISNULL(d.estado_caso, 0) AS caso_cerrado,
+
+               CASE WHEN EXISTS (
+                   SELECT 1
+                   FROM table_info_laboral_mult lm
+                   WHERE lm.Id_damage_to_fleet = d.Id
+               ) AND EXISTS (
+                   SELECT 1
+                   FROM table_info_labora l
+                   WHERE l.Id_damage_to_fleet = d.Id
+               ) THEN 1 ELSE 0 END AS cerrado_por_laboral,
+
+               ISNULL((
+                   SELECT TOP 1 estado_oper
+                   FROM table_info_oper o
+                   WHERE o.Id_damage_to_fleet = d.Id
+                   ORDER BY o.Id DESC
+               ), 0) AS estado_oper,
+
+               ISNULL((
+                   SELECT TOP 1 estado_mtto
+                   FROM table_info_mtto m
+                   WHERE m.Id_damage_to_fleet = d.Id
+                   ORDER BY m.Fecha_registro DESC
+               ), 0) AS estado_mtto,
+
+               ISNULL((
+                   SELECT TOP 1 estado_svial
+                   FROM table_info_svial s
+                   WHERE s.Id_damage_to_fleet = d.Id
+                   ORDER BY s.Fecha_registro DESC
+               ), 0) AS estado_svial,
+
+               (
+                   SELECT TOP 1 lm.Pendiente_proceso
+                   FROM table_info_laboral_mult lm
+                   WHERE lm.Id_damage_to_fleet = d.Id
+                   ORDER BY lm.Fecha_registro DESC
+               ) AS pendiente_proceso_actual,
+
+               CASE WHEN EXISTS (
+                   SELECT 1
+                   FROM table_mtto_files mf
+                   WHERE mf.DamageToFleetId = d.Id
+               ) THEN 1 ELSE 0 END AS tiene_ot,
+
+               (
+                   SELECT TOP 1 o.responsabilidad_operador
+                   FROM table_info_oper o
+                   WHERE o.Id_damage_to_fleet = d.Id
+                   ORDER BY o.Id DESC
+               ) AS responsabilidad_operador,
+
+               (
+                   SELECT TOP 1 o.conciliacion
+                   FROM table_info_oper o
+                   WHERE o.Id_damage_to_fleet = d.Id
+                   ORDER BY o.Id DESC
+               ) AS conciliacion
+
+        FROM table_damage_to_fleet d
+        WHERE {' AND '.join(filtros_sql)}
+        ORDER BY d.Id ASC
+    """
     else:
         query = f"""
             SELECT d.*
@@ -508,19 +563,53 @@ def exportar_excel():
     registros = [dict(zip(columnas, row)) for row in cursor.fetchall()]
 
     def estado_rrll(registro):
-        """Replica los predicados de filtro de Script_oper.js para RRLL."""
         caso_cerrado = bool(registro.get("caso_cerrado"))
-        tiene_laboral = bool(registro.get("tiene_laboral"))
         cerrado_por_laboral = bool(registro.get("cerrado_por_laboral"))
 
+        estado_oper = bool(registro.get("estado_oper"))
+        estado_mtto = bool(registro.get("estado_mtto"))
+        estado_svial = bool(registro.get("estado_svial"))
+        tiene_ot = bool(registro.get("tiene_ot"))
+
+        pendiente_proceso = str(
+            registro.get("pendiente_proceso_actual") or ""
+        ).strip().upper()
+
+        # =========================
+        # CERRADOS
+        # =========================
         if caso_cerrado and cerrado_por_laboral:
             return "CERRADO"
-        if not caso_cerrado and tiene_laboral:
-            return "GESTIONADO"
-        if not caso_cerrado and not tiene_laboral:
-            return "PENDIENTE"
-        return None
 
+        # =========================
+        # GESTIONADOS
+        # =========================
+        if (
+            not caso_cerrado
+            and estado_oper
+            and estado_mtto
+            and estado_svial
+            and pendiente_proceso == "COMPLETO"
+        ):
+            return "GESTIONADO"
+
+        # =========================
+        # PENDIENTES
+        # =========================
+        if (
+            not caso_cerrado
+            and estado_oper
+            and estado_mtto
+            and estado_svial
+            and tiene_ot
+            and pendiente_proceso != "COMPLETO"
+        ):
+            return "PENDIENTE"
+
+        # Si no cumple ninguna condición de RRLL,
+        # no debe aparecer en la exportación.
+        return None
+    
     if es_exportacion_laboral:
         for registro in registros:
             registro["estado_excel"] = estado_rrll(registro)

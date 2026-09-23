@@ -453,10 +453,20 @@ def index(modulo):
         )
         ORDER BY Id DESC
     """
-
+    print("========== DEBUG RRLL ==========")
+    print("MODULO:", modulo)
+    print("FILTRO SQL:", filtro_sql)
+    print("PARAMETROS:", parametros)
+    print("QUERY:", query)
+    
+    
     cursor.execute(query, parametros)
     columnas = [c[0] for c in cursor.description]
     registros = [dict(zip(columnas, fila)) for fila in cursor.fetchall()]
+
+    print("CANTIDAD REGISTROS SQL:", len(registros))
+    print("IDS SQL:", [r["Id"] for r in registros])
+    print("================================")
 
     for r in registros:
 
@@ -479,7 +489,10 @@ def index(modulo):
         r["requiere_laboral"] = r["tiene_oper"] and requiere_relaciones_laborales(
             r.pop("responsabilidad_operador"), r.pop("conciliacion")
         )
-        r["pendiente_ot"] = r["requiere_laboral"] and not r["tiene_ot"]
+        
+        r["pendiente_ot"] = (r["requiere_laboral"] and r["tiene_mtto"]
+        and (not r["estado_mtto"] or not r["tiene_ot"]))
+        
         r["caso_cerrado"] = bool(r["caso_cerrado"])
         r["cerrado_por_laboral"] = bool(r["cerrado_por_laboral"])
         campo_estado = {"Operaciones": "estado_oper", "Mtto": "estado_mtto", "Svial": "estado_svial"}.get(modulo)
@@ -1033,6 +1046,9 @@ def obtener_reincidencia_operador(cursor, id_dano):
         return 0
 
     codigo_operador, fecha_evento_actual = fila
+    
+    if str(codigo_operador).strip() in ("1", "2", "3", "4", "5", "6", "7"):
+        return 0
 
     cursor.execute("""
         SELECT COUNT(DISTINCT d.Id)

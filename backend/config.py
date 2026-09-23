@@ -39,7 +39,6 @@ for carpeta in UPLOAD_FOLDERS.values():
 # 🔹 Función para crear la conexión a SQL Server
 # 🔹 Configuración SQL Server
 
-
 SQL_SERVER = '***REMOVED***'
 DATABASE = 'damage_to_fleet'
 DRIVER = '{ODBC Driver 18 for SQL Server}'

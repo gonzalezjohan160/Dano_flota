@@ -549,6 +549,18 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
         const script = document.getElementById("registros-json");
         registros = JSON.parse(script.textContent);
+        console.log("REGISTROS RRLL:", registros.map(r => ({
+            Id: r.Id,
+            estado_caso: r.estado_caso,
+            estado_oper: r.estado_oper,
+            estado_mtto: r.estado_mtto,
+            estado_svial: r.estado_svial,
+            pendiente_proceso_actual: r.pendiente_proceso_actual,
+            caso_cerrado: r.caso_cerrado,
+            cerrado_por_laboral: r.cerrado_por_laboral,
+            tiene_ot: r.tiene_ot,
+            requiere_laboral: r.requiere_laboral
+        })));
     } catch (error) {
         console.error(error);
     }
