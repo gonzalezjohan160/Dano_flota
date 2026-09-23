@@ -214,12 +214,23 @@ def evento_pendiente_para_modulo(evento, modulo):
     return proceso_modulo in procesos
 
 
-def cerrar_caso_automaticamente(cursor, codigo, usuario):
+def requiere_relaciones_laborales(responsabilidad, conciliacion):
+    return not (
+        responsabilidad == "NO APLICA"
+        or (responsabilidad == "SI" and conciliacion == "SI")
+    )
+
+
+def cerrar_caso_automaticamente(cursor, codigo, usuario, permitir_cierre=True):
     """Cierra el caso cuando hayan finalizado todas las gestiones requeridas."""
     cursor.execute("""
         SELECT TOP 1 o.responsabilidad_operador, o.conciliacion,
                ISNULL(o.estado_oper, 0), ISNULL(m.estado_mtto, 0),
                ISNULL(s.estado_svial, 0),
+               CASE WHEN EXISTS (
+                   SELECT 1 FROM table_mtto_files mf
+                   WHERE mf.DamageToFleetId = o.Id_damage_to_fleet
+               ) THEN 1 ELSE 0 END,
                CASE WHEN EXISTS (
                    SELECT 1 FROM table_info_labora l
                    WHERE l.Id_damage_to_fleet = o.Id_damage_to_fleet
@@ -234,7 +245,7 @@ def cerrar_caso_automaticamente(cursor, codigo, usuario):
     if not fila:
         return
 
-    responsabilidad, conciliacion, estado_oper, estado_mtto, estado_svial, estado_laboral = fila
+    responsabilidad, conciliacion, estado_oper, estado_mtto, estado_svial, tiene_ot, estado_laboral = fila
     gestiones_iniciales_completas = estado_oper == 1 and estado_mtto == 1 and estado_svial == 1
     if not gestiones_iniciales_completas:
         return
@@ -242,10 +253,15 @@ def cerrar_caso_automaticamente(cursor, codigo, usuario):
     # Solo estos dos desenlaces terminan en Operaciones. Los demás llegan
     # a Relaciones Laborales: costo > $2M, no aceptación, no conciliación
     # o reincidencia (la conciliación queda vacía por la regla vigente).
-    requiere_laboral = not (
-        responsabilidad == "NO APLICA"
-        or (responsabilidad == "SI" and conciliacion == "SI")
-    )
+    requiere_laboral = requiere_relaciones_laborales(responsabilidad, conciliacion)
+    if requiere_laboral and not tiene_ot:
+        cursor.execute(
+            "UPDATE table_info_mtto SET estado_mtto = 0 WHERE Id_damage_to_fleet = ?",
+            [codigo]
+        )
+        return
+    if not permitir_cierre:
+        return
     puede_cerrar = not requiere_laboral or estado_laboral == 1
     if not puede_cerrar:
         return
@@ -395,6 +411,13 @@ def index(modulo):
                 ISNULL((SELECT TOP 1 estado_oper FROM table_info_oper o WHERE o.Id_damage_to_fleet = d.Id), 0) AS estado_oper,
                 ISNULL((SELECT TOP 1 estado_mtto FROM table_info_mtto m WHERE m.Id_damage_to_fleet = d.Id), 0) AS estado_mtto,
                 ISNULL((SELECT TOP 1 estado_svial FROM table_info_svial s WHERE s.Id_damage_to_fleet = d.Id), 0) AS estado_svial,
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM table_mtto_files mf WHERE mf.DamageToFleetId = d.Id
+                ) THEN 1 ELSE 0 END AS tiene_ot,
+                (SELECT TOP 1 responsabilidad_operador FROM table_info_oper oreq
+                 WHERE oreq.Id_damage_to_fleet = d.Id) AS responsabilidad_operador,
+                (SELECT TOP 1 conciliacion FROM table_info_oper oreq
+                 WHERE oreq.Id_damage_to_fleet = d.Id) AS conciliacion,
                 ISNULL(d.estado_caso, 0) AS caso_cerrado,
                 CASE WHEN EXISTS (
                     SELECT 1 FROM table_info_laboral_mult lm WHERE lm.Id_damage_to_fleet = d.Id
@@ -452,6 +475,11 @@ def index(modulo):
         r["tiene_mtto"] = bool(r["tiene_mtto"])
         r["tiene_svial"] = bool(r["tiene_svial"])
         r["tiene_laboral"] = bool(r["tiene_laboral"])
+        r["tiene_ot"] = bool(r["tiene_ot"])
+        r["requiere_laboral"] = r["tiene_oper"] and requiere_relaciones_laborales(
+            r.pop("responsabilidad_operador"), r.pop("conciliacion")
+        )
+        r["pendiente_ot"] = r["requiere_laboral"] and not bool(r["estado_mtto"])
         r["caso_cerrado"] = bool(r["caso_cerrado"])
         r["cerrado_por_laboral"] = bool(r["cerrado_por_laboral"])
         campo_estado = {"Operaciones": "estado_oper", "Mtto": "estado_mtto", "Svial": "estado_svial"}.get(modulo)
@@ -463,6 +491,15 @@ def index(modulo):
         else:
             r["fecha_r_laboral"] = None
         del r["Fecha_r_laboral"]
+
+    if modulo == "laboral":
+        registros = [
+            r for r in registros
+            if not (
+                r["estado_oper"] == 1 and r["estado_mtto"] == 1 and r["estado_svial"] == 1
+                and r["requiere_laboral"] and not r["tiene_ot"]
+            )
+        ]
 
     conn.close()
 
@@ -1147,8 +1184,24 @@ def agregar(modulo, accion):
         }), 500
         return jsonify({"status": "error", "message": str(error)}), 500
 
+    respuesta = {"status": "success", "message": "Registro guardado correctamente."}
+    if modulo == "Mtto":
+        cursor.execute("""
+            SELECT TOP 1 ISNULL(m.estado_mtto, 0), o.Id_damage_to_fleet,
+                   o.responsabilidad_operador,
+                   o.conciliacion
+            FROM table_info_mtto m
+            LEFT JOIN table_info_oper o ON o.Id_damage_to_fleet = m.Id_damage_to_fleet
+            WHERE m.Id_damage_to_fleet = ?
+        """, [id_registro])
+        estado_mtto, tiene_oper, responsabilidad, conciliacion = cursor.fetchone()
+        requiere_laboral = bool(tiene_oper) and requiere_relaciones_laborales(
+            responsabilidad, conciliacion
+        )
+        respuesta["estado_mtto"] = bool(estado_mtto)
+        respuesta["pendiente_ot"] = requiere_laboral and not bool(estado_mtto)
     conn.close()
-    return jsonify({"status": "success", "message": "Registro guardado correctamente."})
+    return jsonify(respuesta)
 
 
 # ==========================================================
@@ -1458,6 +1511,7 @@ def agregar_operaciones():
                 "UPDATE table_damage_to_fleet SET estado_caso = 0 WHERE Id = ?",
                 [codigo]
             )
+            cerrar_caso_automaticamente(cursor, codigo, usuario, permitir_cierre=False)
 
         conn.commit()
         conn.close()

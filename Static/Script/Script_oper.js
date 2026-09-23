@@ -586,16 +586,28 @@ document.addEventListener("DOMContentLoaded", () => {
                 !registro.caso_cerrado || (CFG.propia === "laboral" && !registro.cerrado_por_laboral)
             )) return false;
 
-            if (filtroEstado === "pendientes" && (
-                registro.caso_cerrado || (CFG.propia === "laboral"
-            ? String(registro.pendiente_proceso_actual ?? "").trim().toUpperCase() === "COMPLETO"
-            : registro.estado_modulo)
-            )) return false;
+            if (filtroEstado === "pendientes") {
+                if (registro.caso_cerrado) return false;
+                if (CFG.propia === "mtto") {
+                    if (registro.tiene_mtto) return false;
+                } else if (CFG.propia === "laboral"
+                    ? String(registro.pendiente_proceso_actual ?? "").trim().toUpperCase() === "COMPLETO"
+                    : registro.estado_modulo) {
+                    return false;
+                }
+            }
 
             if (filtroEstado === "gestionados" && (
                 registro.caso_cerrado || (CFG.propia === "laboral"
                 ? String(registro.pendiente_proceso_actual ?? "").trim().toUpperCase() !== "COMPLETO"
                 : !registro.estado_modulo)
+            )) return false;
+
+            if (filtroEstado === "pendiente_ot" && (
+                CFG.propia !== "mtto" ||
+                !registro.tiene_mtto ||
+                !registro.pendiente_ot ||
+                registro.caso_cerrado
             )) return false;
 
             if (filtros["0"] &&
@@ -1710,7 +1722,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const registro = registros.find(r => r.Id == id);
         modoCorreccionGestion = !!registro && !registro.caso_cerrado && (
             CFG.propia === "oper" ? registro.tiene_oper :
-                CFG.propia === "laboral" ? registro.tiene_laboral : registro.estado_modulo
+                CFG.propia === "laboral" ? registro.tiene_laboral
+                : CFG.propia === "mtto"
+                ? (registro.estado_modulo || registro.pendiente_ot)
+                : registro.estado_modulo
         );
         document.getElementById("bloqueMotivoGestion").style.display = modoCorreccionGestion ? "block" : "none";
         const motivoGestion = document.getElementById("motivo_gestion");
@@ -2393,7 +2408,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // ACTUALIZAR ESTADO LOCAL TRAS GUARDAR 
     //======================================================
 
-    function actualizarEstadoLocal(id) {
+    function actualizarEstadoLocal(id, resultado = {}) {
 
         const registro = registros.find(r => r.Id == id);
         if (!registro) return;
@@ -2403,6 +2418,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (["oper", "mtto", "svial"].includes(CFG.propia)) {
             registro["tiene_" + CFG.propia] = true;
             registro.estado_modulo = true;
+            if (CFG.propia === "mtto" && typeof resultado.estado_mtto === "boolean") {
+                registro.estado_mtto = resultado.estado_mtto ? 1 : 0;
+                registro.estado_modulo = resultado.estado_mtto;
+                registro.pendiente_ot = Boolean(resultado.pendiente_ot);
+            }
             filtrarTabla();
             return;
         }
@@ -2488,7 +2508,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     document.getElementById("btnCerrarCaso")?.style && (document.getElementById("btnCerrarCaso").style.display = "none");
                 }
                 alert(result.message);
-                actualizarEstadoLocal(idGuardado);
+                actualizarEstadoLocal(idGuardado, result);
                 cerrarModal();
             } else {
                 alert(result.message);
@@ -2595,7 +2615,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            actualizarEstadoLocal(idGuardado);
+            actualizarEstadoLocal(idGuardado, resultGuardar);
 
             const resultCierre = await enviarCierreCaso(idGuardado);
 

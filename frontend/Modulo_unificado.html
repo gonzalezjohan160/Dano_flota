@@ -304,6 +304,9 @@
     <label for="filtroEstado" style="margin-left:12px;">Estado:</label>
     <select id="filtroEstado" class="btn">
         <option value="pendientes" selected>Pendientes</option>
+        {% if modulo == 'Mtto' %}
+            <option value="pendiente_ot">Pendientes OT</option>
+        {% endif %}
         <option value="gestionados">Gestionados</option>
         <option value="cerrados">Cerrados</option>
         <option value="todos">Todos</option>
