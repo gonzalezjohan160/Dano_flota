@@ -47,14 +47,7 @@ DRIVER = os.getenv("DB_DRIVER")
 usurname = os.getenv("DB_USER")
 password = os.getenv("DB_PASSWORD")
 
-"""
 
-SQL_SERVER = '127.0.0.1,1433'
-DATABASE = 'damage_to_fleet'
-DRIVER = '{ODBC Driver 18 for SQL Server}'
-usurname = '***REMOVED***'
-password = '***REMOVED***'
-"""
 
 def connect():
     conn_str = (
