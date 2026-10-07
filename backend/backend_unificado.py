@@ -7,7 +7,7 @@ from flask import (
     send_file,
     abort
 )
-import traceback
+from werkzeug.utils import secure_filename
 import os
 import time
 import json
@@ -18,6 +18,7 @@ from config import connect
 from backend_security import login_required, requiere_permiso
 from config import BASE_DIR
 from config import UPLOAD_FOLDERS
+from logger import logger
 
 Modulo_unificado = Blueprint(
     "Modulo_unificado",
@@ -435,11 +436,14 @@ def index(modulo):
                         SELECT m.Fecha_registro FROM table_info_mtto m WHERE m.Id_damage_to_fleet = d.Id
                         UNION ALL
                         SELECT s.Fecha_registro FROM table_info_svial s WHERE s.Id_damage_to_fleet = d.Id
+                        UNION ALL
+                        SELECT mf.Fecha_subida FROM table_mtto_files mf WHERE mf.DamageToFleetId = d.Id
                     ) AS fechas_gestion
                 ) AS Fecha_r_laboral
 
             FROM table_damage_to_fleet d
             WHERE {filtro_sql}
+              AND ISNULL(d.eliminado, 0) = 0
         )
         SELECT * FROM base
         WHERE {filtro_modulo}
@@ -453,20 +457,10 @@ def index(modulo):
         )
         ORDER BY Id DESC
     """
-    print("========== DEBUG RRLL ==========")
-    print("MODULO:", modulo)
-    print("FILTRO SQL:", filtro_sql)
-    print("PARAMETROS:", parametros)
-    print("QUERY:", query)
-    
-    
+
     cursor.execute(query, parametros)
     columnas = [c[0] for c in cursor.description]
     registros = [dict(zip(columnas, fila)) for fila in cursor.fetchall()]
-
-    print("CANTIDAD REGISTROS SQL:", len(registros))
-    print("IDS SQL:", [r["Id"] for r in registros])
-    print("================================")
 
     for r in registros:
 
@@ -539,7 +533,6 @@ def detalle(modulo, id):
     t0 = time.perf_counter()
     t_etapa = time.perf_counter()
     conn = connect()
-    print(f"[DETALLE] Conexión SQL: {(time.perf_counter() - t_etapa) * 1000:.2f} ms")
     cursor = conn.cursor()
 
     t_etapa = time.perf_counter()
@@ -599,11 +592,9 @@ def detalle(modulo, id):
         SELECT FileName, FilePath FROM table_svial_files WHERE DamageId = ?;
         SELECT FileName, FilePath FROM table_laboral_files WHERE DamageToFleetId = ?;
     """, [id, id, id, id, id, id])
-    print(f"[DETALLE] Execute SQL: {(time.perf_counter() - t_etapa) * 1000:.2f} ms")
 
     t_etapa = time.perf_counter()
     detalle_principal = fila_a_dict(cursor, cursor.fetchone())
-    print(f"[DETALLE] fetch principal: {(time.perf_counter() - t_etapa) * 1000:.2f} ms")
 
     registro = {
         campo: detalle_principal.get(campo)
@@ -639,27 +630,23 @@ def detalle(modulo, id):
         evento for evento in laboral_eventos
         if evento_pendiente_para_modulo(evento, modulo)
     ]
-    print(f"[DETALLE] fetch laboral: {(time.perf_counter() - t_etapa) * 1000:.2f} ms")
 
     t_etapa = time.perf_counter()
     cursor.nextset()
     archivos = filas_a_lista(cursor, cursor.fetchall())
-    print(f"[DETALLE] fetch archivos daño: {(time.perf_counter() - t_etapa) * 1000:.2f} ms")
+
 
     t_etapa = time.perf_counter()
     cursor.nextset()
     archivos_mtto = filas_a_lista(cursor, cursor.fetchall())
-    print(f"[DETALLE] fetch archivos mtto: {(time.perf_counter() - t_etapa) * 1000:.2f} ms")
 
     t_etapa = time.perf_counter()
     cursor.nextset()
     archivos_svial = filas_a_lista(cursor, cursor.fetchall())
-    print(f"[DETALLE] fetch archivos svial: {(time.perf_counter() - t_etapa) * 1000:.2f} ms")
 
     t_etapa = time.perf_counter()
     cursor.nextset()
     archivos_laboral = filas_a_lista(cursor, cursor.fetchall())
-    print(f"[DETALLE] fetch archivos laboral: {(time.perf_counter() - t_etapa) * 1000:.2f} ms")
 
     conn.close()
 
@@ -679,12 +666,10 @@ def detalle(modulo, id):
         "archivos_svial": archivos_svial,
         "archivos_laboral": archivos_laboral
     }
-    print(f"[DETALLE] construir JSON: {(time.perf_counter() - t_etapa) * 1000:.2f} ms")
+
 
     t_etapa = time.perf_counter()
     respuesta_json = jsonify(respuesta)
-    print(f"[DETALLE] jsonify: {(time.perf_counter() - t_etapa) * 1000:.2f} ms")
-    print(f"[DETALLE] TOTAL: {(time.perf_counter() - t0) * 1000:.2f} ms")
 
     return respuesta_json
 
@@ -789,9 +774,6 @@ def actualizar_evento(modulo, id):
         }
         usuario = session.get("usuario", "")
         for campo, valor in cambios_reales.items():
-            print(">>> CAMPO:", campo)
-            print(">>> VALOR:", repr(valor))
-            print(">>> TIPO:", type(valor))
             
             if campo == "Fecha_evento" and isinstance(valor, str):
                 valor = datetime.strptime(valor, "%Y-%m-%dT%H:%M")
@@ -809,9 +791,10 @@ def actualizar_evento(modulo, id):
         guardar_archivos(cursor, id, "table_damage_files", "DamageId", UPLOAD_FOLDERS["Operaciones"])
         conn.commit()
         return jsonify({"status": "success", "message": "Información del evento actualizada.", "cambios": len(cambios_reales)})
-    except Exception as error:
+    except Exception:
         conn.rollback()
-        return jsonify({"status": "error", "message": str(error)}), 500
+        logger.exception("error_actualizar_evento")
+        return jsonify({"status": "error", "message": "No fue posible actualizar el evento."}), 500
     finally:
         conn.close()
 
@@ -833,6 +816,7 @@ def consultar_operador(codigo):
 
 @Modulo_unificado.route("/Operaciones/eliminar_evento/<int:id>", methods=["POST"])
 @login_required
+@requiere_permiso("Eliminar_evento")
 def eliminar_evento(id):
     verificar_acceso_modulo("Operaciones")
     datos = request.get_json(silent=True) or {}
@@ -843,9 +827,16 @@ def eliminar_evento(id):
     conn = connect()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT 1 FROM table_damage_to_fleet WHERE Id = ?", [id])
-        if not cursor.fetchone():
+        cursor.execute("""
+            SELECT ISNULL(eliminado, 0)
+            FROM table_damage_to_fleet
+            WHERE Id = ?
+        """, [id])
+        evento = cursor.fetchone()
+        if not evento:
             return jsonify({"status": "error", "message": "No se encontró el evento."}), 404
+        if evento[0]:
+            return jsonify({"status": "error", "message": "El evento ya se encuentra eliminado."}), 409
 
         usuario = session.get("usuario", "")
         cursor.execute("""
@@ -853,20 +844,21 @@ def eliminar_evento(id):
                 (Id_damage, Tabla_Afectada, Usuario_Modifica, Fecha_Modificacion, Motivo_modificacion)
             VALUES (?, ?, ?, ?, ?)
         """, (id, "table_damage_to_fleet", usuario, datetime.now(), motivo))
-        for tabla, campo in (
-            ("table_damage_files", "DamageId"), ("table_mtto_files", "DamageToFleetId"),
-            ("table_svial_files", "DamageId"), ("table_laboral_files", "DamageToFleetId"),
-            ("table_info_laboral_mult", "Id_damage_to_fleet"), ("table_info_labora", "Id_damage_to_fleet"),
-            ("table_info_svial", "Id_damage_to_fleet"), ("table_info_mtto", "Id_damage_to_fleet"),
-            ("table_info_oper", "Id_damage_to_fleet")
-        ):
-            cursor.execute(f"DELETE FROM {tabla} WHERE {campo} = ?", [id])
-        cursor.execute("DELETE FROM table_damage_to_fleet WHERE Id = ?", [id])
+        cursor.execute("""
+            UPDATE table_damage_to_fleet
+            SET eliminado = 1
+            WHERE Id = ? AND ISNULL(eliminado, 0) = 0
+        """, [id])
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return jsonify({"status": "error", "message": "El evento ya se encuentra eliminado."}), 409
+
         conn.commit()
         return jsonify({"status": "success", "message": "Caso eliminado correctamente."})
-    except Exception as error:
+    except Exception:
         conn.rollback()
-        return jsonify({"status": "error", "message": str(error)}), 500
+        logger.exception("error_eliminar_evento")
+        return jsonify({"status": "error", "message": "No fue posible eliminar el evento."}), 500
     finally:
         conn.close()
 
@@ -916,9 +908,10 @@ def reabrir_caso(id, modulo):
               usuario, datetime.now(), motivo))
         conn.commit()
         return jsonify({"status": "success", "message": "Caso reabierto correctamente."})
-    except Exception as error:
+    except Exception:
         conn.rollback()
-        return jsonify({"status": "error", "message": str(error)}), 500
+        logger.exception("error_reabrir_evento")
+        return jsonify({"status": "error", "message": "No fue posible reabrir el evento."}), 500
     finally:
         conn.close()
 
@@ -950,22 +943,17 @@ def ver_archivo(modulo):
     
 
     ruta = request.args.get("path")
-    print("[ARCHIVO] ruta recibida:", ruta)
+
     if not ruta:
         abort(400)
         
     # Convertir rutas guardadas en Windows para que funcionen en Ubuntu/WSL
     if ruta.startswith("C:\\media\\"):
         ruta = "/" + ruta[3:].replace("\\", "/")
-    
-    print("[ARCHIVO] ruta convertida:", ruta)        
+
 
      # Convertir la ruta recibida en un objeto Path y obtener la ruta absoluta
     ruta_archivo = Path(ruta).resolve()
-    
-    print("[ARCHIVO] ruta resuelta:", ruta_archivo)
-    print("[ARCHIVO] existe:", ruta_archivo.is_file())
-    
     
 
     # Verificar que el archivo pertenezca a alguna de las carpetas permitidas
@@ -973,8 +961,6 @@ def ver_archivo(modulo):
         carpeta.resolve() in ruta_archivo.parents
         for carpeta in UPLOAD_FOLDERS.values()
     )
-    
-    print("[ARCHIVO] permitido:", permitido)
     
     if not permitido:
         abort(403)
@@ -1008,8 +994,9 @@ def guardar_archivos(cursor, codigo, tabla_files, campo_id, carpeta_base):
         if not archivo.filename:
             continue
 
+        nombre_seguro = secure_filename(archivo.filename)
         fecha = datetime.now().strftime("%Y%m%d_%H%M%S")
-        nombre = f"{os.path.splitext(archivo.filename)[0]}_{fecha}{os.path.splitext(archivo.filename)[1]}"
+        nombre = f"{os.path.splitext(nombre_seguro)[0]}_{fecha}{os.path.splitext(nombre_seguro)[1]}"
         ruta = carpeta / nombre
         archivo.save(str(ruta))
 
@@ -1188,17 +1175,15 @@ def agregar(modulo, accion):
         if modulo in ("Mtto", "Svial"):
             cerrar_caso_automaticamente(cursor, id_registro, usuario)
         conn.commit()
-    except Exception as error:
+    except Exception:
         conn.rollback()
-        print("\n" + "=" * 80)
-        traceback.print_exc()
-        print("=" * 80 + "\n")
+        logger.exception("error_operacion_modulo")
+
         conn.close()
         return jsonify({
         "status": "error",
-        "message": str(error)
+        "message": "No fue posible completar la operación."
         }), 500
-        return jsonify({"status": "error", "message": str(error)}), 500
 
     respuesta = {"status": "success", "message": "Registro guardado correctamente."}
     if modulo == "Mtto":
@@ -1325,9 +1310,9 @@ def agregar_relaciones_laborales():
 
         return jsonify({"status": "success", "message": "✅ Información de RRLL y archivos guardados correctamente."})
 
-    except Exception as e:
-        print("⚠️ Error al agregar relaciones laborales:", e)
-        return jsonify({"status": "error", "message": str(e)})
+    except Exception:
+        logger.exception("error_guardar_relaciones_laborales")
+        return jsonify({"status": "error", "message": "No fue posible guardar la información de Relaciones Laborales."})
 
 
 # ==========================================================
@@ -1341,7 +1326,6 @@ def agregar_relaciones_laborales():
 
 def agregar_operaciones():
     try:
-        print(">>> ENTRE A AGREGAR_OPERACIONES")
         codigo = request.form.get("Id_damage_to_fleet")
         observaciones_1 = request.form.get("observaciones_1")
         usuario = request.form.get("Usuario_registro_oper")
@@ -1485,11 +1469,11 @@ def agregar_operaciones():
                         (Id_damage_to_fleet, Tipo_cerrado, Valor_conciliado, Usuario_registro_labora)
                     VALUES (?, ?, ?, ?)
                 """, (codigo, tipo_cerrado, valor_conciliado_oper, usuario))
-        print(">>> ANTES DE GUARDAR ARCHIVOS")
+
         
         guardar_archivos(cursor, codigo, "table_damage_files", "DamageId", UPLOAD_FOLDERS["Operaciones"])
         
-        print(">>> DESPUÉS DE GUARDAR ARCHIVOS")
+
         if termina_en_operaciones:
             cerrar_caso_automaticamente(cursor, codigo, usuario)
         else:
@@ -1538,9 +1522,9 @@ def agregar_operaciones():
             "bloqueado_reincidencia": bloqueado_reincidencia
         })
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
             conn.close()
-        print("⚠️ Error al agregar operaciones:", e)
-        return jsonify({"status": "error", "message": str(e)}), 500
+        logger.exception("error_guardar_operaciones")
+        return jsonify({"status": "error", "message": "No fue posible guardar la información de Operaciones."}), 500

@@ -359,7 +359,6 @@ def detalle(id_damage):
 @Historico_danos.route('/ver_archivo')
 def ver_archivo():
     path = request.args.get('path')
-    print(f"[DEBUG] Ruta recibida: {path}")
 
     if not path:
         return abort(400, "Ruta de archivo no especificada")
@@ -377,7 +376,6 @@ def ver_archivo():
         abort(403)
         
     if not path.is_file():
-        print(f"⚠️ Archivo no encontrado: {path}")
         abort(404, description="Archivo no encontrado")
 
     # Detectar tipo MIME según la extensión
@@ -391,7 +389,6 @@ def ver_archivo():
             # Si es otro tipo (PDF, DOC, ZIP, etc.), ofrecer descarga
             return send_file(path, as_attachment=True)
     except Exception as e:
-        print(f"⚠️ Error al enviar archivo: {e}")
         return abort(500, description="Error al abrir el archivo")
 
 @Historico_danos.route('/exportar_excel')
@@ -544,7 +541,13 @@ def exportar_excel():
                    FROM table_info_oper o
                    WHERE o.Id_damage_to_fleet = d.Id
                    ORDER BY o.Id DESC
-               ) AS conciliacion
+               ) AS conciliacion,
+               
+               (
+                   SELECT MAX(mf.Fecha_subida)
+                   FROM table_mtto_files mf 
+                   WHERE mf.DamageToFleetId = d.Id 
+               ) AS fecha_r_laborales
 
         FROM table_damage_to_fleet d
         WHERE {' AND '.join(filtros_sql)}
@@ -746,7 +749,9 @@ def exportar_excel():
             "TIPO DE CIERRE": laboral.get("Tipo_cerrado"),
             "FECHA REGISTRO DEBIDO PROCESO": laboral.get("Fecha_registro"),
             "USUARIO LABORAL": laboral.get("Usuario_registro_labora"),
+            "FECHA R. LABORALES": r.get("fecha_r_laborales"),
             "PROCESO LABORAL MÚLTIPLE": proceso_texto.strip()
+            
         }
 
         # ESTADO se agrega únicamente al archivo solicitado desde RRLL.

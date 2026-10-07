@@ -28,6 +28,7 @@
 
 <h2>Crear Usuario</h2>
 <form method="POST" class="form-rol">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="text" name="Nombre" placeholder="Nombre" required>
     <input type="int" name="IDusuario" placeholder="ID" required>
     <input type="text" name="username" placeholder="Usuario" required>

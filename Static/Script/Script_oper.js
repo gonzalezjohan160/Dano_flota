@@ -1179,8 +1179,10 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("btn_editar_informacion").style.display =
         !editando && !casoCerrado ? "inline-block" : "none";
 
-        document.getElementById("btn_eliminar_evento").style.display =
-            editando ? "inline-block" : "none";
+        const botonEliminarEvento = document.getElementById("btn_eliminar_evento");
+        if (botonEliminarEvento) {
+            botonEliminarEvento.style.display = editando ? "inline-block" : "none";
+        }
 
         document.getElementById("btn_guardar_modificacion").style.display =
             editando ? "inline-block" : "none";
@@ -1332,7 +1334,7 @@ document.addEventListener("DOMContentLoaded", () => {
         archivosEdicionSeleccionados.forEach(archivo => {
             formData.append("archivos", archivo);
         });
-        const response = await fetch(`/${CFG.modulo}/actualizar_evento/${eventoEdicionActual.registro.Id}`, {
+        const response = await csrfFetch(`/${CFG.modulo}/actualizar_evento/${eventoEdicionActual.registro.Id}`, {
             method: "POST",
             body: formData
         });
@@ -1363,7 +1365,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!campoMotivo.reportValidity()) return;
         const motivo = campoMotivo.value.trim();
         if (!confirm("¿Confirma que desea eliminar este caso? Esta acción no se puede deshacer.")) return;
-        const response = await fetch(`/Operaciones/eliminar_evento/${eventoEdicionActual.registro.Id}`, {
+        const response = await csrfFetch(`/Operaciones/eliminar_evento/${eventoEdicionActual.registro.Id}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ motivo_modificacion: motivo })
@@ -1384,7 +1386,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         if (!confirm("¿Confirma que desea reabrir este caso?")) return;
-        const response = await fetch(`/${CFG.modulo}/reabrir_evento/${id}`, {
+        const response = await csrfFetch(`/${CFG.modulo}/reabrir_evento/${id}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ motivo_modificacion: motivo })
@@ -1406,7 +1408,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         if (!confirm("¿Confirma que desea reabrir este caso?")) return;
-        const response = await fetch(`/${CFG.modulo}/reabrir_evento/${eventoEdicionActual.registro.Id}`, {
+        const response = await csrfFetch(`/${CFG.modulo}/reabrir_evento/${eventoEdicionActual.registro.Id}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ motivo_modificacion: motivo })
@@ -2506,7 +2508,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         try {
-            const response = await fetch(endpoint, {
+            const response = await csrfFetch(endpoint, {
                 method: "POST",
                 body: construirFormData()
             });
@@ -2559,7 +2561,7 @@ document.addEventListener("DOMContentLoaded", () => {
         formData.append("Id_damage_to_fleet", idGuardado);
         formData.append("Usuario_registro_oper", document.body.dataset.usuario);
 
-        const response = await fetch(`/${CFG.modulo}/cerrar_caso_oper`, {
+        const response = await csrfFetch(`/${CFG.modulo}/cerrar_caso_oper`, {
             method: "POST",
             body: formData
         });
@@ -2615,7 +2617,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         try {
-            const responseGuardar = await fetch(`/${CFG.modulo}/${FORM_CONFIG[CFG.propia].endpoint}`, {
+            const responseGuardar = await csrfFetch(`/${CFG.modulo}/${FORM_CONFIG[CFG.propia].endpoint}`, {
                 method: "POST",
                 body: construirFormData()
             });

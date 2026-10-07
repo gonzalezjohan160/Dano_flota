@@ -53,7 +53,7 @@ def get_flota():
         conn.close()
         return jsonify({"Tipologia_interno": row[0] if row else None})
     except Exception:
-        print(traceback.format_exc())
+    
         return jsonify({"Tipologia_interno": None})
 
       
@@ -66,14 +66,6 @@ MAX_FILES_COUNT = 5               # Máximo 5 archivos por reporte
 # 🔹 Recibir formulario y archivos
 @Capturador_rep.route('/submit', methods=['POST'])
 def submit_form():
-
-    print("====== DEBUG REQUEST ======")
-    print("Content-Type:", request.content_type)
-    print("Form keys:", list(request.form.keys()))
-    print("Files keys:", list(request.files.keys()))
-    print("Raw files:", request.files)
-    print("===========================")
-
 
     try:
 
@@ -152,7 +144,7 @@ def submit_form():
                     continue
 
                 if not allowed_file(f.filename):
-                    print(f"Archivo no permitido: {f.filename}")
+                
                     continue
 
                 # Generar nombre único
@@ -181,6 +173,6 @@ def submit_form():
         return jsonify({"mensaje": "Datos y archivos guardados correctamente"})
 
     except Exception as e:
-        print(traceback.format_exc())
+        
         return jsonify({"error": str(e)}), 500
 

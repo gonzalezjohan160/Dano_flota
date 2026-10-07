@@ -33,6 +33,66 @@
         color: #fff !important;
         border: 1px solid #bd2130 !important;
     }
+
+    .selector-usuarios {
+        position: relative;
+        width: 100%;
+    }
+
+    .selector-usuarios-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        padding: 10px !important;
+        color: #111 !important;
+        font-size: 14px !important;
+        font-weight: 400 !important;
+        text-align: left;
+        background: #fff !important;
+        border: 1px solid #dcdfe6 !important;
+        border-radius: 6px !important;
+    }
+
+    .selector-usuarios-toggle:hover {
+        background: #fff !important;
+    }
+
+    .lista-usuarios-cambio-password {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        z-index: 20;
+        width: 100%;
+        max-height: 220px;
+        overflow-y: auto;
+        overflow-x: auto;
+        padding: 8px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        background: #fff;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .selector-usuarios.abierto .lista-usuarios-cambio-password {
+        display: block;
+    }
+
+    .lista-usuarios-cambio-password label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 0;
+        white-space: nowrap;
+    }
+
+    .btn-forzar-cambio-password {
+        margin-top: 10px;
+        background: #6c757d !important;
+        color: #fff !important;
+        border: 1px solid #6c757d !important;
+    }
 </style>
 {% endblock %}
 
@@ -60,16 +120,33 @@
 
 <div class="form-container">
     <form method="POST" class="form-rol">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
         <div class="form-row">
             <div class="form-group">
-                <label>Rol</label>
-                <select name="user" id="usuario_permisos" required>
-                    <option value="" selected disabled>Seleccione un usuario</option>
-                    {% for user in users %}
-                    <option value="{{ user[0] }}" data-activo="{{ 1 if user[2] else 0 }}">{{ user[1] }}</option>
-                    {% endfor %}
-                </select>
+                <label for="selector_usuarios_toggle">Usuarios</label>
+                <input type="hidden" name="user" id="usuario_permisos" value="">
+                <div class="selector-usuarios" id="selector-usuarios">
+                    <button type="button" id="selector_usuarios_toggle" class="selector-usuarios-toggle"
+                        aria-expanded="false" aria-controls="lista-usuarios-cambio-password">
+                        <span id="texto-selector-usuarios">Seleccione uno o varios usuarios</span>
+                        <span aria-hidden="true">▾</span>
+                    </button>
+                    <div class="lista-usuarios-cambio-password" id="lista-usuarios-cambio-password">
+                        <label>
+                            <input type="checkbox" id="seleccionar_todos_cambio_password">
+                            Seleccionar todos
+                        </label>
+                        {% for user in users %}
+                        <label>
+                            <input type="checkbox" name="user_ids" value="{{ user[0] }}"
+                                data-nombre="{{ user[1] }}" data-activo="{{ 1 if user[2] else 0 }}"
+                                class="usuario-cambio-password">
+                            {{ user[1] }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
             </div>
 
             <div class="form-group">
@@ -101,10 +178,14 @@
         </div>
 
 
-        <button type="submit">Asignar Permisos</button>
-        <button type="submit" class="btn-eliminar-usuario"
-                formaction="/Modulo_permisos_roles/eliminar_usuario"
-                formmethod="post" onclick="return confirmarEliminacionUsuario()">
+        <button type="submit" onclick="return validarUsuarioUnico()">Asignar Permisos</button>
+        <button type="submit" id="btn-forzar-cambio-password" class="btn-forzar-cambio-password"
+            formaction="{{ url_for('Modulo_permisos_roles.forzar_cambio_password') }}" formnovalidate
+            onclick="return validarSeleccionCambioPassword()">
+            Forzar cambio de contraseña
+        </button>
+        <button type="submit" class="btn-eliminar-usuario" formaction="/Modulo_permisos_roles/eliminar_usuario"
+            formmethod="post" onclick="return confirmarEliminacionUsuario()">
             Eliminar usuario
         </button>
 
@@ -115,15 +196,47 @@
     const selectorUsuarioPermisos = document.getElementById('usuario_permisos');
     const selectorEstadoUsuario = document.getElementById('estado_usuario');
     const casillasPermisos = Array.from(document.querySelectorAll("input[name='permisos']"));
+    const usuariosCambioPassword = Array.from(document.querySelectorAll('.usuario-cambio-password'));
+    const seleccionarTodosCambioPassword = document.getElementById('seleccionar_todos_cambio_password');
+    const contenedorSelectorUsuarios = document.getElementById('selector-usuarios');
+    const botonSelectorUsuarios = document.getElementById('selector_usuarios_toggle');
+    const textoSelectorUsuarios = document.getElementById('texto-selector-usuarios');
 
-    selectorUsuarioPermisos.addEventListener('change', async () => {
-        const userId = selectorUsuarioPermisos.value;
-        selectorEstadoUsuario.value = selectorUsuarioPermisos.selectedOptions[0].dataset.activo;
+    botonSelectorUsuarios.addEventListener('click', () => {
+        const abierto = contenedorSelectorUsuarios.classList.toggle('abierto');
+        botonSelectorUsuarios.setAttribute('aria-expanded', abierto);
+    });
+
+    document.addEventListener('click', evento => {
+        if (!contenedorSelectorUsuarios.contains(evento.target)) {
+            contenedorSelectorUsuarios.classList.remove('abierto');
+            botonSelectorUsuarios.setAttribute('aria-expanded', 'false');
+        }
+    });
+
+    function actualizarTextoSelectorUsuarios() {
+        const seleccionados = usuariosCambioPassword.filter(usuario => usuario.checked);
+        if (seleccionados.length === 0) {
+            textoSelectorUsuarios.textContent = 'Seleccione uno o varios usuarios';
+        } else if (seleccionados.length === 1) {
+            textoSelectorUsuarios.textContent = seleccionados[0].dataset.nombre;
+        } else {
+            textoSelectorUsuarios.textContent = `${seleccionados.length} usuarios seleccionados`;
+        }
+    }
+
+    async function cargarPermisosUsuarioSeleccionado() {
+        const seleccionados = usuariosCambioPassword.filter(usuario => usuario.checked);
         casillasPermisos.forEach(casilla => {
             casilla.checked = false;
         });
 
-        if (!userId) return;
+        selectorUsuarioPermisos.value = seleccionados.length === 1 ? seleccionados[0].value : '';
+        if (seleccionados.length !== 1) return;
+
+        const usuarioSeleccionado = seleccionados[0];
+        const userId = usuarioSeleccionado.value;
+        selectorEstadoUsuario.value = usuarioSeleccionado.dataset.activo;
 
         try {
             const respuesta = await fetch(`/Modulo_permisos_roles/permisos_usuario/${userId}`);
@@ -141,11 +254,45 @@
             console.error(error);
             alert('No fue posible cargar los permisos del usuario seleccionado.');
         }
+    }
+
+    usuariosCambioPassword.forEach(casilla => {
+        casilla.addEventListener('change', () => {
+            const seleccionados = usuariosCambioPassword.filter(usuario => usuario.checked).length;
+            seleccionarTodosCambioPassword.checked = seleccionados === usuariosCambioPassword.length;
+            seleccionarTodosCambioPassword.indeterminate = seleccionados > 0 && seleccionados < usuariosCambioPassword.length;
+            actualizarTextoSelectorUsuarios();
+            cargarPermisosUsuarioSeleccionado();
+        });
     });
 
+    seleccionarTodosCambioPassword.addEventListener('change', () => {
+        usuariosCambioPassword.forEach(usuario => {
+            usuario.checked = seleccionarTodosCambioPassword.checked;
+        });
+        actualizarTextoSelectorUsuarios();
+        cargarPermisosUsuarioSeleccionado();
+    });
+
+    function validarUsuarioUnico() {
+        const seleccionados = usuariosCambioPassword.filter(usuario => usuario.checked).length;
+        if (seleccionados !== 1) {
+            alert('Seleccione exactamente un usuario para asignar permisos.');
+            return false;
+        }
+        return true;
+    }
+
+    function validarSeleccionCambioPassword() {
+        if (!usuariosCambioPassword.some(usuario => usuario.checked)) {
+            alert('Debe seleccionar al menos un usuario.');
+            return false;
+        }
+        return true;
+    }
+
     function confirmarEliminacionUsuario() {
-        if (!selectorUsuarioPermisos.value) {
-            alert('Primero debe seleccionar un usuario.');
+        if (!validarUsuarioUnico()) {
             return false;
         }
         return confirm('¿Está seguro de que desea eliminar este usuario? Esta acción eliminará también todos los permisos asociados y no se puede deshacer.');

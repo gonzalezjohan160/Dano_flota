@@ -31,6 +31,7 @@
             {% endwith %}
 
             <form method="POST" action="{{ url_for('Modulo_login.login') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="text" name="username" placeholder="Usuario" required>
                 <input type="password" name="password" placeholder="Contraseña" required>
                 <button type="submit">Entrar</button>

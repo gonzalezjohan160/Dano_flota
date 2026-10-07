@@ -389,6 +389,7 @@
         </h3>
 
         <form id="formModal" method="post" onsubmit="return false;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
             <!-- ================= INFORMACIÓN DEL CASO ================= -->
             <div id="cardInfoCaso" class="card-seccion">
@@ -760,7 +761,9 @@
 
         <div id="accionesModificacion" style="text-align:center; margin-top:15px; display:none;">
             <button id="btn_editar_informacion" type="button" class="btn btn-success">Editar información</button>
+            {% if modulo == 'Operaciones' and 'Eliminar_evento' in session.get('permisos', []) %}
             <button id="btn_eliminar_evento" type="button" class="btn" style="background:#c62828; color:#fff;">Eliminar caso</button>
+            {% endif %}
             <button id="btn_guardar_modificacion" type="button" class="btn btn-success" style="display:none;">Guardar información</button>
             <label id="btn_elegir_archivos_edicion" for="archivos_edicion" class="btn" style="display:none; background:#e0e0e0; color:#333;">Elegir archivos</label>
             <input type="file" id="archivos_edicion" accept="image/*,video/*,audio/*,.pdf" multiple style="display:none;">

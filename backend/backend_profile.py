@@ -6,6 +6,7 @@ from datetime import datetime
 from backend_security import login_required, requiere_permiso
 from werkzeug.security import generate_password_hash, check_password_hash
 from config import BASE_DIR
+from logger import logger
 
 
 Profile = Blueprint(
@@ -21,6 +22,7 @@ Profile = Blueprint(
 @login_required
 def index():
     usuario_logeado = session.get('usuario')
+    mostrar_alerta_cambio_password = session.pop('mostrar_alerta_cambio_password', False)
     conn = connect()
     cursor = conn.cursor()
     
@@ -38,7 +40,11 @@ def index():
         return "Usuario no encontrado", 404
 
     registro = dict(zip(columns, row))
-    return render_template("Front_profile.html", registro=registro)
+    return render_template(
+        "Front_profile.html",
+        registro=registro,
+        mostrar_alerta_cambio_password=mostrar_alerta_cambio_password
+    )
 
 # --- RUTA PARA PROCESAR EL CAMBIO (AJAX) ---
 @Profile.route('/cambiar-password', methods=['POST'])
@@ -63,9 +69,22 @@ def cambiar_password():
     
     if row and check_password_hash(row[0], old_password):
         nuevo_hash = generate_password_hash(new_password)
-        cursor.execute("UPDATE Table_usuarios SET PasswordHash = ? WHERE Username = ?", (nuevo_hash, current_user))
-        conn.commit()
-        conn.close()
+        try:
+            cursor.execute("""
+                UPDATE Table_usuarios
+                SET PasswordHash = ?, Cambio_password_obligatorio = 0
+                WHERE Username = ?
+            """, (nuevo_hash, current_user))
+            if cursor.rowcount != 1:
+                conn.rollback()
+                return jsonify({'status': 'error', 'message': 'No fue posible actualizar la contraseña.'}), 500
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            logger.exception("error_cambiar_password_perfil")
+            return jsonify({'status': 'error', 'message': 'No fue posible actualizar la contraseña.'}), 500
+        finally:
+            conn.close()
         return jsonify({'status': 'success', 'message': 'Contraseña actualizada con éxito.'})
     
     conn.close()

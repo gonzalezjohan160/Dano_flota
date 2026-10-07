@@ -9,6 +9,7 @@
 {% block content %}
 <div class="contenedor-form">
     <form class="form-capturador" id="miFormulario" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <h2>Registro de reparaciónes a la flota</h2>
 
         <!-- Unidad Funcional y Móvil -->

@@ -97,21 +97,10 @@ def index():
         ORDER BY 1, 2  
         """
         
-        print("========================================")
-        print("DEBUG DASHBOARD - QUERY PENDIENTES")
-        print("PARAMETROS:", params)
-        print(query_pendientes)
-        print("========================================")
         
         cursor.execute(query_pendientes, params)
         rows_p = cursor.fetchall()
-        
-        print("========================================")
-        print("RESULTADO QUERY PENDIENTES")
-        print("FILAS:", len(rows_p))
-        for fila in rows_p:
-            print(fila)
-        print("========================================")
+     
 
         # --- 2️⃣ CONSULTA: COSTOS MTTO (Gráfica 2 - Parte A) ---
         query_costos = f"""
@@ -344,7 +333,6 @@ def index():
     
     except Exception as e:
         traceback.print_exc()
-        print(e)
         registros_final, costos_final, valores_final, operaciones_final, ranking, heat_data, lista_uf, franjas_final, rrll_final, ultimos_eventos, ranking_rutas, ranking_registradores, vehiculos_final, zonas_final = [], [], [], [], [], [], [], [], [], [], [], [], [], []
     
     finally:

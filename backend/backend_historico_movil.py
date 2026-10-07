@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, jsonify, send_from_directory, send_file, abort
+from flask import Blueprint, render_template, request, jsonify, send_file, abort
 import os
 import math
 import io
@@ -441,7 +441,7 @@ def exportar_excel():
 @Historico_movil.route('/ver_archivo')
 def ver_archivo():
     path = request.args.get('path')
-    print(f"[DEBUG] Ruta recibida: {path}")
+    
 
     if not path:
         return abort(400, "Ruta de archivo no especificada")
@@ -459,7 +459,6 @@ def ver_archivo():
         abort(403)
         
     if not path.is_file():
-        print(f"⚠️ Archivo no encontrado: {path}")
         abort(404, description="Archivo no encontrado")    
 
     # Detectar tipo MIME según la extensión
@@ -473,13 +472,6 @@ def ver_archivo():
             # Si es otro tipo (PDF, DOC, ZIP, etc.), ofrecer descarga
             return send_file(path, as_attachment=True)
     except Exception as e:
-        print(f"⚠️ Error al enviar archivo: {e}")
+        
         return abort(500, description="Error al abrir el archivo")
 
-
-
-
-# 🔹 Servir archivos HTML del frontend
-@Historico_movil.route('/<path:filename>')
-def serve_static(filename):
-    return send_from_directory(r'..', filename)

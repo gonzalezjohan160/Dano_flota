@@ -7,7 +7,7 @@ def main():
 
     try:
         sincronizar_operadores()
-
+        
     except Exception as e:
         raise
 

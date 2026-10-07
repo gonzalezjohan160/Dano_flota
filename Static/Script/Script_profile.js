@@ -1,4 +1,8 @@
 document.addEventListener('DOMContentLoaded', function() {
+    if (window.MOSTRAR_ALERTA_CAMBIO_PASSWORD) {
+        alert('Se necesita actualizar la contraseña. Debes actualizarla para continuar.');
+    }
+
     // 1. Cargar datos del JSON (Opcional, según lo que necesites mostrar)
     const datosElemento = document.getElementById('registro-json');
     if (datosElemento) {

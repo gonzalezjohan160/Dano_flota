@@ -8,7 +8,6 @@ def login_required(f):
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        print("[AUTH] claves de sesión:", list(session.keys()))
         if 'usuario' not in session:
             return redirect(url_for('Modulo_login.login'))
         return f(*args, **kwargs)

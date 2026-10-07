@@ -11,6 +11,7 @@
 <div class="contenedor-form">
 
     <form class="form-capturador" id="miFormulario" action="/submit" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <h2>Registro de daño a flota</h2>
 
         <div class="caja">

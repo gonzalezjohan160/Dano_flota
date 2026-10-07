@@ -7,7 +7,6 @@ import pyodbc
 import requests
 import traceback
 from backend_security import login_required, requiere_permiso
-from backend_email import enviar_correo
 from pathlib import Path
 from flask import Flask
 from config import BASE_DIR
@@ -25,7 +24,6 @@ Capturador = Blueprint(
 
 FILES_DIR = UPLOAD_FOLDERS["Operaciones"]
 
-print("RUTA FILES_DIR:", FILES_DIR)
 
 FILES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -68,7 +66,7 @@ def geocode():
             })
         return jsonify(resultados)
     except Exception as e:
-        print("Error geocoding:", e)
+        
         return jsonify([])
 
 # 🔹 Obtener nombre conductor
@@ -86,7 +84,7 @@ def get_conductor():
         conn.close()
         return jsonify({"nombre": row[0] if row else None})
     except Exception:
-        print(traceback.format_exc())
+        
         return jsonify({"nombre": None})
 
 # 🔹 Obtener tipología de móvil
@@ -107,7 +105,7 @@ def get_flota():
             "movil_valido": bool(row)
         })
     except Exception:
-        print(traceback.format_exc())
+        
         return jsonify({"Tipologia_interno": None, "movil_valido": False})
       
 
@@ -139,7 +137,6 @@ def validar_duplicado():
         return jsonify({"duplicado": existe})
 
     except Exception as e:
-        print(e)
         return jsonify({"duplicado": False})      
 
 # --- Definir constantes de restricción ---
@@ -200,13 +197,9 @@ def submit_form():
         # 3. Restar los días
         fecha_pasada = hoy - dias_a_restar
         
-        print("FECHA EVENTO RECIBIDA:", repr(fecha_evento))
-        
         try:
             fecha_evento_dt = datetime.strptime(fecha_evento, '%Y-%m-%dT%H:%M')
-            print("FECHA ORIGINAL:", repr(fecha_evento))
-            print("FECHA CONVERTIDA:", repr(fecha_evento_dt))
-            print("TIPO:", type(fecha_evento_dt))
+           
         except ValueError:
             return jsonify({"error": "Fecha de evento inválida"}), 400
 
@@ -272,47 +265,12 @@ def submit_form():
                 """, (damage_id, final_name, str(path)))
                 
         conn.commit()
-        
-        mensaje = f"""
-                    <h2>Nuevo Evento Registrado</h2>
-                    
-                    <p>Se ha registrado un nuevo daño a Flota en el sistema.</p>
-
-                    <p><b>ID Caso:</b> {damage_id}</p>
-
-                    <p>Por favor ingresar al aplicativo para revisar la información.</p>
-
-                <hr>
-
-                """
-        
-        # consultar correos
-        cursor.execute(
-        """
-            SELECT Email
-            FROM Table_usuarios
-            WHERE Activo = 1
-            AND Email IS NOT NULL
-            AND Email <> ''
-        """)
-            
-        destinatarios = [row[0] for row in cursor.fetchall()]
-        
-        print("Destinatarios:", destinatarios)
-        
-        try:
-            if destinatarios:
-                enviar_correo(destinatarios, "Nuevo Evento Registrado", mensaje)
-        except Exception as email_error:
-            print(f"Error al enviar correo: {email_error}")
+             
         
         return jsonify({"mensaje": "Registro exitoso", "id": damage_id})
     
-    
-
     except Exception as e:
         if conn: conn.rollback()
-        print(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
     finally:
         if conn: conn.close()

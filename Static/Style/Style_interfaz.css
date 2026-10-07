@@ -211,6 +211,25 @@ body {
     background: #014b57;
 }
 
+.user-dropdown form {
+    margin: 0;
+}
+
+.user-dropdown button.logout-link {
+    display: block;
+    width: 100%;
+    padding: 8px 0;
+    border: 0;
+    background: transparent;
+    color: white;
+    text-align: left;
+    cursor: pointer;
+}
+
+.user-dropdown button.logout-link:hover {
+    background: #014b57;
+}
+
 /* Cuando la sidebar está colapsada, ocultamos el dropdown */
 .sidebar:not(:hover) .user-dropdown {
     max-height: 0 !important;
@@ -254,6 +273,10 @@ body {
     align-items: center;
     justify-content: center;
     height: 40px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
 }
 
 .logout-btn img {

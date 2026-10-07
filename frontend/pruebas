@@ -77,6 +77,7 @@
             </h3>
 
             <form id="formModal" method="post" onsubmit="return false;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <!-- observaciónes del daño -->
                 <label for="observaciones_1">CONCEPTO DE SEGURIDAD VIAL DEL DAÑO:</label>
                 <textarea id="observaciones_1" rows="3" style="width:100%;" required></textarea><br><br>
@@ -707,7 +708,9 @@
                     return;
                 }
 
-                const formData = new FormData();
+                    const formData = new FormData();
+                    const csrfToken = document.querySelector('#formModal input[name="csrf_token"]')?.value;
+                    if (csrfToken) formData.append("csrf_token", csrfToken);
                 formData.append("Id_damage_to_fleet", movilSeleccionado);
                 formData.append("Usuario_registro_svial", document.body.dataset.usuario);
                 formData.append("observaciones_1", document.getElementById("observaciones_1").value);

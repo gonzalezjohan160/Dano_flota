@@ -28,7 +28,8 @@
 </button>
 
 <div id="form-password" style="display:none; margin-top: 20px; border: 1px solid #ccc; padding: 15px;">
-    <form id="changePasswordForm"> 
+    <form id="changePasswordForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div>
             <label>Contraseña Actual:</label><br>
             <input type="password" name="old_password" required>
@@ -63,6 +64,7 @@
     <script>
             // Esta variable sí la procesa Jinja2 y el JS externo la podrá ver
             const URL_CAMBIO_PASS = "{{ url_for('Profile.cambiar_password') }}";
+            window.MOSTRAR_ALERTA_CAMBIO_PASSWORD = {{ mostrar_alerta_cambio_password|tojson }};
         </script>
 
     <script src="{{ url_for('static', filename='Script/Script_profile.js') }}"></script>

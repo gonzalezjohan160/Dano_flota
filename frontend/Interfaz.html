@@ -3,6 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>APP – Daño a flota</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='Images/favicon.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='Style/Style_interfaz.css') }}">
@@ -17,12 +18,15 @@
 
         <div class="topbar-right">
 
-            <a href="{{ url_for('Modulo_login.logout') }}" onclick="return confirm('¿Deseas cerrar sesión?')"
-                class="logout-btn">
+            <form method="post" action="{{ url_for('Modulo_login.logout') }}"
+                onsubmit="return confirm('¿Deseas cerrar sesión?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="logout-btn" aria-label="Cerrar sesión">
 
                 <img src="{{ url_for('static', filename='Images/Logout.png') }}" alt="Cerrar sesión">
 
-            </a>
+                </button>
+            </form>
         </div>
     </header>
 
@@ -43,9 +47,10 @@
 
                     <div class="user-dropdown" id="userDropdown">
                         <a href="/Profile">Mi perfil</a>
-                        <a href="{{ url_for('Modulo_login.logout') }}" class="logout-link">
-                            Cerrar sesión
-                        </a>
+                        <form method="post" action="{{ url_for('Modulo_login.logout') }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="logout-link">Cerrar sesión</button>
+                        </form>
                     </div>
 
                 </div>
@@ -65,7 +70,7 @@
                     <a href="/Dashboard">Dashboard</a>
 
                     {% if 'Ingresar_historico_danos' in session.get('permisos', []) %}
-                    <a href="/Historico_danos">Historico de daños</a>
+                    <a href="/Historico_danos">Histórico de daños</a>
                     {% endif %}
                 </div>
                 {% endif %}
@@ -103,10 +108,10 @@
                     <a href="/Mtto">Valoración daño</a>
                     {% endif %}
                     {% if 'Ingresar_captur_reparaciones' in session.get('permisos', []) %}
-                    <a href="/Capturador_rep">Cargar reparaciónes</a>
+                    <a href="/Capturador_rep">Cargar reparaciones</a>
                     {% endif %}
                     {% if 'Ingresar_danos_vs_reparaciones' in session.get('permisos', []) %}
-                    <a href="/Historico_movil">Historico movil</a>
+                    <a href="/Historico_movil">Histórico móvil</a>
                     {% endif %}
                 </div>
 
@@ -141,6 +146,17 @@
                     {% endif %}
                 </div>
 
+                <!-- VIDEOS -->
+                <a href="javascript:void(0)" class="has-submenu">
+                    <span class="icon">
+                        <img src="{{ url_for('static', filename='Images/videos.png') }}" alt="Videos">
+                    </span>
+                    <span class="text">Videos</span>
+                </a>
+                <div class="submenu">
+                    <a href="{{ url_for('Tutoriales.index') }}">Tutoriales</a>
+                </div>
+
 
 
                 <!-- T.I -->
@@ -168,6 +184,14 @@
         </main>
     </div>
 
+    <script>
+        window.csrfFetch = function (input, init = {}) {
+            const headers = new Headers(init.headers || {});
+            const token = document.querySelector('meta[name="csrf-token"]')?.content;
+            if (token) headers.set('X-CSRFToken', token);
+            return window.fetch(input, { ...init, headers });
+        };
+    </script>
     <script src="{{ url_for('static', filename='Script/Script_interfaz.js') }}"></script>
     <!-- 👇 BLOQUE JS DE LOS MÓDULOS -->
     {% block extra_js %}{% endblock %}

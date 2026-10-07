@@ -1,8 +1,11 @@
 import pyodbc
 import os
+from dotenv import load_dotenv
 from pathlib import Path
 import platform
 from plistlib import UID
+
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -15,9 +18,6 @@ FILES_DIR = MEDIA_DIR / "Files"
 
 # Carpetas de cada módulo
 
-print("MEDIA_DIR:", MEDIA_DIR)
-print("FILES_DIR:", FILES_DIR)
-
 UPLOAD_FOLDERS = {
 
     "Operaciones": FILES_DIR / "Files_ppal",
@@ -28,7 +28,9 @@ UPLOAD_FOLDERS = {
 
     "Reparaciones": FILES_DIR / "Files_reparaciones",
 
-    "Svial": FILES_DIR / "Files_svial"
+    "Svial": FILES_DIR / "Files_svial",
+
+    "Tutoriales": FILES_DIR / "Files_tutoriales"
 }
 
 # Crear carpetas automáticamente si no existen
@@ -39,13 +41,14 @@ for carpeta in UPLOAD_FOLDERS.values():
 # 🔹 Función para crear la conexión a SQL Server
 # 🔹 Configuración SQL Server
 
-SQL_SERVER = '***REMOVED***'
-DATABASE = 'damage_to_fleet'
-DRIVER = '{ODBC Driver 18 for SQL Server}'
-usurname = '***REMOVED***'
-password = '***REMOVED***'
+SQL_SERVER = os.getenv("DB_SERVER")
+DATABASE = os.getenv("DB_DATABASE")
+DRIVER = os.getenv("DB_DRIVER")
+usurname = os.getenv("DB_USER")
+password = os.getenv("DB_PASSWORD")
 
 """
+
 SQL_SERVER = '127.0.0.1,1433'
 DATABASE = 'damage_to_fleet'
 DRIVER = '{ODBC Driver 18 for SQL Server}'
@@ -53,13 +56,12 @@ usurname = '***REMOVED***'
 password = '***REMOVED***'
 """
 
-
 def connect():
     conn_str = (
         f'DRIVER={DRIVER};'
         f'SERVER={SQL_SERVER};'
         f'DATABASE={DATABASE};'
-        'Encrypt=no;'
+        'Encrypt=yes;'
         f'UID={usurname};'
         f'PWD={password};'
         'TrustServerCertificate=yes;'

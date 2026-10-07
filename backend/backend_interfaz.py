@@ -13,8 +13,14 @@ from backend_capturador import Capturador
 from backend_reparaciones import Capturador_rep
 from backend_historico_danos import Historico_danos
 from backend_profile import Profile
+from backend_tutoriales import Tutoriales
 from pathlib import Path
 from sincronizar_operadores import sincronizar_operadores
+from dotenv import load_dotenv
+from flask_wtf.csrf import CSRFProtect
+from logger import logger
+
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -24,12 +30,69 @@ Interfaz = Flask(
     static_folder=str(BASE_DIR / "Static")
 )
 
-Interfaz.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=20)
+csrf = CSRFProtect()
+csrf.init_app(Interfaz)
+
+Interfaz.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=60)
 Interfaz.config["SESSION_REFRESH_EACH_REQUEST"] = True
 Interfaz.config["SESSION_COOKIE_HTTPONLY"] = True
 Interfaz.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
-Interfaz.secret_key = "***REMOVED***"
+Interfaz.secret_key = os.environ["SECRET_KEY"]
+
+@Interfaz.before_request
+def proteger_rutas():
+    rutas_publicas = {
+        'Modulo_login.login',
+        'Modulo_login.forgot_password',
+        'Modulo_login.reset_password',
+    }
+
+    # Permitir únicamente los archivos estáticos propios de Flask
+    if request.endpoint and (
+        request.endpoint == 'static' or
+        request.endpoint.endswith('.static')
+    ):          
+        return
+
+    # Permitir las rutas públicas de autenticación
+    if request.endpoint in rutas_publicas:
+        return
+
+    # Todo lo demás requiere sesión
+    if 'usuario' not in session:
+        return redirect(url_for('Modulo_login.login'))
+
+    # La ruta de cambio y el cierre de sesión siguen permitidos aunque haya
+    # una obligación pendiente. Profile.index consulta el estado para notificar
+    # al frontend y permite mostrar la pantalla de cambio.
+    if request.endpoint in {
+        'Profile.cambiar_password',
+        'Modulo_login.logout',
+    }:
+        return
+
+    # Se consulta el estado actual para que también aplique a sesiones ya abiertas.
+    conn = None
+    try:
+        conn = connect()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT ISNULL(Cambio_password_obligatorio, 0) FROM Table_usuarios WHERE Username = ?",
+            session.get('usuario_id')
+        )
+        estado_cambio = cursor.fetchone()
+    except Exception:
+        logger.exception("error_verificar_cambio_password_obligatorio")
+        abort(503)
+    finally:
+        if conn:
+            conn.close()
+
+    if estado_cambio and estado_cambio[0]:
+        session['mostrar_alerta_cambio_password'] = True
+        if request.endpoint != 'Profile.index':
+            return redirect(url_for('Profile.index'))
 
 Interfaz.register_blueprint(Modulo_login)
 
@@ -61,6 +124,9 @@ Interfaz.register_blueprint(Capturador_rep, url_prefix='/Capturador_rep')
 # Registrar Historico de daños como Blueprint
 Interfaz.register_blueprint(Historico_danos, url_prefix='/Historico_danos')
 
+# Registrar Tutoriales
+Interfaz.register_blueprint(Tutoriales, url_prefix='/Videos')
+
 @Interfaz.route('/interfaz')
 def index():
     """Redirige a Dashboard al cargar la página raíz"""
@@ -83,10 +149,10 @@ def page_not_found(e):
 if __name__ == "__main__":
         # Ejemplo: Limitar a 16 Megabytes el total de la petición
         Interfaz.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
-        print(Interfaz.url_map)
+        
         
        
         #sincronizar_operadores()
         
        #Interfaz.run(host="0.0.0.0", port=5000, debug=True, ssl_context=None)
-        Interfaz.run(host="0.0.0.0", port=5000, ssl_context='adhoc', debug=True)
+        Interfaz.run(host="0.0.0.0", port=5000, ssl_context='adhoc', debug=False)
