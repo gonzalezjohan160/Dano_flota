@@ -1,5 +1,6 @@
-from flask import Flask, app, render_template, request, jsonify, send_from_directory, send_file, url_for, abort, redirect,session
+from flask import Flask, app, render_template, request, jsonify, send_from_directory, send_file, url_for, abort, redirect,session, g
 import os
+import secrets
 from mimetypes import guess_type
 from config import connect
 from datetime import datetime,timedelta
@@ -39,6 +40,49 @@ Interfaz.config["SESSION_COOKIE_HTTPONLY"] = True
 Interfaz.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 Interfaz.secret_key = os.environ["SECRET_KEY"]
+
+
+@Interfaz.context_processor
+def incluir_nonce_csp():
+    if not getattr(g, "csp_nonce", None):
+        g.csp_nonce = secrets.token_urlsafe(18)
+    return {"csp_nonce": g.csp_nonce}
+
+
+@Interfaz.after_request
+def agregar_csp(response):
+    nonce = getattr(g, "csp_nonce", None) or secrets.token_urlsafe(18)
+    rutas_n01 = {
+        "Historico_danos.index",
+        "Historico_movil.index",
+        "Modulo_unificado.index",
+    }
+
+    if request.endpoint in rutas_n01:
+        politica = (
+            "default-src 'self'; base-uri 'self'; object-src 'none'; "
+            "frame-ancestors 'self'; form-action 'self'; "
+            f"script-src 'self' 'nonce-{nonce}' https://unpkg.com; "
+            "script-src-attr 'none'; "
+            "style-src 'self' 'unsafe-inline' https://unpkg.com; "
+            "img-src 'self' data: blob: https://unpkg.com https://*.tile.openstreetmap.org; "
+            "connect-src 'self' https://nominatim.openstreetmap.org; "
+            "font-src 'self' data: https://unpkg.com; media-src 'self' blob:"
+        )
+    else:
+        # Compatibilidad temporal para páginas existentes que aún usan JS inline.
+        politica = (
+            "default-src 'self'; base-uri 'self'; object-src 'none'; "
+            "frame-ancestors 'self'; form-action 'self'; "
+            "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://leaflet.github.io; "
+            "style-src 'self' 'unsafe-inline' https://unpkg.com; "
+            "img-src 'self' data: blob: https://unpkg.com https://*.tile.openstreetmap.org; "
+            "connect-src 'self' https://nominatim.openstreetmap.org; "
+            "font-src 'self' data: https://unpkg.com; media-src 'self' blob:"
+        )
+
+    response.headers["Content-Security-Policy"] = politica
+    return response
 
 @Interfaz.before_request
 def proteger_rutas():

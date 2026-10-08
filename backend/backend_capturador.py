@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, request, session, render_template, jsonify, send_from_directory,send_file, abort
+from flask import Blueprint, request, session, render_template, jsonify, send_file, abort
 from datetime import datetime, date, timedelta
 from mimetypes import guess_type
 from config import connect
@@ -36,13 +36,10 @@ FILES_DIR.mkdir(parents=True, exist_ok=True)
 def index():
     return render_template('Formulario.html')
 
-# 🔹 Archivos estáticos
-@Capturador.route('/static/<path:filename>')
-def serve_static(filename):
-    return send_from_directory(FILES_DIR, filename)
-
 # 🔹 Endpoint de geocodificación
 @Capturador.route('/geocode')
+@login_required
+@requiere_permiso('Ingresar_captur_danos')
 def geocode():
     direccion = request.args.get('q', '').strip()
     if not direccion:
@@ -71,6 +68,8 @@ def geocode():
 
 # 🔹 Obtener nombre conductor
 @Capturador.route('/getConductor')
+@login_required
+@requiere_permiso('Ingresar_captur_danos')
 def get_conductor():
     codigo = request.args.get('codigo', '').strip()
     if not codigo:
@@ -89,6 +88,8 @@ def get_conductor():
 
 # 🔹 Obtener tipología de móvil
 @Capturador.route('/getFlota')
+@login_required
+@requiere_permiso('Ingresar_captur_danos')
 def get_flota():
     No_interno = request.args.get('No_interno', '').strip()
     if not No_interno:
@@ -110,6 +111,8 @@ def get_flota():
       
 
 @Capturador.route('/validarDuplicado')
+@login_required
+@requiere_permiso('Ingresar_captur_danos')
 def validar_duplicado():
     fecha = request.args.get("fecha")
     movil = request.args.get("movil")
@@ -144,6 +147,8 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB por archivo
 MAX_FILES_COUNT = 5               # Máximo 5 archivos por reporte
 
 @Capturador.route('/submit', methods=['POST'])
+@login_required
+@requiere_permiso('Ingresar_captur_danos')
 def submit_form():
     conn = None # Para asegurar el cierre en caso de error
     try:

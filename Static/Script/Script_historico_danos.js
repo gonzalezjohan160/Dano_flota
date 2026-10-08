@@ -7,6 +7,7 @@
 
 
 document.addEventListener("DOMContentLoaded", () => {
+    const escaparHtml = window.escaparHtml;
     
 
     const jsonTag = document.getElementById("registros-json");
@@ -136,13 +137,13 @@ document.addEventListener("DOMContentLoaded", () => {
             tr.dataset.uf = registro.UF
 
             tr.innerHTML = `
-                <td>${registro.Id}</td>
-                <td>${fechaFormateada}</td>
-                <td>${registro.Movil}</td>
-                <td>${registro.Codigo}</td>
-                <td>${registro.Nombre}</td>
-                <td>${duracion}</td>
-                <td>${duracionEvento}</td>
+                <td>${escaparHtml(registro.Id)}</td>
+                <td>${escaparHtml(fechaFormateada)}</td>
+                <td>${escaparHtml(registro.Movil)}</td>
+                <td>${escaparHtml(registro.Codigo)}</td>
+                <td>${escaparHtml(registro.Nombre)}</td>
+                <td>${escaparHtml(duracion)}</td>
+                <td>${escaparHtml(duracionEvento)}</td>
                 <td>${iconoCheck(registro.oper)}</td>   <!-- Archivos adjuntos -->
                 <td>${iconoCheck(registro.mtto)}</td>        <!-- Mantenimiento -->
                 <td>${iconoCheck(registro.svial)}</td>       <!-- Seguridad vial -->
@@ -150,8 +151,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     ${
                         registro.archivos_count > 0
                         ? `
-                            <button class="btn" onclick="mostrarAdjuntos('${registro.Id}')">
-                                Ver archivos (${registro.archivos_count})
+                            <button class="btn" data-accion="mostrar-adjuntos" data-id="${escaparHtml(registro.Id)}">
+                                Ver archivos (${escaparHtml(registro.archivos_count)})
                             </button>
                         `
                         : `<span style="color:#777;">Sin archivos</span>`
@@ -164,6 +165,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     configurarFiltrosYPaginacion();
     renderTabla(registros);
+
+    document.getElementById("tablaRegistros").addEventListener("click", event => {
+        const boton = event.target.closest('[data-accion="mostrar-adjuntos"]');
+        if (boton) window.mostrarAdjuntos(boton.dataset.id);
+    });
 
 
     // ================= MODAL ADJUNTOS =================
@@ -204,11 +210,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     const observacionesHTML = laboralm.length > 0
                         ? laboralm.map(item => `
                             <div>
-                                <strong>FECHA REGISTRO:</strong> ${formatoFechaHora(item.Fecha_registro)}<br>
-                                <strong>FECHA PRESENTACIÓN:</strong> ${formatoFecha(item.Fecha_presentacion) || "-"}<br>
-                                <strong>PENDIENTE POR EL PROCESO:</strong> ${item.Pendiente_proceso || "-"}<br>                                
-                                <strong>OBSERVACIÓN:</strong> ${item.Observaciones_rrll || "-"}<br>
-                                <strong>USUARIO:</strong> ${item.Usuario_registro_laboral || "-"}
+                                <strong>FECHA REGISTRO:</strong> ${escaparHtml(formatoFechaHora(item.Fecha_registro))}<br>
+                                <strong>FECHA PRESENTACIÓN:</strong> ${escaparHtml(formatoFecha(item.Fecha_presentacion) || "-")}<br>
+                                <strong>PENDIENTE POR EL PROCESO:</strong> ${escaparHtml(item.Pendiente_proceso || "-")}<br>
+                                <strong>OBSERVACIÓN:</strong> ${escaparHtml(item.Observaciones_rrll || "-")}<br>
+                                <strong>USUARIO:</strong> ${escaparHtml(item.Usuario_registro_laboral || "-")}
                                 <hr>
                             </div>
                         `).join("")
@@ -217,12 +223,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     const correccionesHTML = correcciones.length > 0
                         ? correcciones.map(item => `
                             <div>
-                                <strong>FECHA REGISTRO:</strong> ${formatoFechaHora(item.Fecha_Modificacion)}<br>
-                                <strong>TABLA AFECTADA:</strong> ${item.Tabla_afectada || "-"}<br>
-                                <strong>CAMPO MODIFICADO:</strong> ${item.Campo_Modificado || "-"}<br>
-                                <strong>VALOR ANTERIOR:</strong> ${item.Valor_Anterior || "-"}<br>
-                                <strong>VALOR NUEVO:</strong> ${item.Valor_Nuevo || "-"}<br>
-                                <strong>USUARIO:</strong> ${item.Usuario_Modifica || "-"}
+                                <strong>FECHA REGISTRO:</strong> ${escaparHtml(formatoFechaHora(item.Fecha_Modificacion))}<br>
+                                <strong>TABLA AFECTADA:</strong> ${escaparHtml(item.Tabla_afectada || "-")}<br>
+                                <strong>CAMPO MODIFICADO:</strong> ${escaparHtml(item.Campo_Modificado || "-")}<br>
+                                <strong>VALOR ANTERIOR:</strong> ${escaparHtml(item.Valor_Anterior || "-")}<br>
+                                <strong>VALOR NUEVO:</strong> ${escaparHtml(item.Valor_Nuevo || "-")}<br>
+                                <strong>USUARIO:</strong> ${escaparHtml(item.Usuario_Modifica || "-")}
                                 <hr>
                             </div>
                         `).join("")
@@ -250,54 +256,54 @@ document.addEventListener("DOMContentLoaded", () => {
                     console.log("FECHA registroDetalle:", registroDetalle.Fecha_evento);
 
                     infoBody.innerHTML = `
-                        <tr><td>FECHA EVENTO</td><td>${formatoFechaHora(registroDetalle.Fecha_evento) || "-"}</td></tr>
-                        <tr><td>MÓVIL</td><td>${registroDetalle.Movil || "-"}</td></tr>
-                        <tr><td>CÓDIGO</td><td>${registroDetalle.Codigo || "-"}</td></tr>
-                        <tr><td>NOMBRE</td><td>${registroDetalle.Nombre || "-"}</td></tr>
-                        <tr><td>ÁREA</td><td>${registroDetalle.Area || "-"}</td></tr>
-                        <tr><td>RUTA</td><td>${registroDetalle.Ruta || "-"}</td></tr>
-                        <tr><td>VERSIÓN LIBRE</td><td>${registroDetalle.Version_libre || "-"}</td></tr>
-                        <tr><td>ZONA DEL DAÑO</td><td>${registroDetalle.Zona_dano || "-"}</td></tr>
-                        <tr><td>PARTE AFECTADA</td><td>${registroDetalle.Parte_afectada || "-"}</td></tr>
-                        <tr><td>DAÑO OCASIONADO POR</td><td>${registroDetalle.Dano_ocasionado || "-"}</td></tr>
-                        <tr><td>CENTRO OPERACIONAL</td><td>${registroDetalle.Centro_operaciones || "-"}</td></tr>
-                        <tr><td>RESPONSABLE DILIGENCIAMIENTO</td><td>${registroDetalle.Registrador || "-"}</td></tr>
-                        <tr><td>FECHA REGISTRO</td><td>${registro.fecha_r || "-"}</td></tr>
-                        <tr><td>DIRECCIÓN</td><td>${registroDetalle.Direccion || "-"}</td></tr>
+                        <tr><td>FECHA EVENTO</td><td>${escaparHtml(formatoFechaHora(registroDetalle.Fecha_evento) || "-")}</td></tr>
+                        <tr><td>MÓVIL</td><td>${escaparHtml(registroDetalle.Movil || "-")}</td></tr>
+                        <tr><td>CÓDIGO</td><td>${escaparHtml(registroDetalle.Codigo || "-")}</td></tr>
+                        <tr><td>NOMBRE</td><td>${escaparHtml(registroDetalle.Nombre || "-")}</td></tr>
+                        <tr><td>ÁREA</td><td>${escaparHtml(registroDetalle.Area || "-")}</td></tr>
+                        <tr><td>RUTA</td><td>${escaparHtml(registroDetalle.Ruta || "-")}</td></tr>
+                        <tr><td>VERSIÓN LIBRE</td><td>${escaparHtml(registroDetalle.Version_libre || "-")}</td></tr>
+                        <tr><td>ZONA DEL DAÑO</td><td>${escaparHtml(registroDetalle.Zona_dano || "-")}</td></tr>
+                        <tr><td>PARTE AFECTADA</td><td>${escaparHtml(registroDetalle.Parte_afectada || "-")}</td></tr>
+                        <tr><td>DAÑO OCASIONADO POR</td><td>${escaparHtml(registroDetalle.Dano_ocasionado || "-")}</td></tr>
+                        <tr><td>CENTRO OPERACIONAL</td><td>${escaparHtml(registroDetalle.Centro_operaciones || "-")}</td></tr>
+                        <tr><td>RESPONSABLE DILIGENCIAMIENTO</td><td>${escaparHtml(registroDetalle.Registrador || "-")}</td></tr>
+                        <tr><td>FECHA REGISTRO</td><td>${escaparHtml(registro.fecha_r || "-")}</td></tr>
+                        <tr><td>DIRECCIÓN</td><td>${escaparHtml(registroDetalle.Direccion || "-")}</td></tr>
                     `;
 
                     infosoper.innerHTML = `
-                        <tr><td>OBSERVACIÓNES TECNICAS CONTROL OPERACIONAL</td><td>${oper ? oper.Observaciones_operaciones : '-'}</td></tr>
-                        <tr><td>LA INFORMACIÓN CARGADA ES CORRECTA?</td><td>${oper ? oper.rev_error : '-'}</td></tr>
-                        <tr><td>OBSERVACIÓNES DE DILIGENCIAMIENTO ERRONEO</td><td>${oper ? oper.Observaciones_correctivos : '-'}</td></tr>
-                        <tr><td>RESPONSABILIDAD DEL OPERADOR</td><td>${oper?.responsabilidad_operador || '-'}</td></tr>
-                        <tr><td>CONCILIACIÓN</td><td>${oper?.conciliacion || '-'}</td></tr>
-                        <tr><td>COSTO DEL DAÑO</td><td>${formatoCOP(oper?.costo_oper)}</td></tr>
-                        <tr><td>FECHA REGISTRO OPERACIONES</td><td>${ oper?.Fecha_registro ? formatoFechaHora(oper.Fecha_registro) : '-'}</td></tr>
-                        <tr><td>USUARIO</td><td>${ oper ? oper.Usuario_registro_oper : '-'}</td></tr>
+                        <tr><td>OBSERVACIÓNES TECNICAS CONTROL OPERACIONAL</td><td>${escaparHtml(oper ? oper.Observaciones_operaciones : '-')}</td></tr>
+                        <tr><td>LA INFORMACIÓN CARGADA ES CORRECTA?</td><td>${escaparHtml(oper ? oper.rev_error : '-')}</td></tr>
+                        <tr><td>OBSERVACIÓNES DE DILIGENCIAMIENTO ERRONEO</td><td>${escaparHtml(oper ? oper.Observaciones_correctivos : '-')}</td></tr>
+                        <tr><td>RESPONSABILIDAD DEL OPERADOR</td><td>${escaparHtml(oper?.responsabilidad_operador || '-')}</td></tr>
+                        <tr><td>CONCILIACIÓN</td><td>${escaparHtml(oper?.conciliacion || '-')}</td></tr>
+                        <tr><td>COSTO DEL DAÑO</td><td>${escaparHtml(formatoCOP(oper?.costo_oper))}</td></tr>
+                        <tr><td>FECHA REGISTRO OPERACIONES</td><td>${escaparHtml(oper?.Fecha_registro ? formatoFechaHora(oper.Fecha_registro) : '-')}</td></tr>
+                        <tr><td>USUARIO</td><td>${escaparHtml(oper ? oper.Usuario_registro_oper : '-')}</td></tr>
                     `;
 
                     infomtto.innerHTML = `
-                        <tr><td>COSTO</td><td>${mtto ? formatoCOP(mtto.Costo) : "-"}</td></tr>
-                        <tr><td>DAÑO ADICIONAL</td><td>${mtto?.dano_adicional || "-"}</td></tr>
-                        <tr><td>OBSERVACIONES</td><td>${mtto?.observaciones || "-"}</td></tr>
-                        <tr><td>FECHA REGISTRO COSTO</td><td>${ mtto?.Fecha_registro ? formatoFechaHora(mtto.Fecha_registro) : "-"}</td></tr>
-                        <tr><td>USUARIO</td><td>${mtto?.Usuario_registro_mtto || "-"}</td></tr>
+                        <tr><td>COSTO</td><td>${escaparHtml(mtto ? formatoCOP(mtto.Costo) : "-")}</td></tr>
+                        <tr><td>DAÑO ADICIONAL</td><td>${escaparHtml(mtto?.dano_adicional || "-")}</td></tr>
+                        <tr><td>OBSERVACIONES</td><td>${escaparHtml(mtto?.observaciones || "-")}</td></tr>
+                        <tr><td>FECHA REGISTRO COSTO</td><td>${escaparHtml(mtto?.Fecha_registro ? formatoFechaHora(mtto.Fecha_registro) : "-")}</td></tr>
+                        <tr><td>USUARIO</td><td>${escaparHtml(mtto?.Usuario_registro_mtto || "-")}</td></tr>
                     `;
 
                     infosvial.innerHTML = `
-                        <tr><td>OBSERVACIONES</td><td>${svial?.Observaciones_svial || "-"}</td></tr>
-                        <tr><td>CONCILIADO A FAVOR DE</td><td>${svial?.conciliado_a_favor || "-"}</td></tr>
-                        <tr><td>VALOR CONCILIADO</td><td>${formatoCOP(svial?.valor_conciliado_terceros)}</td></tr>
-                        <tr><td>FECHA REGISTRO S. VIAL</td><td>${svial?.Fecha_registro ? formatoFechaHora(svial.Fecha_registro) : "-"}</td></tr>
-                        <tr><td>USUARIO</td><td>${svial?.Usuario_registro_svial || "-"}</td></tr>
+                        <tr><td>OBSERVACIONES</td><td>${escaparHtml(svial?.Observaciones_svial || "-")}</td></tr>
+                        <tr><td>CONCILIADO A FAVOR DE</td><td>${escaparHtml(svial?.conciliado_a_favor || "-")}</td></tr>
+                        <tr><td>VALOR CONCILIADO</td><td>${escaparHtml(formatoCOP(svial?.valor_conciliado_terceros))}</td></tr>
+                        <tr><td>FECHA REGISTRO S. VIAL</td><td>${escaparHtml(svial?.Fecha_registro ? formatoFechaHora(svial.Fecha_registro) : "-")}</td></tr>
+                        <tr><td>USUARIO</td><td>${escaparHtml(svial?.Usuario_registro_svial || "-")}</td></tr>
                     `;
 
                     infolaboral.innerHTML = `
-                        <tr><td>VALOR CONCILIADO</td><td>${formatoCOP(laboral?.Valor_conciliado) || "-"}</td></tr>
-                        <tr><td>TIPO DE CIERRE:</td><td>${laboral?.Tipo_cerrado || "-"}</td></tr>
-                        <tr><td>FECHA REGISTRO DEBIDO PROCESO</td><td>${ laboral?.Fecha_registro ? formatoFechaHora(laboral.Fecha_registro) : "-"}</td></tr>
-                        <tr><td>USUARIO</td><td>${laboral?.Usuario_registro_labora || "-"}</td></tr>
+                        <tr><td>VALOR CONCILIADO</td><td>${escaparHtml(formatoCOP(laboral?.Valor_conciliado) || "-")}</td></tr>
+                        <tr><td>TIPO DE CIERRE:</td><td>${escaparHtml(laboral?.Tipo_cerrado || "-")}</td></tr>
+                        <tr><td>FECHA REGISTRO DEBIDO PROCESO</td><td>${escaparHtml(laboral?.Fecha_registro ? formatoFechaHora(laboral.Fecha_registro) : "-")}</td></tr>
+                        <tr><td>USUARIO</td><td>${escaparHtml(laboral?.Usuario_registro_labora || "-")}</td></tr>
                         <tr><td>PROCESO</td><td>${observacionesHTML}</td></tr>
                     `;
 
@@ -322,7 +328,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             div.classList.add('adjunto-item');
 
                             const ext = file.FileName.split('.').pop().toLowerCase();
-                            const url = "/Historico_danos/ver_archivo?path=" + encodeURIComponent(file.FilePath);
+                            const url = "/archivo/" + encodeURIComponent(file.Id) + "?tipo=" + encodeURIComponent(file.TipoArchivo);
 
                             if (['jpg','jpeg','png','gif','webp'].includes(ext)) {
                                 const img = document.createElement('img');

@@ -20,7 +20,7 @@
     <div class="barra-filtros-inline" >
         <label for="buscarMovil">🔍 BUSCAR HISTORIAL POR MÓVIL:</label>
         <input type="text" id="buscarMovil" class="control-compacto" placeholder="Movil" value="{{ movil_buscado }}">
-        <button onclick="ejecutarBusqueda()" class="btn-verde-sm" >Consultar</button>
+        <button data-csp-action="ejecutar-busqueda" class="btn-verde-sm" >Consultar</button>
     </div>
 
     <div class="barra-filtros-inline" id="barraFiltrosHistorico">
@@ -44,8 +44,8 @@
             <option value="16">16</option>
         </select>
 
-        <button onclick="aplicarFiltrosHistorico()" class="btn-verde-sm">Aplicar filtros</button>
-        <button onclick="descargarExcelHistorico()" class="btn-verde-sm">⬇️ Descargar Excel</button>
+        <button data-csp-action="aplicar-filtros" class="btn-verde-sm">Aplicar filtros</button>
+        <button data-csp-action="descargar-excel" class="btn-verde-sm">⬇️ Descargar Excel</button>
     </div>
 
     <div class="table-card">
@@ -82,9 +82,9 @@
     </div>
 
     <div class="barra-filtros-inline" id="paginacionHistorico">
-        <button id="btnPaginaAnterior" class="btn-verde-sm" onclick="irPaginaAnterior()">&laquo; Anterior</button>
+        <button id="btnPaginaAnterior" class="btn-verde-sm" data-csp-action="pagina-anterior">&laquo; Anterior</button>
         <span id="infoPaginacion"></span>
-        <button id="btnPaginaSiguiente" class="btn-verde-sm" onclick="irPaginaSiguiente()">Siguiente &raquo;</button>
+        <button id="btnPaginaSiguiente" class="btn-verde-sm" data-csp-action="pagina-siguiente">Siguiente &raquo;</button>
     </div>
 
 
@@ -92,7 +92,7 @@
     <!-- Modal de danos -->
     <div id="modalAdjuntos_danos" class="modal">
         <div class="modal-content" style="max-width: 80%;">
-            <span class="close" onclick="cerrarModalAdjuntos()">&times;</span>
+            <span class="close" data-csp-action="cerrar-modal-adjuntos">&times;</span>
 
             <h3 style="text-align:center;">📝 INFORMACIÓN DEL EVENTO <span id="modal_danos"></span></h3>
             <div class="tabla-estilo">
@@ -156,17 +156,17 @@
 
     <!-- Lightbox para imágenes -->
 <div id="lightbox" class="lightbox">
-    <span class="close" onclick="cerrarLightbox()">&times;</span>
-    <button id="lightbox-anterior" class="lightbox-nav lightbox-nav-anterior" type="button" onclick="navegarLightbox(-1)">&lt;</button>
+    <span class="close" data-csp-action="cerrar-lightbox">&times;</span>
+    <button id="lightbox-anterior" class="lightbox-nav lightbox-nav-anterior" type="button" data-csp-action="lightbox-anterior">&lt;</button>
     <img id="lightbox-img" src="" alt="Vista ampliada">
-    <button id="lightbox-siguiente" class="lightbox-nav lightbox-nav-siguiente" type="button" onclick="navegarLightbox(1)">&gt;</button>
+    <button id="lightbox-siguiente" class="lightbox-nav lightbox-nav-siguiente" type="button" data-csp-action="lightbox-siguiente">&gt;</button>
 </div>
 
 
     <!-- Modal de reparaciones -->
     <div id="modalAdjuntos_reparaciones" class="modal">
         <div class="modal-content" style="max-width: 80%;">
-            <span class="close" onclick="cerrarModalAdjuntos()">&times;</span>
+            <span class="close" data-csp-action="cerrar-modal-adjuntos">&times;</span>
 
             <h3 style="text-align:center;">📝 INFORMACIÓN DE LA REPARACIONES <span id="modal_reparaciones"></span></h3>
             <div class="tabla-estilo">
@@ -191,10 +191,10 @@
 
     <!-- Lightbox para imágenes -->
     <div id="lightbox" class="lightbox">
-        <span class="close" onclick="cerrarLightbox()">&times;</span>
-        <button id="lightbox-anterior" class="lightbox-nav lightbox-nav-anterior" type="button" onclick="navegarLightbox(-1)">&lt;</button>
+        <span class="close" data-csp-action="cerrar-lightbox">&times;</span>
+        <button id="lightbox-anterior" class="lightbox-nav lightbox-nav-anterior" type="button" data-csp-action="lightbox-anterior">&lt;</button>
         <img id="lightbox-img" src="" alt="Vista ampliada">
-        <button id="lightbox-siguiente" class="lightbox-nav lightbox-nav-siguiente" type="button" onclick="navegarLightbox(1)">&gt;</button>
+        <button id="lightbox-siguiente" class="lightbox-nav lightbox-nav-siguiente" type="button" data-csp-action="lightbox-siguiente">&gt;</button>
     </div>
 
 
@@ -227,6 +227,7 @@
     </script>
 
     <script src="{{ url_for('static', filename='Script/Mult_formularios.js') }}"></script>
+    <script src="{{ url_for('static', filename='Script/Script_utils.js') }}"></script>
     <script src="{{ url_for('static', filename='Script/Script_historico_movil.js') }}"></script>
 
 {% endblock %}

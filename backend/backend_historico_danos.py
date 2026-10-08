@@ -1,14 +1,11 @@
-from flask import Blueprint, render_template, request, jsonify, send_from_directory, send_file, abort
+from flask import Blueprint, render_template, request, jsonify, send_file, abort, session
 import os
-from mimetypes import guess_type
 from io import BytesIO
 import pandas as pd
 from config import connect
 from datetime import datetime, timedelta
 from backend_security import login_required, requiere_permiso
 from config import BASE_DIR
-from pathlib import Path
-from config import UPLOAD_FOLDERS
 
 Historico_danos = Blueprint(
     'Historico_danos',               # nombre interno del blueprint
@@ -219,6 +216,8 @@ def index():
 
 
 @Historico_danos.route('/detalle/<int:id_damage>')
+@login_required
+@requiere_permiso('Ingresar_historico_danos')
 def detalle(id_damage):
     conn = connect()
     cursor = conn.cursor()
@@ -300,7 +299,7 @@ def detalle(id_damage):
 
     # ARCHIVOS
     cursor.execute("""
-        SELECT DamageId, FileName, FilePath, Fecha_subida
+        SELECT Id, 'operaciones' AS TipoArchivo, FileName, Fecha_subida
         FROM table_damage_files
         WHERE DamageId = ?
     """, (id_damage,))
@@ -309,7 +308,7 @@ def detalle(id_damage):
 
         # ARCHIVOS LABORAL
     cursor.execute("""
-        SELECT DamageToFleetId, FileName, FilePath, Fecha_subida
+        SELECT Id, 'laboral' AS TipoArchivo, FileName, Fecha_subida
         FROM table_laboral_files
         WHERE DamageToFleetId = ?
     """, (id_damage,))
@@ -318,7 +317,7 @@ def detalle(id_damage):
 
         # ARCHIVOS MTTO
     cursor.execute("""
-        SELECT DamageToFleetId, FileName, FilePath, Fecha_subida
+        SELECT Id, 'mtto' AS TipoArchivo, FileName, Fecha_subida
         FROM table_mtto_files
         WHERE DamageToFleetId = ?
     """, (id_damage,))
@@ -327,7 +326,7 @@ def detalle(id_damage):
 
         # ARCHIVOS S. VIAL
     cursor.execute("""
-        SELECT DamageId, FileName, FilePath, Fecha_subida
+        SELECT Id, 'svial' AS TipoArchivo, FileName, Fecha_subida
         FROM table_svial_files
         WHERE DamageId = ?
     """, (id_damage,))
@@ -355,44 +354,14 @@ def detalle(id_damage):
 
 
 
-# 🔹 Abrir y visualizar archivos adjuntos
-@Historico_danos.route('/ver_archivo')
-def ver_archivo():
-    path = request.args.get('path')
-
-    if not path:
-        return abort(400, "Ruta de archivo no especificada")
-
-    # # Convertir a Path
-    path = Path(path).resolve()
-    
-     # Verificar que pertenezca a alguna carpeta permitida
-    permitido = any(
-        carpeta.resolve() in path.parents
-        for carpeta in UPLOAD_FOLDERS.values()
-    )
-
-    if not permitido:
-        abort(403)
-        
-    if not path.is_file():
-        abort(404, description="Archivo no encontrado")
-
-    # Detectar tipo MIME según la extensión
-    mime_type, _ = guess_type(str(path))
-
-    try:
-        # Si es imagen, video o audio: mostrar directamente en el navegador
-        if mime_type and any(t in mime_type for t in ['image', 'video', 'audio']):
-            return send_file(path, mimetype=mime_type)
-        else:
-            # Si es otro tipo (PDF, DOC, ZIP, etc.), ofrecer descarga
-            return send_file(path, as_attachment=True)
-    except Exception as e:
-        return abort(500, description="Error al abrir el archivo")
-
 @Historico_danos.route('/exportar_excel')
+@login_required
+@requiere_permiso('Ingresar_historico_danos')
 def exportar_excel():
+
+    es_exportacion_laboral = request.args.get('modulo') == 'laboral'
+    if es_exportacion_laboral and 'Ingresar_modulo__laboral' not in session.get('permisos', []):
+        abort(403)
 
     fecha_inicio_str = request.args.get('fecha_inicio')
     fecha_fin_str = request.args.get('fecha_fin')
@@ -410,7 +379,6 @@ def exportar_excel():
 
     filtro_uf = request.args.get('filtro_uf', 'todos')
     filtro_estado = request.args.get('filtro_estado', 'todos')
-    es_exportacion_laboral = request.args.get('modulo') == 'laboral'
 
     conn = connect()
     cursor = conn.cursor()

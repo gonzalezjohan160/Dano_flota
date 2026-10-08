@@ -1,8 +1,10 @@
 import os
-from flask import Blueprint, request, render_template, session, jsonify, send_from_directory,send_file, abort
+from pathlib import Path
+from flask import Blueprint, request, render_template, session, jsonify, send_file, abort
 from datetime import datetime
 from mimetypes import guess_type
 from config import connect
+from werkzeug.utils import secure_filename
 import traceback
 from backend_security import login_required, requiere_permiso
 from config import BASE_DIR
@@ -32,14 +34,10 @@ FILES_DIR.mkdir(parents=True, exist_ok=True)
 def index():
     return render_template('Capturador_reparaciones.html')
 
-# 🔹 Archivos estáticos
-@Capturador_rep.route('/static/<path:filename>')
-def serve_static(filename):
-    return send_from_directory(FILES_DIR, filename)
-
-
 # 🔹 Obtener tipología de móvil
 @Capturador_rep.route('/getFlota')
+@login_required
+@requiere_permiso('Ingresar_captur_reparaciones')
 def get_flota():
     No_interno = request.args.get('No_interno', '').strip()
     if not No_interno:
@@ -65,6 +63,8 @@ MAX_FILES_COUNT = 5               # Máximo 5 archivos por reporte
 
 # 🔹 Recibir formulario y archivos
 @Capturador_rep.route('/submit', methods=['POST'])
+@login_required
+@requiere_permiso('Ingresar_captur_reparaciones')
 def submit_form():
 
     try:
@@ -127,6 +127,7 @@ def submit_form():
       
         repair_folder = FILES_DIR / str(repair_id)
         repair_folder.mkdir(parents=True, exist_ok=True)
+        resolved_repair_folder = repair_folder.resolve()
 
         def allowed_file(filename):
                     ext = os.path.splitext(filename)[1].lower()
@@ -150,10 +151,13 @@ def submit_form():
                 # Generar nombre único
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 _, ext = os.path.splitext(f.filename)
-                
-                # El nombre final usará la 'key' original (foto, video, etc) para saber qué es
-                final_name = f"{key}_{timestamp}_{i}{ext}"
+
+                # Conservar el prefijo de clasificación, eliminando componentes de ruta.
+                safe_key = secure_filename(key) or "archivo"
+                final_name = f"{safe_key}_{timestamp}_{i}{ext}"
                 path = repair_folder / final_name
+                if path.resolve().parent != resolved_repair_folder:
+                    raise ValueError("La ruta del archivo debe permanecer en la carpeta de reparación")
 
                 # Resetear el puntero por si las validaciones de arriba lo movieron
                 f.seek(0)

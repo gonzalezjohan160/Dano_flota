@@ -1,14 +1,11 @@
-from flask import Blueprint, render_template, request, jsonify, send_file, abort
+from flask import Blueprint, render_template, request, jsonify, send_file
 import os
 import math
 import io
-from mimetypes import guess_type
 from config import connect
 from datetime import datetime, timedelta
 from backend_security import login_required, requiere_permiso
 from config import BASE_DIR
-from config import UPLOAD_FOLDERS
-from pathlib import Path
 from openpyxl import Workbook
 
 Historico_movil = Blueprint(
@@ -52,7 +49,8 @@ def _leer_filtros():
 def parse_fecha(valor):
     if not valor:
         return None
-    for fmt in ('%Y-%m-%dT%H:%M'):
+    
+    for fmt in ('%Y-%m-%d', '%Y-%m-%dT%H:%M'):
         try:
             return datetime.strptime(valor, fmt)
         except ValueError:
@@ -267,6 +265,8 @@ def index():
 
 
 @Historico_movil.route('/detalle/<int:id_damage>')
+@login_required
+@requiere_permiso('Ingresar_danos_vs_reparaciones')
 def detalle(id_damage):
     conn = connect()
     cursor = conn.cursor()
@@ -309,7 +309,7 @@ def detalle(id_damage):
 
     # ARCHIVOS
     cursor.execute("""
-        SELECT DamageId, FileName, FilePath, Fecha_subida
+        SELECT Id, 'operaciones' AS TipoArchivo, FileName, Fecha_subida
         FROM table_damage_files
         WHERE DamageId = ?
     """, (id_damage,))
@@ -327,6 +327,8 @@ def detalle(id_damage):
     })
 
 @Historico_movil.route('/detalle_reparacion/<int:id>')
+@login_required
+@requiere_permiso('Ingresar_danos_vs_reparaciones')
 def detalle_reparacion(id):
     conn = connect()
     cursor = conn.cursor()
@@ -343,7 +345,7 @@ def detalle_reparacion(id):
 
     # ARCHIVOS REPARACIONES
     cursor.execute("""
-        SELECT RepairId, FileName, FilePath, Fecha_subida
+        SELECT Id, 'reparaciones' AS TipoArchivo, FileName, Fecha_subida
         FROM table_intervenciones_files
         WHERE RepairId = ?
     """, (id,))
@@ -435,43 +437,3 @@ def exportar_excel():
         download_name=nombre_archivo,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
-
-# 🔹 Abrir y visualizar archivos adjuntos
-@Historico_movil.route('/ver_archivo')
-def ver_archivo():
-    path = request.args.get('path')
-    
-
-    if not path:
-        return abort(400, "Ruta de archivo no especificada")
-
-    # Convertir a Path
-    path = Path(path).resolve()
-    
-    # Verificar que el archivo pertenezca a una carpeta permitida
-    permitido = any(
-        carpeta.resolve() in path.parents
-        for carpeta in UPLOAD_FOLDERS.values()
-    )
-
-    if not permitido:
-        abort(403)
-        
-    if not path.is_file():
-        abort(404, description="Archivo no encontrado")    
-
-    # Detectar tipo MIME según la extensión
-    mime_type, _ = guess_type(str(path))
-
-    try:
-        # Si es imagen, video o audio: mostrar directamente en el navegador
-        if mime_type and any(t in mime_type for t in ['image', 'video', 'audio']):
-            return send_file(path, mimetype=mime_type)
-        else:
-            # Si es otro tipo (PDF, DOC, ZIP, etc.), ofrecer descarga
-            return send_file(path, as_attachment=True)
-    except Exception as e:
-        
-        return abort(500, description="Error al abrir el archivo")
-

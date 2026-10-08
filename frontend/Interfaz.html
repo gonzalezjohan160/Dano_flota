@@ -18,8 +18,7 @@
 
         <div class="topbar-right">
 
-            <form method="post" action="{{ url_for('Modulo_login.logout') }}"
-                onsubmit="return confirm('¿Deseas cerrar sesión?')">
+            <form method="post" action="{{ url_for('Modulo_login.logout') }}" class="form-logout-confirmar">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="logout-btn" aria-label="Cerrar sesión">
 
@@ -184,7 +183,7 @@
         </main>
     </div>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
         window.csrfFetch = function (input, init = {}) {
             const headers = new Headers(init.headers || {});
             const token = document.querySelector('meta[name="csrf-token"]')?.content;

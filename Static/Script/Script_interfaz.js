@@ -3,6 +3,12 @@ const user = document.getElementById("userToggle");
 const dropdown = document.getElementById("userDropdown");
 const submenuButtons = document.querySelectorAll(".has-submenu");
 
+document.querySelectorAll(".form-logout-confirmar").forEach(form => {
+    form.addEventListener("submit", event => {
+        if (!window.confirm("¿Deseas cerrar sesión?")) event.preventDefault();
+    });
+});
+
 // --- Función para cerrar todo (Limpieza) ---
 function cerrarTodo() {
     // Cerramos submenús de navegación

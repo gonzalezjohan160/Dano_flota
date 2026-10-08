@@ -7,6 +7,7 @@ let movilSeleccionado = "";
 
 
 document.addEventListener("DOMContentLoaded", () => {
+    const escaparHtml = window.escaparHtml;
 
 
 
@@ -159,12 +160,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 v ? new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(v) : "-";
 
             tr.innerHTML = `
-                <td>${fechaFormateadacombi || "-"}</td>
-                <td>${registro.Movil || "-"}</td>
-                <td>${registro.tipo || "-"}</td>
-                <td>${formatoCOP(registro.costo) ?? "-"}</td>
+                <td>${escaparHtml(fechaFormateadacombi || "-")}</td>
+                <td>${escaparHtml(registro.Movil || "-")}</td>
+                <td>${escaparHtml(registro.tipo || "-")}</td>
+                <td>${escaparHtml(formatoCOP(registro.costo) ?? "-")}</td>
                 <td>
-                    <button class="btn" onclick="mostrarAdjuntos('${registro.tipo}', ${registro.id})">
+                    <button class="btn" data-accion="mostrar-adjuntos"
+                        data-tipo="${escaparHtml(registro.tipo)}" data-id="${escaparHtml(registro.id)}">
                         Info
                     </button>
                 </td>
@@ -175,6 +177,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     renderTabla(registros);
+
+    document.getElementById("tablaRegistros").addEventListener("click", event => {
+        const boton = event.target.closest('[data-accion="mostrar-adjuntos"]');
+        if (boton) window.mostrarAdjuntos(boton.dataset.tipo, boton.dataset.id);
+    });
 
 
     // ================= MODAL ADJUNTOS =================
@@ -249,39 +256,39 @@ document.addEventListener("DOMContentLoaded", () => {
             v ? new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(v) : "-";
 
         infoBody.innerHTML = `
-                        <tr><td>FECHA EVENTO</td><td>${fechaFormateadaevento || "-"}</td></tr>
-                        <tr><td>MÓVIL</td><td>${registroDetalle.Movil || "-"}</td></tr>
-                        <tr><td>CÓDIGO</td><td>${registroDetalle.Codigo || "-"}</td></tr>
-                        <tr><td>NOMBRE</td><td>${registroDetalle.Nombre || "-"}</td></tr>
-                        <tr><td>ÁREA</td><td>${registroDetalle.Area || "-"}</td></tr>
-                        <tr><td>RUTA</td><td>${registroDetalle.Ruta || "-"}</td></tr>
-                        <tr><td>VERSIÓN LIBRE</td><td>${registroDetalle.Version_libre || "-"}</td></tr>
-                        <tr><td>ZONA DEL DAÑO</td><td>${registroDetalle.Zona_dano || "-"}</td></tr>
-                        <tr><td>PARTE AFECTADA</td><td>${registroDetalle.Parte_afectada || "-"}</td></tr>
-                        <tr><td>DAÑO OCASIONADO POR</td><td>${registroDetalle.Dano_ocasionado || "-"}</td></tr>
-                        <tr><td>CENTRO OPERACIONAL</td><td>${registroDetalle.Centro_operaciones || "-"}</td></tr>
-                        <tr><td>RESPONSABLE DILIGENCIAMIENTO</td><td>${registroDetalle.Registrador || "-"}</td></tr>
-                        <tr><td>FECHA REGISTRO</td><td>${fechaFormateadascapt || "-"}</td></tr>
-                        <tr><td>DIRECCIÓN</td><td>${registroDetalle.Direccion || "-"}</td></tr>
+                        <tr><td>FECHA EVENTO</td><td>${escaparHtml(fechaFormateadaevento || "-")}</td></tr>
+                        <tr><td>MÓVIL</td><td>${escaparHtml(registroDetalle.Movil || "-")}</td></tr>
+                        <tr><td>CÓDIGO</td><td>${escaparHtml(registroDetalle.Codigo || "-")}</td></tr>
+                        <tr><td>NOMBRE</td><td>${escaparHtml(registroDetalle.Nombre || "-")}</td></tr>
+                        <tr><td>ÁREA</td><td>${escaparHtml(registroDetalle.Area || "-")}</td></tr>
+                        <tr><td>RUTA</td><td>${escaparHtml(registroDetalle.Ruta || "-")}</td></tr>
+                        <tr><td>VERSIÓN LIBRE</td><td>${escaparHtml(registroDetalle.Version_libre || "-")}</td></tr>
+                        <tr><td>ZONA DEL DAÑO</td><td>${escaparHtml(registroDetalle.Zona_dano || "-")}</td></tr>
+                        <tr><td>PARTE AFECTADA</td><td>${escaparHtml(registroDetalle.Parte_afectada || "-")}</td></tr>
+                        <tr><td>DAÑO OCASIONADO POR</td><td>${escaparHtml(registroDetalle.Dano_ocasionado || "-")}</td></tr>
+                        <tr><td>CENTRO OPERACIONAL</td><td>${escaparHtml(registroDetalle.Centro_operaciones || "-")}</td></tr>
+                        <tr><td>RESPONSABLE DILIGENCIAMIENTO</td><td>${escaparHtml(registroDetalle.Registrador || "-")}</td></tr>
+                        <tr><td>FECHA REGISTRO</td><td>${escaparHtml(fechaFormateadascapt || "-")}</td></tr>
+                        <tr><td>DIRECCIÓN</td><td>${escaparHtml(registroDetalle.Direccion || "-")}</td></tr>
                     `;
 
         infosoper.innerHTML = `
-                        <tr><td>OBSERVACIÓNES TECNICAS CONTROL OPERACIONAL</td><td>${oper ? oper.Observaciones_operaciones : '-'}</td></tr>
-                        <tr><td>LA INFORMACIÓN CARGADA ES CORRECTA?</td><td>${oper ? oper.rev_error : '-'}</td></tr>
-                        <tr><td>OBSERVACIÓNES DE DILIGENCIAMIENTO ERRONEO</td><td>${oper ? oper.Observaciones_correctivos : '-'}</td></tr>
-                        <tr><td>FECHA REGISTRO OPERACIONES</td><td>${oper ? fechaFormateadaoper : '-'}</td></tr>
+                        <tr><td>OBSERVACIÓNES TECNICAS CONTROL OPERACIONAL</td><td>${escaparHtml(oper ? oper.Observaciones_operaciones : '-')}</td></tr>
+                        <tr><td>LA INFORMACIÓN CARGADA ES CORRECTA?</td><td>${escaparHtml(oper ? oper.rev_error : '-')}</td></tr>
+                        <tr><td>OBSERVACIÓNES DE DILIGENCIAMIENTO ERRONEO</td><td>${escaparHtml(oper ? oper.Observaciones_correctivos : '-')}</td></tr>
+                        <tr><td>FECHA REGISTRO OPERACIONES</td><td>${escaparHtml(oper ? fechaFormateadaoper : '-')}</td></tr>
                     `;
 
         infomtto.innerHTML = `
-                        <tr><td>COSTO</td><td>${mtto ? formatoCOP(mtto.Costo) : "-"}</td></tr>
-                        <tr><td>DAÑO ADICIONAL</td><td>${mtto?.dano_adicional || "-"}</td></tr>
-                        <tr><td>OBSERVACIONES</td><td>${mtto?.observaciones || "-"}</td></tr>
-                        <tr><td>FECHA REGISTRO MANTENIMIENTO</td><td>${fechaFormateadamtto || "-"}</td></tr>
+                        <tr><td>COSTO</td><td>${escaparHtml(mtto ? formatoCOP(mtto.Costo) : "-")}</td></tr>
+                        <tr><td>DAÑO ADICIONAL</td><td>${escaparHtml(mtto?.dano_adicional || "-")}</td></tr>
+                        <tr><td>OBSERVACIONES</td><td>${escaparHtml(mtto?.observaciones || "-")}</td></tr>
+                        <tr><td>FECHA REGISTRO MANTENIMIENTO</td><td>${escaparHtml(fechaFormateadamtto || "-")}</td></tr>
                     `;
 
         infosvial.innerHTML = `
-                        <tr><td>OBSERVACIONES</td><td>${svial?.Observaciones_svial || "-"}</td></tr>
-                        <tr><td>FECHA REGISTRO S. VIAL</td><td>${fechaFormateadasvial || "-"}</td></tr>
+                        <tr><td>OBSERVACIONES</td><td>${escaparHtml(svial?.Observaciones_svial || "-")}</td></tr>
+                        <tr><td>FECHA REGISTRO S. VIAL</td><td>${escaparHtml(fechaFormateadasvial || "-")}</td></tr>
                     `;
 
         // Galería de archivos
@@ -305,11 +312,11 @@ document.addEventListener("DOMContentLoaded", () => {
             v ? new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(v) : "-";
 
         body.innerHTML = `
-                <tr><td>FECHA</td><td>${fechaFormateadarep || "-"}</td></tr>
-                <tr><td>MÓVIL</td><td>${registro.Movil || "-"}</td></tr>
+                <tr><td>FECHA</td><td>${escaparHtml(fechaFormateadarep || "-")}</td></tr>
+                <tr><td>MÓVIL</td><td>${escaparHtml(registro.Movil || "-")}</td></tr>
                 <tr><td>COSTO</td><td>${formatoCOP(registro.Costo_intervencion) || "-"}</td></tr>
-                <tr><td>ZONA INTERVENIDA</td><td>${registro.Zona_intervenida || "-"}</td></tr>
-                <tr><td>PARTE INTERVENIDA</td><td>${registro.Parte_intervenida || "-"}</td></tr>
+                <tr><td>ZONA INTERVENIDA</td><td>${escaparHtml(registro.Zona_intervenida || "-")}</td></tr>
+                <tr><td>PARTE INTERVENIDA</td><td>${escaparHtml(registro.Parte_intervenida || "-")}</td></tr>
             `;
 
         renderGaleria(galeria, data.archivos);

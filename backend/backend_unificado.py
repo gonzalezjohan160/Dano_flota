@@ -587,10 +587,10 @@ def detalle(modulo, id):
         WHERE Id_damage_to_fleet = ?
         ORDER BY Fecha_registro ASC;
 
-        SELECT FileName, FilePath FROM table_damage_files WHERE DamageId = ?;
-        SELECT FileName, FilePath FROM table_mtto_files WHERE DamageToFleetId = ?;
-        SELECT FileName, FilePath FROM table_svial_files WHERE DamageId = ?;
-        SELECT FileName, FilePath FROM table_laboral_files WHERE DamageToFleetId = ?;
+        SELECT Id, FileName, 'operaciones' AS TipoArchivo FROM table_damage_files WHERE DamageId = ?;
+        SELECT Id, FileName, 'mtto' AS TipoArchivo FROM table_mtto_files WHERE DamageToFleetId = ?;
+        SELECT Id, FileName, 'svial' AS TipoArchivo FROM table_svial_files WHERE DamageId = ?;
+        SELECT Id, FileName, 'laboral' AS TipoArchivo FROM table_laboral_files WHERE DamageToFleetId = ?;
     """, [id, id, id, id, id, id])
 
     t_etapa = time.perf_counter()
@@ -934,49 +934,80 @@ def reabrir_evento_laboral(id):
 # VER ARCHIVO
 # ==========================================================
 
-@Modulo_unificado.route("/<modulo>/ver_archivo")
+ARCHIVOS_POR_TIPO = {
+    "operaciones": {
+        "tabla": "table_damage_files", "campo_padre": "DamageId",
+        "tabla_padre": "table_damage_to_fleet", "permiso": ("Ingresar_modulo__oper", "Ingresar_captur_danos"),
+        "carpeta": "Operaciones",
+    },
+    "mtto": {
+        "tabla": "table_mtto_files", "campo_padre": "DamageToFleetId",
+        "tabla_padre": "table_damage_to_fleet", "permiso": ("Ingresar_modulo__mtto",),
+        "carpeta": "Mtto",
+    },
+    "svial": {
+        "tabla": "table_svial_files", "campo_padre": "DamageId",
+        "tabla_padre": "table_damage_to_fleet", "permiso": ("Ingresar_modulo__svial",),
+        "carpeta": "Svial",
+    },
+    "laboral": {
+        "tabla": "table_laboral_files", "campo_padre": "DamageToFleetId",
+        "tabla_padre": "table_damage_to_fleet", "permiso": ("Ingresar_modulo__laboral",),
+        "carpeta": "laboral",
+    },
+    "reparaciones": {
+        "tabla": "table_intervenciones_files", "campo_padre": "RepairId",
+        "tabla_padre": "table_intervenciones", "permiso": ("Ingresar_captur_reparaciones", "Ingresar_danos_vs_reparaciones"),
+        "carpeta": "Reparaciones",
+    },
+}
+
+
+@Modulo_unificado.route("/archivo/<int:file_id>")
 @login_required
-def ver_archivo(modulo):
-
-    verificar_acceso_modulo(modulo)
-    
-    
-
-    ruta = request.args.get("path")
-
-    if not ruta:
+def descargar_archivo(file_id):
+    tipo = request.args.get("tipo", "").lower()
+    config_archivo = ARCHIVOS_POR_TIPO.get(tipo)
+    if not config_archivo:
         abort(400)
-        
-    # Convertir rutas guardadas en Windows para que funcionen en Ubuntu/WSL
-    if ruta.startswith("C:\\media\\"):
-        ruta = "/" + ruta[3:].replace("\\", "/")
 
-
-     # Convertir la ruta recibida en un objeto Path y obtener la ruta absoluta
-    ruta_archivo = Path(ruta).resolve()
-    
-
-    # Verificar que el archivo pertenezca a alguna de las carpetas permitidas
-    permitido = any(
-        carpeta.resolve() in ruta_archivo.parents
-        for carpeta in UPLOAD_FOLDERS.values()
-    )
-    
-    if not permitido:
+    if not any(p in session.get("permisos", []) for p in config_archivo["permiso"]):
         abort(403)
 
-    # Verificar que el archivo exista
+    conn = connect()
+    try:
+        cursor = conn.cursor()
+        tabla_padre = config_archivo["tabla_padre"]
+        campo_padre = config_archivo["campo_padre"]
+        clave_padre = "ID" if tabla_padre == "table_intervenciones" else "Id"
+        cursor.execute(f"""
+            SELECT f.FilePath
+            FROM {config_archivo['tabla']} f
+            INNER JOIN {tabla_padre} p ON p.{clave_padre} = f.{campo_padre}
+            WHERE f.Id = ?
+        """, (file_id,))
+        registro = cursor.fetchone()
+    finally:
+        conn.close()
+
+    if not registro or not registro[0]:
+        abort(404)
+
+    ruta = str(registro[0])
+    if ruta.startswith("C:\\media\\"):
+        ruta = "/" + ruta[3:].replace("\\", "/")
+    ruta_archivo = Path(ruta).resolve()
+    carpeta_permitida = UPLOAD_FOLDERS[config_archivo["carpeta"]].resolve()
+    if carpeta_permitida not in ruta_archivo.parents:
+        abort(403)
     if not ruta_archivo.is_file():
         abort(404)
 
     mime, _ = guess_type(str(ruta_archivo))
-   
     try:
-        if mime and any(t in mime for t in ["image", "video", "audio"]):
+        if mime and any(t in mime for t in ("image", "video", "audio")):
             return send_file(str(ruta_archivo), mimetype=mime)
-
         return send_file(str(ruta_archivo), as_attachment=True)
-
     except Exception:
         abort(500)
 

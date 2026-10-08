@@ -13,6 +13,7 @@ let movilSeleccionado = "";
 const FILAS_POR_PAGINA = 30;
 let paginaActual = 1;
 let listaTablaActual = []; // lista que se está paginando
+const escaparHtml = window.escaparHtml;
 
 
 //======================================================
@@ -297,15 +298,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
         return eventos.map(ev => `
             <tr>
-                <td colspan="2"><strong>Relaciones Laborales — caso ${formatearEstadoCaso(ev.Pendiente_proceso)}</strong></td>
+                <td colspan="2"><strong>Relaciones Laborales — caso ${escaparHtml(formatearEstadoCaso(ev.Pendiente_proceso))}</strong></td>
             </tr>
             <tr>
                 <td>Fecha presentación</td>
-                <td>${ev.Fecha_presentacion ?? "-"}</td>
+                <td>${escaparHtml(ev.Fecha_presentacion ?? "-")}</td>
             </tr>
             <tr>
                 <td>Observaciones de Relaciones Laborales</td>
-                <td>${ev.Observaciones_rrll ?? "-"}</td>
+                <td>${escaparHtml(ev.Observaciones_rrll ?? "-")}</td>
             </tr>
         `).join("<tr><td colspan='2'><hr></td></tr>");
     }
@@ -334,7 +335,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (valor === undefined || valor === null || valor === "") {
                 valor = "-";
             }
-            return `<tr><td>${campo.label}</td><td>${valor}</td></tr>`;
+            return `<tr><td>${campo.label}</td><td>${escaparHtml(valor)}</td></tr>`;
         }).join("");
     }
 
@@ -759,25 +760,25 @@ document.addEventListener("DOMContentLoaded", () => {
             tr.dataset.uf = registro.UF;
 
             const celdaFechaLaboral = MOSTRAR_COLUMNA_FECHA_LABORAL
-                ? `<td class="col-fecha-laboral">${window.formatearFechaRegistro(registro.fecha_r_laboral)}</td>`
+                ? `<td class="col-fecha-laboral">${escaparHtml(window.formatearFechaRegistro(registro.fecha_r_laboral))}</td>`
                 : "";
 
             const celdaAdjuntos = registro.archivos_count > 0
-                ? `<button class="btn" onclick="mostrarAdjuntos('${registro.Id}')">
-                        Ver archivos (${registro.archivos_count})
+                ? `<button class="btn" data-oper-accion="mostrar-adjuntos" data-id="${escaparHtml(registro.Id)}">
+                        Ver archivos (${escaparHtml(registro.archivos_count)})
                    </button>`
                 : `<span style="color:#777">Sin archivos</span>`;
 
             const celdaAcciones = construirCeldaAcciones(registro);
 
             tr.innerHTML = `
-                <td>${registro.Id}</td>
-                <td>${fechaFormateada}</td>
-                <td>${registro.Movil}</td>
-                <td>${registro.Codigo}</td>
-                <td>${registro.Nombre}</td>
-                <td>${duracion}</td>
-                <td>${duracionEvento}</td>
+                <td>${escaparHtml(registro.Id)}</td>
+                <td>${escaparHtml(fechaFormateada)}</td>
+                <td>${escaparHtml(registro.Movil)}</td>
+                <td>${escaparHtml(registro.Codigo)}</td>
+                <td>${escaparHtml(registro.Nombre)}</td>
+                <td>${escaparHtml(duracion)}</td>
+                <td>${escaparHtml(duracionEvento)}</td>
                 ${celdaFechaLaboral}
                 <td>${celdaAdjuntos}</td>
                 <td>${celdaAcciones}</td>
@@ -839,10 +840,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (propia === "laboral") {
             if (registro.caso_cerrado) {
                 return registro.cerrado_por_laboral && CFG.puedeReabrirCaso
-                    ? ` <button class="btn btn-success" onclick="reabrirCaso('${registro.Id}')">Reabrir caso</button>`
+                    ? ` <button class="btn btn-success" data-oper-accion="reabrir-caso" data-id="${escaparHtml(registro.Id)}">Reabrir caso</button>`
                     : "";
             }
-            return `<button class="btn btn-success" onclick="abrirModal('${registro.Id}')">
+            return `<button class="btn btn-success" data-oper-accion="abrir-modal" data-id="${escaparHtml(registro.Id)}">
                         Añadir info
                     </button>`;
         }
@@ -854,11 +855,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (propia === "oper") {
             if (registro.caso_cerrado) {
                 const botonReabrir = CFG.puedeReabrirCaso
-                    ? ` <button class="btn btn-success" onclick="reabrirCaso('${registro.Id}')">Reabrir caso</button>`
+                    ? ` <button class="btn btn-success" data-oper-accion="reabrir-caso" data-id="${escaparHtml(registro.Id)}">Reabrir caso</button>`
                     : "";
                 return botonReabrir;
             }
-            return `<button class="btn btn-success" onclick="abrirModal('${registro.Id}')">
+            return `<button class="btn btn-success" data-oper-accion="abrir-modal" data-id="${escaparHtml(registro.Id)}">
                         Añadir info
                     </button>`;
         }
@@ -868,7 +869,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (propia === "mtto" || propia === "svial") {
-            return `<button class="btn btn-success" onclick="abrirModal('${registro.Id}')">
+            return `<button class="btn btn-success" data-oper-accion="abrir-modal" data-id="${escaparHtml(registro.Id)}">
                         Añadir info
                     </button>`;
         }
@@ -879,12 +880,22 @@ document.addEventListener("DOMContentLoaded", () => {
             return `<span class="badge badge-ok">Ya registrado</span>`;
         }
 
-        return `<button class="btn btn-success" onclick="abrirModal('${registro.Id}')">
+        return `<button class="btn btn-success" data-oper-accion="abrir-modal" data-id="${escaparHtml(registro.Id)}">
                     Añadir info
                 </button>`;
     }
 
     filtrarTabla();
+
+    document.getElementById("tablaRegistros").addEventListener("click", event => {
+        const boton = event.target.closest("[data-oper-accion]");
+        if (!boton) return;
+
+        const { operAccion, id } = boton.dataset;
+        if (operAccion === "mostrar-adjuntos") window.mostrarAdjuntos(id);
+        if (operAccion === "abrir-modal") window.abrirModal(id);
+        if (operAccion === "reabrir-caso") window.reabrirCaso(id);
+    });
 
     window.renderTabla = renderTabla;
 
@@ -1092,15 +1103,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 filasEventos = laboral.eventos.map(ev => `
                     <tr>
                         <td>Fecha presentación</td>
-                        <td>${ev.Fecha_presentacion ?? "-"}</td>
+                        <td>${escaparHtml(ev.Fecha_presentacion ?? "-")}</td>
                     </tr>
                     <tr>
                         <td>Estado del caso</td>
-                        <td>${formatearEstadoCaso(ev.Pendiente_proceso)}</td>
+                        <td>${escaparHtml(formatearEstadoCaso(ev.Pendiente_proceso))}</td>
                     </tr>
                     <tr>
                         <td>Observaciones</td>
-                        <td>${ev.Observaciones_rrll ?? "-"}</td>
+                        <td>${escaparHtml(ev.Observaciones_rrll ?? "-")}</td>
                     </tr>
                 `).join("<tr><td colspan='2'><hr></td></tr>");
             } else {
@@ -1150,10 +1161,6 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     const ZONAS_DANO = ["LATERAL IZQUIERDO", "LATERAL DERECHO", "FRONTAL", "POSTERIOR", "TECHO", "ESPEJOS", "PUERTAS", "VIDRIOS", "LLANTAS", "ITS", "SIRCI", "CARROCERÍA INTERNA", "TREN MOTRIZ", "CHASIS"];
     const DANOS_OCASIONADOS = ["CONDUCTA OPERACIONAL", "INFRAESTRUCTURA PATIO", "INFRAESTRUCTURA VIAL", "VANDALISMO", "MECÁNICO", "SINIESTRO VIAL", "ALISTAMIENTO"];
-
-    function escaparHtml(valor) {
-        return String(valor ?? "").replace(/[&<>'"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[c]);
-    }
 
     function opcionesSelect(valores, seleccionado) {
         return valores.map(valor => `<option value="${escaparHtml(valor)}" ${String(valor) === String(seleccionado ?? "") ? "selected" : ""}>${escaparHtml(valor)}</option>`).join("");
@@ -1446,7 +1453,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const ext = file.FileName.split(".").pop().toLowerCase();
 
-            const url = `/${CFG.modulo}/ver_archivo?path=${encodeURIComponent(file.FilePath)}`;
+            const url = `/archivo/${encodeURIComponent(file.Id)}?tipo=${encodeURIComponent(file.TipoArchivo)}`;
 
             if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext)) {
                 const img = document.createElement("img");
@@ -2662,15 +2669,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const div = document.createElement("div");
             div.className = "archivo-item";
-            div.innerHTML = `
-                <span>${archivo.name}</span>
-                <button type="button" class="btn btn-danger btn-sm">✕</button>
-            `;
+            const nombre = document.createElement("span");
+            nombre.textContent = archivo.name;
+            const botonEliminar = document.createElement("button");
+            botonEliminar.type = "button";
+            botonEliminar.className = "btn btn-danger btn-sm";
+            botonEliminar.textContent = "✕";
 
-            div.querySelector("button").onclick = () => {
+            botonEliminar.addEventListener("click", () => {
                 adjuntosSeleccionados.splice(index, 1);
                 actualizarListaAdjuntos();
-            };
+            });
+
+            div.append(nombre, botonEliminar);
 
             listaAdjuntos.appendChild(div);
         });

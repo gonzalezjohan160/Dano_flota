@@ -436,7 +436,7 @@ function renderGaleria(galeria, archivos) {
         div.classList.add('adjunto-item');
 
         const ext = file.FileName.split('.').pop().toLowerCase();
-        const url = "/Historico_movil/ver_archivo?path=" + encodeURIComponent(file.FilePath);
+        const url = "/archivo/" + encodeURIComponent(file.Id) + "?tipo=" + encodeURIComponent(file.TipoArchivo);
 
         if (['jpg','jpeg','png','gif','webp'].includes(ext)) {
             const img = document.createElement('img');
