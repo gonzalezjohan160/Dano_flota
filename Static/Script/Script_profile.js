@@ -1,7 +1,18 @@
 document.addEventListener('DOMContentLoaded', function() {
-    if (window.MOSTRAR_ALERTA_CAMBIO_PASSWORD) {
+    const form = document.getElementById('changePasswordForm');
+    const alerta = document.getElementById('mensaje-alerta');
+    const contenedorForm = document.getElementById('form-password');
+
+    if (form && form.dataset.alertaCambio === 'true') {
         alert('Se necesita actualizar la contraseña. Debes actualizarla para continuar.');
     }
+
+    document.getElementById('btn-mostrar-form-password')?.addEventListener('click', () => {
+        contenedorForm.style.display = 'block';
+    });
+    document.getElementById('btn-ocultar-form-password')?.addEventListener('click', () => {
+        contenedorForm.style.display = 'none';
+    });
 
     // 1. Cargar datos del JSON (Opcional, según lo que necesites mostrar)
     const datosElemento = document.getElementById('registro-json');
@@ -11,16 +22,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // 2. Manejar el formulario
-    const form = document.getElementById('changePasswordForm');
-    const alerta = document.getElementById('mensaje-alerta');
-
     if (form) {
         form.addEventListener('submit', function(e) {
             e.preventDefault(); // Detiene el redireccionamiento
 
             const formData = new FormData(this);
 
-            fetch(URL_CAMBIO_PASS, { // Usamos la variable definida en el HTML
+            fetch(form.dataset.url, {
                 method: 'POST',
                 body: formData
             })

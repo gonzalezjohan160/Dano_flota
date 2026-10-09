@@ -1,7 +1,14 @@
 document.addEventListener('DOMContentLoaded', function () {
     const getJSON = (id) => {
         const el = document.getElementById(id);
-        return el ? JSON.parse(el.textContent) : [];
+        if (!el) return [];
+        try {
+            const datos = JSON.parse(el.textContent);
+            return Array.isArray(datos) ? datos : [];
+        } catch (error) {
+            console.error(`No fue posible leer los datos del Dashboard (${id}).`, error);
+            return [];
+        }
     };
 
     const registros = getJSON('registros-json');
@@ -138,20 +145,25 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function renderUltimosEventos(datos) {
 
-        tbodyUltimosEventos.innerHTML = "";
+        tbodyUltimosEventos.replaceChildren();
 
-        datos.forEach(evento => {
+        (Array.isArray(datos) ? datos : []).forEach(evento => {
 
             const fila = document.createElement("tr");
 
-            fila.innerHTML = `
+            const valores = [
+            evento?.Movil,
+            evento?.Fecha_evento,
+            evento?.Zona_dano,
+            evento?.Parte_afectada
+            ];
 
-                <td>${evento.Movil}</td>
-                <td>${evento.Fecha_evento}</td>
-                <td>${evento.Zona_dano}</td>
-                <td>${evento.Parte_afectada}</td>
+            valores.forEach(valor => {
+            const celda = document.createElement("td");
+            celda.textContent = valor == null ? "" : String(valor);
+            fila.appendChild(celda);
+            });
 
-            `;
             tbodyUltimosEventos.appendChild(fila);
         })
     }
@@ -169,7 +181,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const filtrados = ultimosEventos.filter(evento =>
-            evento.Movil.toUpperCase().includes(texto)
+            String(evento?.Movil ?? "").toUpperCase().includes(texto)
         );
 
         renderUltimosEventos(filtrados);
@@ -182,17 +194,44 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function renderVehiculos(datos) {
 
-        tbodyVehiculos.innerHTML = "";
+        tbodyVehiculos.replaceChildren();
 
-        datos.forEach(vehiculo => {
-
+        (Array.isArray(datos) ? datos : []).forEach(vehiculo => {
+            const valoresVehiculo = Array.isArray(vehiculo) ? vehiculo : [];
             const fila = document.createElement("tr");
 
-            fila.innerHTML = `
-                <td>${vehiculo[0]}</td>
-                <td class="text-center"><span class="badge">${vehiculo[1]}</span></td>
-                <td class="text-right text-danger">$${Number(vehiculo[2]).toLocaleString('es-CO', { maximumFractionDigits: 0 })}</td>
-            `;
+            // Móvil
+            const celdaMovil = document.createElement("td");
+            celdaMovil.textContent =
+                valoresVehiculo[0] == null ? "" : String(valoresVehiculo[0]);
+            fila.appendChild(celdaMovil);
+
+            // Cantidad de eventos
+            const celdaEventos = document.createElement("td");
+            celdaEventos.className = "text-center";
+
+            const badge = document.createElement("span");
+            badge.className = "badge";
+            badge.textContent =
+                valoresVehiculo[1] == null ? "" : String(valoresVehiculo[1]);
+
+            celdaEventos.appendChild(badge);
+            fila.appendChild(celdaEventos);
+
+            // Costo
+            const celdaCosto = document.createElement("td");
+            celdaCosto.className = "text-right text-danger";
+
+            const valorCosto = valoresVehiculo[2];
+            const costo = (typeof valorCosto === "number" ||
+                (typeof valorCosto === "string" && valorCosto.trim() !== ""))
+                ? Number(valorCosto)
+                : NaN;
+            celdaCosto.textContent = Number.isFinite(costo)
+                ? `$${costo.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`
+                : "—";
+
+            fila.appendChild(celdaCosto);
             tbodyVehiculos.appendChild(fila);
         })
     }
@@ -212,7 +251,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             const filtrados = vehiculosData.filter(vehiculo =>
-                String(vehiculo[0]).toUpperCase().includes(texto)
+                String(Array.isArray(vehiculo) ? vehiculo[0] ?? "" : "").toUpperCase().includes(texto)
             );
 
             renderVehiculos(filtrados);

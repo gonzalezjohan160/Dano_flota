@@ -23,12 +23,13 @@
 
 <hr>
 <h3>Seguridad</h3>
-<button type="button" class="btn-verde-sm" onclick="document.getElementById('form-password').style.display='block'">
+<button type="button" class="btn-verde-sm" id="btn-mostrar-form-password">
     Cambiar Contraseña
 </button>
 
 <div id="form-password" style="display:none; margin-top: 20px; border: 1px solid #ccc; padding: 15px;">
-    <form id="changePasswordForm">
+    <form id="changePasswordForm" data-url="{{ url_for('Profile.cambiar_password') }}"
+        data-alerta-cambio="{{ 'true' if mostrar_alerta_cambio_password else 'false' }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div>
             <label>Contraseña Actual:</label><br>
@@ -46,7 +47,7 @@
         </div>
         <br>
         <button type="submit" class="btn-verde-sm">Actualizar Contraseña</button>
-        <button type="button" class="btn-azul-sm" onclick="document.getElementById('form-password').style.display='none'">Cancelar</button>
+        <button type="button" class="btn-azul-sm" id="btn-ocultar-form-password">Cancelar</button>
         
         <div id="mensaje-alerta" style="margin-top: 15px; padding: 10px; display: none; border: 1px solid transparent; border-radius: 4px;"></div>
     </form>
@@ -60,12 +61,6 @@
     <script id="registro-json" type="application/json">
     {{ registro|tojson | safe }}
     </script>
-
-    <script>
-            // Esta variable sí la procesa Jinja2 y el JS externo la podrá ver
-            const URL_CAMBIO_PASS = "{{ url_for('Profile.cambiar_password') }}";
-            window.MOSTRAR_ALERTA_CAMBIO_PASSWORD = {{ mostrar_alerta_cambio_password|tojson }};
-        </script>
 
     <script src="{{ url_for('static', filename='Script/Script_profile.js') }}"></script>
 

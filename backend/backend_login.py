@@ -46,6 +46,18 @@ GDAMAGES GMASIVO SOLUTIONS
         servidor.login(remitente, password)
         servidor.send_message(mensaje)
 
+def construir_enlace_restablecimiento(token):
+    """Arma el enlace con APP_BASE_URL y nunca con la cabecera Host de la petición.
+
+    Si el enlace dependiera del Host, un atacante podría pedir la recuperación
+    de otra cuenta con un Host propio y recibir el token en su dominio.
+    """
+    base_url = (os.getenv("APP_BASE_URL") or "").strip().rstrip("/")
+    if not base_url.startswith("https://"):
+        raise RuntimeError("APP_BASE_URL debe configurarse con la URL https pública del aplicativo")
+    return base_url + url_for('Modulo_login.reset_password', token=token)
+
+
 Modulo_login = Blueprint(
     'Modulo_login',
     __name__,
@@ -132,7 +144,7 @@ def forgot_password():
                 """, (user_id, token, expiration))
                 conn.commit()
 
-                reset_link = url_for('Modulo_login.reset_password', token=token, _external=True)
+                reset_link = construir_enlace_restablecimiento(token)
                 enviar_email(email, reset_link)
         except Exception:
             if conn:

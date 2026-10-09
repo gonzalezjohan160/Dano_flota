@@ -24,6 +24,13 @@
         if (event.target === playerDialog) closePlayer();
     });
 
+    document.querySelectorAll(".form-eliminar-tutorial").forEach((form) => {
+        form.addEventListener("submit", (event) => {
+            const confirmado = window.confirm("¿Está seguro de eliminar este video? Esta acción eliminará el archivo y no se puede deshacer.");
+            if (!confirmado) event.preventDefault();
+        });
+    });
+
     const uploadDialog = document.getElementById("dialogoSubida");
 
     if (uploadDialog) {

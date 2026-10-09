@@ -11,14 +11,26 @@ from werkzeug.utils import secure_filename
 import os
 import time
 import json
-from mimetypes import guess_type
 from datetime import datetime
 from pathlib import Path
 from config import connect
-from backend_security import login_required, requiere_permiso
+from backend_security import (
+    login_required,
+    requiere_permiso,
+    usuario_puede_acceder_uf,
+    ufs_autorizadas_sesion,
+)
 from config import BASE_DIR
 from config import UPLOAD_FOLDERS
 from logger import logger
+from backend_capturador import ZONAS_DANO, DANOS_OCASIONADOS_POR
+from attachment_security import (
+    AttachmentValidationError,
+    apply_attachment_headers,
+    inline_type_for_path,
+    store_upload,
+    validate_uploads,
+)
 
 Modulo_unificado = Blueprint(
     "Modulo_unificado",
@@ -26,6 +38,14 @@ Modulo_unificado = Blueprint(
     template_folder=str(BASE_DIR/"frontend"),
     static_folder=str(BASE_DIR/"Static")
 )
+
+
+def validar_adjuntos_de_solicitud():
+    try:
+        validate_uploads(request.files.getlist("archivos"))
+    except AttachmentValidationError as error:
+        return jsonify({"status": "error", "message": str(error)}), 400
+    return None
 
 # ==========================================================
 # CONFIGURACIÓN GENERAL DE LOS MÓDULOS
@@ -156,10 +176,29 @@ INSERT_CONFIG = {
 # ==========================================================
 
 def obtener_filtro_uf():
-    user_uf = session.get("UF")
-    if user_uf == "TRANSVERSAL":
-        return "d.UF IN (10,16)", []
-    return "d.UF = ?", [user_uf]
+    ufs = ufs_autorizadas_sesion()
+    if not ufs:
+        return "1 = 0", []
+    marcadores = ", ".join("?" for _ in ufs)
+    return f"d.UF IN ({marcadores})", list(ufs)
+
+
+def verificar_acceso_uf_caso(id_caso):
+    id_texto = str(id_caso)
+    if not id_texto.isascii() or not id_texto.isdecimal():
+        abort(404)
+    conn = connect()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT UF FROM table_damage_to_fleet WHERE Id = ?", [id_caso])
+        registro = cursor.fetchone()
+    finally:
+        conn.close()
+
+    if not registro:
+        abort(404)
+    if not usuario_puede_acceder_uf(registro[0]):
+        abort(403)
 
 
 def fila_a_dict(cursor, fila):
@@ -381,6 +420,12 @@ def index(modulo):
         """,
     }
     filtro_modulo = FILTRO_PENDIENTE_MODULO[modulo]
+    # Solo Relaciones Laborales exige las tres gestiones iniciales completas.
+    # Se decide en Python para no interpolar valores en el SQL.
+    filtro_gestiones = (
+        "AND estado_oper = 1 AND estado_mtto = 1 AND estado_svial = 1"
+        if modulo == "laboral" else ""
+    )
 
     query = f"""
         WITH base AS (
@@ -447,14 +492,7 @@ def index(modulo):
         )
         SELECT * FROM base
         WHERE {filtro_modulo}
-            AND (
-                '{modulo}' != 'laboral'
-                OR (
-                estado_oper = 1
-                AND estado_mtto = 1
-                AND estado_svial = 1
-            )
-        )
+            {filtro_gestiones}
         ORDER BY Id DESC
     """
 
@@ -529,6 +567,7 @@ def index(modulo):
 def detalle(modulo, id):
 
     verificar_acceso_modulo(modulo)
+    verificar_acceso_uf_caso(id)
 
     t0 = time.perf_counter()
     t_etapa = time.perf_counter()
@@ -682,7 +721,15 @@ def opciones_evento(modulo):
         abort(404)
     conn = connect()
     cursor = conn.cursor()
-    cursor.execute("SELECT DISTINCT Movil FROM table_damage_to_fleet WHERE Movil IS NOT NULL ORDER BY Movil")
+    ufs = ufs_autorizadas_sesion()
+    if not ufs:
+        conn.close()
+        return jsonify({"moviles": []})
+    marcadores = ", ".join("?" for _ in ufs)
+    cursor.execute(
+        f"SELECT DISTINCT Movil FROM table_damage_to_fleet WHERE Movil IS NOT NULL AND UF IN ({marcadores}) ORDER BY Movil",
+        list(ufs),
+    )
     moviles = [fila[0] for fila in cursor.fetchall()]
     conn.close()
     return jsonify({"moviles": moviles})
@@ -694,6 +741,9 @@ def actualizar_evento(modulo, id):
     verificar_acceso_modulo(modulo)
     if modulo != "Operaciones":
         abort(404)
+    error_adjuntos = validar_adjuntos_de_solicitud()
+    if error_adjuntos:
+        return error_adjuntos
 
     datos = request.get_json(silent=True) or {}
     if not datos:
@@ -726,6 +776,8 @@ def actualizar_evento(modulo, id):
         actual = fila_a_dict(cursor, cursor.fetchone())
         if not actual:
             return jsonify({"status": "error", "message": "No se encontró el evento."}), 404
+        if not usuario_puede_acceder_uf(actual.get("UF")):
+            return jsonify({"status": "error", "message": "No tiene acceso a este caso."}), 403
 
         # La UI calcula estos valores, pero se validan y recalculan también
         # en el servidor para impedir guardar datos incoherentes.
@@ -734,6 +786,8 @@ def actualizar_evento(modulo, id):
         prefijos_uf = {"10": "Z32-", "16": "Z34-"}
         if uf not in prefijos_uf:
             return jsonify({"status": "error", "message": "La UF debe ser 10 o 16."}), 400
+        if not usuario_puede_acceder_uf(uf):
+            return jsonify({"status": "error", "message": "No tiene autorización para asignar esa UF."}), 403
         if not movil.startswith(prefijos_uf[uf]) or not movil[len(prefijos_uf[uf]):].isdigit() or len(movil[len(prefijos_uf[uf]):]) != 4:
             return jsonify({"status": "error", "message": "El móvil debe conservar el prefijo de la UF y cuatro dígitos."}), 400
         cambios["UF"] = uf
@@ -762,6 +816,20 @@ def actualizar_evento(modulo, id):
         if centro not in centros_operaciones:
             return jsonify({"status": "error", "message": "El centro de operaciones no es válido."}), 400
         cambios["Centro_operaciones"] = centro
+
+        # Mismas listas que el capturador. Solo se exige si el valor cambia,
+        # para no bloquear la edición de registros antiguos.
+        for campo, permitidos in (("Zona_dano", ZONAS_DANO), ("Dano_ocasionado", DANOS_OCASIONADOS_POR)):
+            if campo in cambios:
+                valor = str(cambios[campo] or "").strip()
+                if valor != str(actual.get(campo) or "").strip() and valor not in permitidos:
+                    return jsonify({"status": "error", "message": f"El valor de {campo} no es válido."}), 400
+                cambios[campo] = valor
+        if "Parte_afectada" in cambios:
+            parte = str(cambios["Parte_afectada"] or "").strip()
+            if not parte or len(parte) > 200:
+                return jsonify({"status": "error", "message": "La parte afectada es obligatoria y no puede superar 200 caracteres."}), 400
+            cambios["Parte_afectada"] = parte
 
         def valor_comparable(campo, valor):
             if campo == "Fecha_evento" and isinstance(valor, datetime):
@@ -828,13 +896,15 @@ def eliminar_evento(id):
     cursor = conn.cursor()
     try:
         cursor.execute("""
-            SELECT ISNULL(eliminado, 0)
+            SELECT ISNULL(eliminado, 0), UF
             FROM table_damage_to_fleet
             WHERE Id = ?
         """, [id])
         evento = cursor.fetchone()
         if not evento:
             return jsonify({"status": "error", "message": "No se encontró el evento."}), 404
+        if not usuario_puede_acceder_uf(evento[1]):
+            return jsonify({"status": "error", "message": "No tiene acceso a este caso."}), 403
         if evento[0]:
             return jsonify({"status": "error", "message": "El evento ya se encuentra eliminado."}), 409
 
@@ -876,7 +946,7 @@ def reabrir_caso(id, modulo):
     try:
         if modulo == "laboral":
             cursor.execute("""
-                SELECT d.estado_caso,
+                SELECT d.UF, d.estado_caso,
                        CASE WHEN EXISTS (
                            SELECT 1 FROM table_info_laboral_mult lm
                            WHERE lm.Id_damage_to_fleet = d.Id
@@ -888,13 +958,15 @@ def reabrir_caso(id, modulo):
                 WHERE d.Id = ?
             """, [id])
         else:
-            cursor.execute("SELECT estado_caso, 1 FROM table_damage_to_fleet WHERE Id = ?", [id])
+            cursor.execute("SELECT UF, estado_caso, 1 FROM table_damage_to_fleet WHERE Id = ?", [id])
         caso = cursor.fetchone()
         if not caso:
             return jsonify({"status": "error", "message": "No se encontró el evento."}), 404
-        if not caso[0]:
+        if not usuario_puede_acceder_uf(caso[0]):
+            return jsonify({"status": "error", "message": "No tiene acceso a este caso."}), 403
+        if not caso[1]:
             return jsonify({"status": "error", "message": "El caso ya se encuentra abierto."}), 409
-        if modulo == "laboral" and not caso[1]:
+        if modulo == "laboral" and not caso[2]:
             return jsonify({"status": "error", "message": "El caso no fue cerrado por Relaciones Laborales."}), 409
 
         usuario = session.get("usuario", "")
@@ -981,7 +1053,7 @@ def descargar_archivo(file_id):
         campo_padre = config_archivo["campo_padre"]
         clave_padre = "ID" if tabla_padre == "table_intervenciones" else "Id"
         cursor.execute(f"""
-            SELECT f.FilePath
+            SELECT f.FilePath, f.FileName, p.UF
             FROM {config_archivo['tabla']} f
             INNER JOIN {tabla_padre} p ON p.{clave_padre} = f.{campo_padre}
             WHERE f.Id = ?
@@ -992,6 +1064,8 @@ def descargar_archivo(file_id):
 
     if not registro or not registro[0]:
         abort(404)
+    if not usuario_puede_acceder_uf(registro[2]):
+        abort(403)
 
     ruta = str(registro[0])
     if ruta.startswith("C:\\media\\"):
@@ -1003,11 +1077,16 @@ def descargar_archivo(file_id):
     if not ruta_archivo.is_file():
         abort(404)
 
-    mime, _ = guess_type(str(ruta_archivo))
     try:
-        if mime and any(t in mime for t in ("image", "video", "audio")):
-            return send_file(str(ruta_archivo), mimetype=mime)
-        return send_file(str(ruta_archivo), as_attachment=True)
+        mime = inline_type_for_path(ruta_archivo)
+        nombre_descarga = secure_filename(str(registro[1] or ruta_archivo.name)) or "archivo"
+        respuesta = send_file(
+            str(ruta_archivo),
+            mimetype=mime or "application/octet-stream",
+            as_attachment=mime is None,
+            download_name=nombre_descarga,
+        )
+        return apply_attachment_headers(respuesta)
     except Exception:
         abort(500)
 
@@ -1016,25 +1095,37 @@ def descargar_archivo(file_id):
 # ==========================================================
 
 def guardar_archivos(cursor, codigo, tabla_files, campo_id, carpeta_base):
-    carpeta = carpeta_base/str(codigo)
-    carpeta.mkdir(parents=True, exist_ok=True)
-
     archivos = request.files.getlist("archivos")
+    validate_uploads(archivos)
+    codigo_seguro = str(codigo)
+    if not codigo_seguro.isascii() or not codigo_seguro.isdecimal():
+        raise AttachmentValidationError("El identificador del caso no es válido.")
+    carpeta_base = Path(carpeta_base).resolve()
+    carpeta = (carpeta_base / codigo_seguro).resolve()
+    if carpeta.parent != carpeta_base:
+        raise AttachmentValidationError("La ruta de almacenamiento no es válida.")
+    carpeta.mkdir(parents=True, exist_ok=True)
+    rutas_guardadas = []
 
-    for archivo in archivos:
-        if not archivo.filename:
-            continue
+    try:
+        for archivo in archivos:
+            if not archivo.filename:
+                continue
 
-        nombre_seguro = secure_filename(archivo.filename)
-        fecha = datetime.now().strftime("%Y%m%d_%H%M%S")
-        nombre = f"{os.path.splitext(nombre_seguro)[0]}_{fecha}{os.path.splitext(nombre_seguro)[1]}"
-        ruta = carpeta / nombre
-        archivo.save(str(ruta))
+            nombre_seguro = secure_filename(archivo.filename)
+            fecha = datetime.now().strftime("%Y%m%d_%H%M%S")
+            nombre = f"{os.path.splitext(nombre_seguro)[0]}_{fecha}{os.path.splitext(nombre_seguro)[1]}"
+            ruta = store_upload(archivo, carpeta, nombre)
+            rutas_guardadas.append(ruta)
 
-        cursor.execute(f"""
-            INSERT INTO {tabla_files} ({campo_id}, FileName, FilePath, Fecha_subida)
-            VALUES(?,?,?,?)
-        """, (codigo, archivo.filename, str(ruta), datetime.now()))
+            cursor.execute(f"""
+                INSERT INTO {tabla_files} ({campo_id}, FileName, FilePath, Fecha_subida)
+                VALUES(?,?,?,?)
+            """, (codigo, archivo.filename, str(ruta), datetime.now()))
+    except Exception:
+        for ruta in rutas_guardadas:
+            ruta.unlink(missing_ok=True)
+        raise
 
 
 # ==========================================================
@@ -1088,6 +1179,7 @@ def obtener_reincidencia_operador(cursor, id_dano):
 def verificar_reincidencia_operador(id):
 
     verificar_acceso_modulo("Operaciones")
+    verificar_acceso_uf_caso(id)
 
     conn = connect()
     cursor = conn.cursor()
@@ -1108,6 +1200,12 @@ def verificar_reincidencia_operador(id):
 def agregar(modulo, accion):
 
     verificar_acceso_modulo(modulo)
+    id_registro_solicitado = request.form.get("Id_damage_to_fleet")
+    if id_registro_solicitado:
+        verificar_acceso_uf_caso(id_registro_solicitado)
+    error_adjuntos = validar_adjuntos_de_solicitud()
+    if error_adjuntos:
+        return error_adjuntos
 
     if modulo == "laboral" and accion == "agregar_rl":
         return agregar_relaciones_laborales()
@@ -1241,6 +1339,7 @@ def agregar(modulo, accion):
 # ==========================================================
 
 def agregar_relaciones_laborales():
+    conn = None
     try:
         codigo = request.form.get("Id_damage_to_fleet")
         observaciones_1 = request.form.get("observaciones_1")
@@ -1342,6 +1441,9 @@ def agregar_relaciones_laborales():
         return jsonify({"status": "success", "message": "✅ Información de RRLL y archivos guardados correctamente."})
 
     except Exception:
+        if conn:
+            conn.rollback()
+            conn.close()
         logger.exception("error_guardar_relaciones_laborales")
         return jsonify({"status": "error", "message": "No fue posible guardar la información de Relaciones Laborales."})
 

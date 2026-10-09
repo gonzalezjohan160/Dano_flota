@@ -31,57 +31,60 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
+    const casillasEstado = Array.from(document.querySelectorAll('#filtroEstados input[name="estado"]'));
+    const casillaTodos = document.getElementById("estadoTodos");
+
+    function estadosSeleccionados() {
+        return casillasEstado.filter(casilla => casilla.checked).map(casilla => casilla.value);
+    }
+
+    // Las fechas son opcionales: vacías = todos los casos. Solo se valida el orden.
+    function fechasValidas() {
+        const inicio = document.getElementById("fecha_inicio").value;
+        const fin = document.getElementById("fecha_fin").value;
+        if (inicio && fin && inicio > fin) {
+            alert("La fecha de inicio no puede ser posterior a la fecha de fin.");
+            return false;
+        }
+        return true;
+    }
+
+    // Filtros comunes del listado y del Excel: fechas (si hay), UF y estados.
+    function parametrosFiltro() {
+        const params = new URLSearchParams();
+        const inicio = document.getElementById("fecha_inicio").value;
+        const fin = document.getElementById("fecha_fin").value;
+        if (inicio) params.set("fecha_inicio", inicio);
+        if (fin) params.set("fecha_fin", fin);
+        params.set("filtro_uf", document.getElementById("filtroUF").value);
+        estadosSeleccionados().forEach(estado => params.append("estado", estado));
+        return params;
+    }
+
     document.getElementById('btnFiltrar').addEventListener('click', () => {
-        const fecha_inicio = document.getElementById('fecha_inicio').value;
-        const fecha_fin = document.getElementById('fecha_fin').value;
-
-        if(!fecha_inicio || !fecha_fin){
-            alert("Por favor seleccione ambas fechas.");
-            return;
-        }
-
-        const start = new Date(fecha_inicio);
-        const end = new Date(fecha_fin);
-        const diffMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
-        if(diffMonths > 2 || diffMonths < 0){
-            alert("El rango de fechas no puede superar 2 meses.");
-            return;
-        }
-
+        if (!fechasValidas()) return;
         aplicarFiltrosDesdeFormulario();
     });
 
     document.getElementById("btnExportar").addEventListener("click", function() {
-        const fechaInicio = document.getElementById("fecha_inicio").value;
-        const fechaFin = document.getElementById("fecha_fin").value;
-
-        if(!fechaInicio || !fechaFin){
-            alert("Por favor seleccione ambas fechas.");
+        if (!fechasValidas()) return;
+        const params = parametrosFiltro();
+        // El Excel nunca incluye casos eliminados.
+        params.delete("estado");
+        const estadosExcel = estadosSeleccionados().filter(estado => estado !== "eliminados");
+        if (estadosExcel.length === 0) {
+            alert("Los casos eliminados no se incluyen en el Excel. Seleccione Abiertos o Cerrados.");
             return;
         }
-
-        const start = new Date(fechaInicio);
-        const end = new Date(fechaFin);
-        const diffMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
-        if(diffMonths > 2 || diffMonths < 0){
-            alert("El rango de fechas no puede superar 2 meses.");
-            return;
-        }
-
-        const filtroUF = document.getElementById("filtroUF").value;
-        const filtroEstado = document.getElementById("filtroEstado").value;
-        window.location.href = `/Historico_danos/exportar_excel?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}&filtro_uf=${encodeURIComponent(filtroUF)}&filtro_estado=${encodeURIComponent(filtroEstado)}`;
+        estadosExcel.forEach(estado => params.append("estado", estado));
+        window.location.href = `/Historico_danos/exportar_excel?${params.toString()}`;
     });
 
 
     const paginacion = JSON.parse(document.getElementById("paginacion-json").textContent);
 
     function aplicarFiltrosDesdeFormulario(pagina = 1) {
-        const params = new URLSearchParams();
-        params.set("fecha_inicio", document.getElementById("fecha_inicio").value);
-        params.set("fecha_fin", document.getElementById("fecha_fin").value);
-        params.set("filtro_uf", document.getElementById("filtroUF").value);
-        params.set("filtro_estado", document.getElementById("filtroEstado").value);
+        const params = parametrosFiltro();
         document.querySelectorAll("thead th input[data-filtro]").forEach(input => {
             if (input.value.trim()) params.set(input.dataset.filtro, input.value.trim());
         });
@@ -91,7 +94,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function configurarFiltrosYPaginacion() {
         document.getElementById("filtroUF").addEventListener("change", () => aplicarFiltrosDesdeFormulario());
-        document.getElementById("filtroEstado").addEventListener("change", () => aplicarFiltrosDesdeFormulario());
+        casillaTodos.addEventListener("change", () => {
+            if (!casillaTodos.checked) {
+                // Siempre debe quedar al menos un estado marcado.
+                casillaTodos.checked = true;
+                return;
+            }
+            casillasEstado.forEach(casilla => { casilla.checked = true; });
+            aplicarFiltrosDesdeFormulario();
+        });
+        casillasEstado.forEach(casilla => {
+            casilla.addEventListener("change", () => {
+                if (estadosSeleccionados().length === 0) {
+                    casilla.checked = true;
+                    return;
+                }
+                casillaTodos.checked = casillasEstado.every(c => c.checked);
+                aplicarFiltrosDesdeFormulario();
+            });
+        });
         document.querySelectorAll("thead th input[data-filtro]").forEach(input => {
             input.addEventListener("change", () => aplicarFiltrosDesdeFormulario());
             input.addEventListener("keydown", event => {
@@ -132,6 +153,12 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
 
+            const estadoCaso = registro.eliminado
+                ? { texto: "Eliminado", clase: "estado-eliminado" }
+                : registro.estado_caso
+                    ? { texto: "Cerrado", clase: "estado-cerrado" }
+                    : { texto: "Abierto", clase: "estado-abierto" };
+
             const tr = document.createElement("tr");
             tr.classList.add(t && t.dias >= 2 ? "row-danger" : "row-ok");
             tr.dataset.uf = registro.UF
@@ -158,6 +185,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         : `<span style="color:#777;">Sin archivos</span>`
                     }
                 </td>
+                <td class="estado-caso ${estadoCaso.clase}">${escaparHtml(estadoCaso.texto)}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -327,7 +355,10 @@ document.addEventListener("DOMContentLoaded", () => {
                             const div = document.createElement('div');
                             div.classList.add('adjunto-item');
 
-                            const ext = file.FileName.split('.').pop().toLowerCase();
+                            const nombreArchivo = String(file.FileName || "Adjunto");
+                            const ext = nombreArchivo.includes(".")
+                                ? nombreArchivo.split(".").pop().toLowerCase()
+                                : "";
                             const url = "/archivo/" + encodeURIComponent(file.Id) + "?tipo=" + encodeURIComponent(file.TipoArchivo);
 
                             if (['jpg','jpeg','png','gif','webp'].includes(ext)) {
@@ -336,17 +367,24 @@ document.addEventListener("DOMContentLoaded", () => {
                                 img.onclick = () => abrirLightbox(url);
                                 div.appendChild(img);
 
-                            } else if (['mp4','mov','avi','webm'].includes(ext)) {
+                            } else if (['mp4','webm'].includes(ext)) {
                                 const video = document.createElement('video');
                                 video.src = url;
                                 video.controls = true;
                                 div.appendChild(video);
 
+                            } else if (['mp3','ogg','wav'].includes(ext)) {
+                                const audio = document.createElement('audio');
+                                audio.src = url;
+                                audio.controls = true;
+                                div.appendChild(audio);
+
                             } else {
                                 const link = document.createElement('a');
                                 link.href = url;
-                                link.target = '_blank';
-                                link.textContent = file.FileName;
+                                link.download = nombreArchivo;
+                                link.rel = 'noopener noreferrer';
+                                link.textContent = nombreArchivo;
                                 div.appendChild(link);
                             }
 

@@ -1,6 +1,46 @@
 from flask import session, abort, redirect, url_for
 from functools import wraps
 
+UFS_AUTORIZADAS = {"10", "16"}
+
+
+def ufs_autorizadas_sesion():
+    """Devuelve las UF que puede consultar la sesión según la regla vigente."""
+    uf_usuario = session.get("UF")
+    if uf_usuario == "TRANSVERSAL":
+        return (10, 16)
+
+    uf_normalizada = str(uf_usuario).strip() if uf_usuario is not None else ""
+    if uf_normalizada not in UFS_AUTORIZADAS:
+        return ()
+    return (int(uf_normalizada),)
+
+
+def usuario_puede_acceder_uf(uf_registro):
+    """Valida acceso a una UF; UF ausente o fuera del conjunto permitido deniega."""
+    if uf_registro is None:
+        return False
+    uf_normalizada = str(uf_registro).strip()
+    return uf_normalizada in {str(uf) for uf in ufs_autorizadas_sesion()}
+
+
+LONGITUD_MINIMA_PASSWORD = 10
+
+
+def validar_politica_password(password, username=None):
+    """Devuelve el motivo de rechazo, o None si la contraseña cumple la política."""
+    password = password or ""
+    if len(password) < LONGITUD_MINIMA_PASSWORD:
+        return f"La contraseña debe tener al menos {LONGITUD_MINIMA_PASSWORD} caracteres."
+    if not any(c.islower() for c in password) or not any(c.isupper() for c in password):
+        return "La contraseña debe combinar mayúsculas y minúsculas."
+    if not any(c.isdigit() for c in password):
+        return "La contraseña debe incluir al menos un número."
+    if username and username.strip().lower() in password.lower():
+        return "La contraseña no puede contener el nombre de usuario."
+    return None
+
+
 def login_required(f):
     """
     Decorador para obligar a que el usuario haya iniciado sesión.

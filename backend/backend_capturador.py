@@ -6,11 +6,23 @@ from config import connect
 import pyodbc
 import requests
 import traceback
-from backend_security import login_required, requiere_permiso
+from backend_security import (
+    login_required,
+    requiere_permiso,
+    usuario_puede_acceder_uf,
+    ufs_autorizadas_sesion,
+)
 from pathlib import Path
+from werkzeug.utils import secure_filename
 from flask import Flask
 from config import BASE_DIR
 from config import UPLOAD_FOLDERS
+from attachment_security import (
+    AttachmentValidationError,
+    store_upload,
+    validate_uploads,
+)
+from logger import logger
 from backend_historico_movil import parse_fecha
 
 
@@ -24,6 +36,17 @@ Capturador = Blueprint(
 
 FILES_DIR = UPLOAD_FOLDERS["Operaciones"]
 
+# Fuente única para las opciones del formulario y su validación en servidor.
+ZONAS_DANO = (
+    "LATERAL IZQUIERDO", "LATERAL DERECHO", "FRONTAL", "POSTERIOR",
+    "TECHO", "ESPEJOS", "PUERTAS", "VIDRIOS", "LLANTAS", "ITS",
+    "SIRCI", "CARROCERÍA INTERNA", "TREN MOTRIZ", "CHASIS",
+)
+DANOS_OCASIONADOS_POR = (
+    "CONDUCTA OPERACIONAL", "INFRAESTRUCTURA PATIO", "INFRAESTRUCTURA VIAL",
+    "VANDALISMO", "MECÁNICO", "SINIESTRO VIAL", "ALISTAMIENTO",
+)
+
 
 FILES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -34,7 +57,11 @@ FILES_DIR.mkdir(parents=True, exist_ok=True)
 @login_required
 @requiere_permiso('Ingresar_captur_danos')
 def index():
-    return render_template('Formulario.html')
+    return render_template(
+        'Formulario.html',
+        zonas_dano=ZONAS_DANO,
+        danos_ocasionados_por=DANOS_OCASIONADOS_POR,
+    )
 
 # 🔹 Endpoint de geocodificación
 @Capturador.route('/geocode')
@@ -44,6 +71,8 @@ def geocode():
     direccion = request.args.get('q', '').strip()
     if not direccion:
         return jsonify([])
+    if len(direccion) > 200:
+        return jsonify([])
     try:
         url = "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates"
         params = {
@@ -52,7 +81,10 @@ def geocode():
             "maxLocations": 5,
             "forStorage": "false"
         }
-        res = requests.get(url, params=params, verify=False)
+        # Se valida el certificado TLS. Si la red usa inspección TLS, la CA
+        # corporativa se indica con la variable de entorno REQUESTS_CA_BUNDLE.
+        res = requests.get(url, params=params, timeout=(3, 10))
+        res.raise_for_status()
         data = res.json()
         resultados = []
         for c in data.get("candidates", []):
@@ -62,8 +94,8 @@ def geocode():
                 "lon": c["location"]["x"]
             })
         return jsonify(resultados)
-    except Exception as e:
-        
+    except (requests.RequestException, ValueError, KeyError, TypeError):
+        logger.exception("error_geocodificacion")
         return jsonify([])
 
 # 🔹 Obtener nombre conductor
@@ -94,10 +126,17 @@ def get_flota():
     No_interno = request.args.get('No_interno', '').strip()
     if not No_interno:
         return jsonify({"Tipologia_interno": None, "movil_valido": False})
+    ufs = ufs_autorizadas_sesion()
+    if not ufs:
+        return jsonify({"Tipologia_interno": None, "movil_valido": False})
     try:
         conn = connect()
         cursor = conn.cursor()
-        cursor.execute("SELECT Tipologia_Movil FROM table_Moviles WHERE No_Movil = ?", (No_interno,))
+        marcadores = ", ".join("?" for _ in ufs)
+        cursor.execute(
+            f"SELECT Tipologia_Movil FROM table_Moviles WHERE No_Movil = ? AND UF IN ({marcadores})",
+            (No_interno, *ufs),
+        )
         row = cursor.fetchone()
         cursor.close()
         conn.close()
@@ -151,6 +190,7 @@ MAX_FILES_COUNT = 5               # Máximo 5 archivos por reporte
 @requiere_permiso('Ingresar_captur_danos')
 def submit_form():
     conn = None # Para asegurar el cierre en caso de error
+    rutas_guardadas = []
     try:
         # --- 1. PREPARAR LISTA DE ARCHIVOS ---
         # Extraemos todos los archivos de todas las llaves (foto_x, video_x, etc.)
@@ -159,6 +199,12 @@ def submit_form():
             for f in request.files.getlist(key):
                 if f.filename:
                     all_files.append((key, f))
+
+        for key, f in all_files:
+            if f.filename == "blob":
+                extension = ".jpg" if "foto" in key.lower() else ".webm"
+                f.filename = f"{key}{extension}"
+        validate_uploads([f for _, f in all_files])
 
         # --- 2. VALIDACIONES ---
         if len(all_files) > MAX_FILES_COUNT:
@@ -175,6 +221,8 @@ def submit_form():
         # (Tu código de recolección de datos se mantiene igual)
         fecha_evento = request.form.get('Fecha')
         UF = request.form.get('UF')
+        if not usuario_puede_acceder_uf(UF):
+            return jsonify({"error": "No tiene autorización para registrar en esa UF."}), 403
         Movil = request.form.get('Movil')
         codigo = request.form.get('Codigo')
         nombre = request.form.get('Nombre')
@@ -191,6 +239,23 @@ def submit_form():
         lon = request.form.get('Longitud')
         direccion_completa = f"{lat},{lon}" if lat and lon else ""
         fecha_registro = datetime.now()
+
+        campos_requeridos = (
+            fecha_evento, UF, Movil, codigo, nombre, Area, ruta, tipologia,
+            Version_libre, parte_afectada, dano_ocasionado, Zona_dano,
+            registrador, centro_operaciones, request.form.get('Direccion'),
+        )
+        if any(valor is None or not valor.strip() for valor in campos_requeridos):
+            return jsonify({"error": "Complete todos los campos obligatorios."}), 400
+
+        if Zona_dano not in ZONAS_DANO:
+            return jsonify({"error": "La zona del daño no es válida."}), 400
+
+        if dano_ocasionado not in DANOS_OCASIONADOS_POR:
+            return jsonify({"error": "La causa del daño no es válida."}), 400
+
+        if len(parte_afectada) > 200:
+            return jsonify({"error": "La parte afectada no puede superar 200 caracteres."}), 400
 
 
         # 1. Obtener la fecha de hoy
@@ -216,7 +281,7 @@ def submit_form():
         conn = connect()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT 1 FROM table_Moviles WHERE No_Movil = ?", (Movil,))
+        cursor.execute("SELECT 1 FROM table_Moviles WHERE No_Movil = ? AND UF = ?", (Movil, UF))
         if not cursor.fetchone():
             cursor.close()
             conn.close()
@@ -240,42 +305,34 @@ def submit_form():
         damage_folder = FILES_DIR/str(damage_id)
         damage_folder.mkdir(parents=True, exist_ok=True)
 
-        def allowed_file(filename):
-            ALLOWED_EXT = {'.jpg', '.jpeg', '.png', '.gif', '.mp4', '.avi', 
-                           '.mov', '.mp3', '.wav', '.pdf', '.ogg', '.webm','.opus'}
-            return Path(filename).suffix.lower() in ALLOWED_EXT
-
         for key, f in all_files:
-            filename = f.filename
-            
-            # Limpiar nombre si viene de Blob de JS
-            if not filename or filename.strip() == "" or filename == "blob":
-                ext = ".jpg" if "foto" in key else ".webm"
-                filename = f"{key}{ext}"
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_name = secure_filename(f.filename)
+            final_name = f"{Path(safe_name).stem}_{timestamp}{Path(safe_name).suffix.lower()}"
+            path = store_upload(f, damage_folder, final_name)
+            rutas_guardadas.append(path)
 
-            if allowed_file(filename):
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                name = Path(filename).stem
-                ext = Path(filename).suffix
-                final_name = f"{name}_{timestamp}{ext}"
-                path = damage_folder / final_name
-                
-                # Guardar en disco
-                f.save(str(path))
-
-                # Registrar en tabla de archivos
-                cursor.execute("""
-                    INSERT INTO table_damage_files (DamageId, FileName, FilePath)
-                    VALUES (?, ?, ?)
-                """, (damage_id, final_name, str(path)))
+            cursor.execute("""
+                INSERT INTO table_damage_files (DamageId, FileName, FilePath)
+                VALUES (?, ?, ?)
+            """, (damage_id, path.name, str(path)))
                 
         conn.commit()
              
         
         return jsonify({"mensaje": "Registro exitoso", "id": damage_id})
     
-    except Exception as e:
+    except AttachmentValidationError as error:
+        if conn:
+            conn.rollback()
+        for ruta in rutas_guardadas:
+            ruta.unlink(missing_ok=True)
+        return jsonify({"error": str(error)}), 400
+    except Exception:
         if conn: conn.rollback()
-        return jsonify({"error": str(e)}), 500
+        for ruta in rutas_guardadas:
+            ruta.unlink(missing_ok=True)
+        logger.exception("error_guardar_adjuntos_capturador")
+        return jsonify({"error": "No fue posible guardar los archivos."}), 500
     finally:
         if conn: conn.close()

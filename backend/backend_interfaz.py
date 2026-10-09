@@ -1,6 +1,7 @@
 from flask import Flask, app, render_template, request, jsonify, send_from_directory, send_file, url_for, abort, redirect,session, g
 import os
 import secrets
+import threading
 from mimetypes import guess_type
 from config import connect
 from datetime import datetime,timedelta
@@ -20,6 +21,8 @@ from sincronizar_operadores import sincronizar_operadores
 from dotenv import load_dotenv
 from flask_wtf.csrf import CSRFProtect
 from logger import logger
+from attachment_security import apply_attachment_headers
+from schema_migrations import SchemaValidationError, validate_required_schema
 
 load_dotenv()
 
@@ -38,8 +41,68 @@ Interfaz.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=60)
 Interfaz.config["SESSION_REFRESH_EACH_REQUEST"] = True
 Interfaz.config["SESSION_COOKIE_HTTPONLY"] = True
 Interfaz.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# Cinco archivos de 5 MB permiten hasta 25 MB de contenido, más la sobrecarga
+# del formato multipart; también deja espacio para videos tutoriales de hasta 20 MB.
+Interfaz.config["MAX_CONTENT_LENGTH"] = 26 * 1024 * 1024
 
 Interfaz.secret_key = os.environ["SECRET_KEY"]
+
+# Cada proceso de Gunicorn es independiente. Validar una vez en su
+# primera petición; nunca al importar el módulo ni aplicando migraciones automáticamente.
+_SCHEMA_VALIDATION_PID = None
+_SCHEMA_VALIDATION_ERROR = None
+_SCHEMA_VALIDATION_LOCK = threading.Lock()
+
+
+def _validar_esquema_una_vez_por_proceso():
+    global _SCHEMA_VALIDATION_PID, _SCHEMA_VALIDATION_ERROR
+    process_id = os.getpid()
+    if _SCHEMA_VALIDATION_PID == process_id:
+        return _SCHEMA_VALIDATION_ERROR
+
+    with _SCHEMA_VALIDATION_LOCK:
+        if _SCHEMA_VALIDATION_PID == process_id:
+            return _SCHEMA_VALIDATION_ERROR
+
+        conn = None
+        error = None
+        try:
+            conn = connect()
+        except Exception:
+            error = "No fue posible conectar con SQL Server para validar el esquema requerido."
+            logger.error("validacion_esquema_sqlserver_sin_conexion")
+        else:
+            try:
+                validate_required_schema(conn)
+            except SchemaValidationError as exc:
+                error = str(exc)
+                logger.error("validacion_esquema_sqlserver_incompatible: %s", error)
+            except Exception:
+                error = "No fue posible inspeccionar el esquema de SQL Server. Revise la conectividad y permisos de metadatos."
+                logger.error("validacion_esquema_sqlserver_fallo_inesperado")
+            finally:
+                conn.close()
+
+        # También se conserva el fallo en caché. Corrija el esquema y reinicie
+        # Gunicorn para reintentar; así no se abre una conexión por petición fallida.
+        _SCHEMA_VALIDATION_PID = process_id
+        _SCHEMA_VALIDATION_ERROR = error
+        return error
+
+
+@Interfaz.before_request
+def validar_esquema_antes_de_atender():
+    error = _validar_esquema_una_vez_por_proceso()
+    if error:
+        return error, 503
+
+
+CDN_LEAFLET = "https://unpkg.com/leaflet@1.9.4/dist/"
+CDN_SCRIPTS = (
+    CDN_LEAFLET,
+    "https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/",
+    "https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/",
+)
 
 
 @Interfaz.context_processor
@@ -52,34 +115,22 @@ def incluir_nonce_csp():
 @Interfaz.after_request
 def agregar_csp(response):
     nonce = getattr(g, "csp_nonce", None) or secrets.token_urlsafe(18)
-    rutas_n01 = {
-        "Historico_danos.index",
-        "Historico_movil.index",
-        "Modulo_unificado.index",
-    }
+    if request.endpoint == "Modulo_unificado.descargar_archivo":
+        return apply_attachment_headers(response)
 
-    if request.endpoint in rutas_n01:
-        politica = (
-            "default-src 'self'; base-uri 'self'; object-src 'none'; "
-            "frame-ancestors 'self'; form-action 'self'; "
-            f"script-src 'self' 'nonce-{nonce}' https://unpkg.com; "
-            "script-src-attr 'none'; "
-            "style-src 'self' 'unsafe-inline' https://unpkg.com; "
-            "img-src 'self' data: blob: https://unpkg.com https://*.tile.openstreetmap.org; "
-            "connect-src 'self' https://nominatim.openstreetmap.org; "
-            "font-src 'self' data: https://unpkg.com; media-src 'self' blob:"
-        )
-    else:
-        # Compatibilidad temporal para páginas existentes que aún usan JS inline.
-        politica = (
-            "default-src 'self'; base-uri 'self'; object-src 'none'; "
-            "frame-ancestors 'self'; form-action 'self'; "
-            "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://leaflet.github.io; "
-            "style-src 'self' 'unsafe-inline' https://unpkg.com; "
-            "img-src 'self' data: blob: https://unpkg.com https://*.tile.openstreetmap.org; "
-            "connect-src 'self' https://nominatim.openstreetmap.org; "
-            "font-src 'self' data: https://unpkg.com; media-src 'self' blob:"
-        )
+    # Política única para todas las páginas: sin JavaScript en línea salvo con
+    # nonce, sin manejadores on*= y solo las librerías externas con versión fija
+    # (cada <script> externo lleva además su hash SRI en la plantilla).
+    politica = (
+        "default-src 'self'; base-uri 'self'; object-src 'none'; "
+        "frame-ancestors 'self'; form-action 'self'; "
+        f"script-src 'self' 'nonce-{nonce}' {' '.join(CDN_SCRIPTS)}; "
+        "script-src-attr 'none'; "
+        f"style-src 'self' 'unsafe-inline' {CDN_LEAFLET}; "
+        f"img-src 'self' data: blob: {CDN_LEAFLET} https://*.tile.openstreetmap.org; "
+        "connect-src 'self' https://nominatim.openstreetmap.org; "
+        "font-src 'self' data:; media-src 'self' blob:"
+    )
 
     response.headers["Content-Security-Policy"] = politica
     return response
@@ -109,7 +160,7 @@ def proteger_rutas():
 
     # La ruta de cambio y el cierre de sesión siguen permitidos aunque haya
     # una obligación pendiente. Profile.index consulta el estado para notificar
-    # al frontend y permite mostrar la pantalla de cambio.
+    # a la interfaz de usuario y permite mostrar la pantalla de cambio.
     if request.endpoint in {
         'Profile.cambiar_password',
         'Modulo_login.logout',
@@ -191,9 +242,6 @@ def page_not_found(e):
 
 
 if __name__ == "__main__":
-        # Ejemplo: Limitar a 16 Megabytes el total de la petición
-        Interfaz.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
-        
         
        
         #sincronizar_operadores()

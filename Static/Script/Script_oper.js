@@ -1451,7 +1451,10 @@ document.addEventListener("DOMContentLoaded", () => {
             const div = document.createElement("div");
             div.className = "adjunto-item";
 
-            const ext = file.FileName.split(".").pop().toLowerCase();
+            const nombreArchivo = String(file.FileName || "Adjunto");
+            const ext = nombreArchivo.includes(".")
+                ? nombreArchivo.split(".").pop().toLowerCase()
+                : "";
 
             const url = `/archivo/${encodeURIComponent(file.Id)}?tipo=${encodeURIComponent(file.TipoArchivo)}`;
 
@@ -1460,16 +1463,22 @@ document.addEventListener("DOMContentLoaded", () => {
                 img.src = url;
                 img.onclick = () => abrirLightbox(url);
                 div.appendChild(img);
-            } else if (["mp4", "avi", "mov", "webm"].includes(ext)) {
+            } else if (["mp4", "webm"].includes(ext)) {
                 const video = document.createElement("video");
                 video.src = url;
                 video.controls = true;
                 div.appendChild(video);
+            } else if (["mp3", "ogg", "wav"].includes(ext)) {
+                const audio = document.createElement("audio");
+                audio.src = url;
+                audio.controls = true;
+                div.appendChild(audio);
             } else {
                 const a = document.createElement("a");
                 a.href = url;
-                a.target = "_blank";
-                a.textContent = file.FileName;
+                a.download = nombreArchivo;
+                a.rel = "noopener noreferrer";
+                a.textContent = nombreArchivo;
                 div.appendChild(a);
             }
 

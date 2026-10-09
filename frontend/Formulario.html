@@ -1,7 +1,7 @@
 {% extends "Interfaz.html" %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous" />
 <link rel="stylesheet" href="{{ url_for('static', filename='Style/Style_captur.css') }}">
 
 {% endblock %}
@@ -82,20 +82,9 @@
 
         <select name="Zona_dano" id="Zona_dano_input" required>
             <option value="" disabled selected hidden>SELECCIONE LA ZONA AFECTADA</option>
-            <option value="LATERAL IZQUIERDO">LATERAL IZQUIERDO</option>
-            <option value="LATERAL DERECHO">LATERAL DERECHO</option>
-            <option value="FRONTAL">FRONTAL</option>
-            <option value="POSTERIOR">POSTERIOR</option>
-            <option value="TECHO">TECHO</option>
-            <option value="ESPEJOS">ESPEJOS</option>
-            <option value="PUERTAS">PUERTAS</option>
-            <option value="VIDRIOS">VIDRIOS</option>
-            <option value="LLANTAS">LLANTAS</option>
-            <option value="ITS">ITS</option>
-            <option value="SIRCI">SIRCI</option>
-            <option value="CARROCERÍA INTERNA">CARROCERÍA INTERNA</option>
-            <option value="TREN MOTRIZ">TREN MOTRIZ</option>
-            <option value="CHASIS">CHASIS</option>
+            {% for zona in zonas_dano %}
+            <option value="{{ zona }}">{{ zona }}</option>
+            {% endfor %}
         </select><br>
 
         <input type="text" id="parte_afectada_input" name="Parte_afectada" placeholder="INGRESE LA PARTE AFECTADA"
@@ -103,13 +92,9 @@
 
         <select name="Dano_ocasionado_por" id="Dano_ocasionado_por_input" required>
             <option value="" disabled selected hidden>SELECCIONE LA CAUSA DEL DAÑO</option>
-            <option value="CONDUCTA OPERACIONAL">CONDUCTA OPERACIONAL</option>
-            <option value="INFRAESTRUCTURA PATIO">INFRAESTRUCTURA PATIO</option>
-            <option value="INFRAESTRUCTURA VIAL">INFRAESTRUCTURA VIAL</option>
-            <option value="VANDALISMO">VANDALISMO</option>
-            <option value="MECÁNICO">MECÁNICO</option>
-            <option value="SINIESTRO VIAL">SINIESTRO VIAL</option>
-            <option value="ALISTAMIENTO">ALISTAMIENTO</option>
+            {% for causa in danos_ocasionados_por %}
+            <option value="{{ causa }}">{{ causa }}</option>
+            {% endfor %}
         </select><br>
 
         <input type="text" name="Inspector" placeholder="Inspector" value="{{ session.get('usuario', 'EM00084') }}"
@@ -125,7 +110,7 @@
 
         <!-- Evidencias -->
         <label for="evidencia"><b>SUBA LAS EVIDENCIAS:</b></label><br>
-        <input type="file" id="evidencia" name="Evidencia" accept="image/*,video/*,audio/*,.pdf" multiple><br><br>
+        <input type="file" id="evidencia" name="Evidencia" accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mp3,.ogg,.wav,.pdf,.avi,.mov,.opus" multiple><br><br>
         <div id="lista_adjuntos"></div>
 
         <!-- Captura de fotos -->
@@ -231,7 +216,7 @@
 
 {% block extra_js %}
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 
 <script src="{{ url_for('static', filename='Script/Script_captur.js') }}"></script>
 

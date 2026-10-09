@@ -4,7 +4,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='Style/Style_modulos.css') }}">
 <!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous" />
 
 <!--
     Estilos del nuevo look del modal "Añadir info" de Relaciones Laborales.
@@ -656,7 +656,7 @@
             <div id="cardEvidencias" class="card-seccion">
                 <div class="card-seccion-header">📎 Evidencias</div>
                 <label id="lblEvidencia" for="evidencia">SUBA LAS EVIDENCIAS:</label><br>
-                <input type="file" id="evidencia" accept="image/*,video/*,audio/*,.pdf" multiple><br><br>
+                <input type="file" id="evidencia" accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mp3,.ogg,.wav,.pdf,.avi,.mov,.opus" multiple><br><br>
                 <div id="lista_adjuntos"></div>
             </div>
 
@@ -766,7 +766,7 @@
             {% endif %}
             <button id="btn_guardar_modificacion" type="button" class="btn btn-success" style="display:none;">Guardar información</button>
             <label id="btn_elegir_archivos_edicion" for="archivos_edicion" class="btn" style="display:none; background:#e0e0e0; color:#333;">Elegir archivos</label>
-            <input type="file" id="archivos_edicion" accept="image/*,video/*,audio/*,.pdf" multiple style="display:none;">
+            <input type="file" id="archivos_edicion" accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mp3,.ogg,.wav,.pdf,.avi,.mov,.opus" multiple style="display:none;">
             <button id="btn_cancelar_modificacion" type="button" class="btn" style="display:none;">Cancelar</button>
         </div>
         <div id="lista_archivos_edicion" style="display:none; margin-top:12px;"></div>
@@ -803,7 +803,7 @@
 </script>
 
 <!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script src="{{ url_for('static', filename='Script/Script_utils.js') }}"></script>
 
 <script src="{{ url_for('static', filename='Script/Script_oper.js') }}"></script>

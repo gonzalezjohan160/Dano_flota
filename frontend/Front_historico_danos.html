@@ -5,13 +5,20 @@
         <!-- Leaflet CSS -->
     <link
     rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous"
     />
     <style>
         .paginacion-tabla { display:flex; align-items:center; justify-content:flex-end; gap:6px; padding:10px 4px; font-size:13px; color:#5f6368; }
         .btn-paginacion { width:28px; height:28px; border:none; border-radius:50%; background:transparent; color:#5f6368; font-size:16px; cursor:pointer; }
         .btn-paginacion:hover:not(:disabled) { background:#eee; }
         .btn-paginacion:disabled { color:#ccc; cursor:not-allowed; }
+        .filtro-estados { display:flex; align-items:center; gap:10px; border:none; margin:0; padding:0; }
+        .filtro-estados legend { float:left; padding:0; margin-right:4px; font-weight:bold; }
+        .filtro-estados label { display:flex; align-items:center; gap:3px; font-size:13px; cursor:pointer; white-space:nowrap; }
+        .estado-caso { font-weight:bold; }
+        .estado-abierto { color:#1a73e8; }
+        .estado-cerrado { color:#188038; }
+        .estado-eliminado { color:#c5221f; }
     </style>
 {% endblock %}
    
@@ -31,14 +38,17 @@
             </select>
         </div>
 
-        <div class="filtro-inline">
-            <label for="filtroEstado">ESTADO:</label>
-            <select id="filtroEstado" class="control-compacto">
-                <option value="todos" {% if filtro_estado == 'todos' %}selected{% endif %}>Todos</option>
-                <option value="abiertos" {% if filtro_estado == 'abiertos' %}selected{% endif %}>Abiertos</option>
-                <option value="cerrados" {% if filtro_estado == 'cerrados' %}selected{% endif %}>Cerrados</option>
-            </select>
-        </div>
+        <fieldset class="filtro-inline filtro-estados" id="filtroEstados">
+            <legend>ESTADO:</legend>
+            <label><input type="checkbox" id="estadoTodos"
+                {% if estados|length == 3 %}checked{% endif %}> Todos</label>
+            <label><input type="checkbox" name="estado" value="abiertos"
+                {% if 'abiertos' in estados %}checked{% endif %}> Abiertos</label>
+            <label><input type="checkbox" name="estado" value="cerrados"
+                {% if 'cerrados' in estados %}checked{% endif %}> Cerrados</label>
+            <label><input type="checkbox" name="estado" value="eliminados"
+                {% if 'eliminados' in estados %}checked{% endif %}> Eliminados</label>
+        </fieldset>
 
         <div class="filtro-inline">
             <label for="fecha_inicio">Inicio:</label>
@@ -103,6 +113,10 @@
                     </th>
                     <th>
                         ADJUNTOS
+                        <input disabled style="background:transparent; border:none;">
+                    </th>
+                    <th>
+                        ESTADO
                         <input disabled style="background:transparent; border:none;">
                     </th>
                 </tr>
@@ -232,7 +246,7 @@
 
     <!-- Leaflet JS -->
     <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous">
     </script>
 
     <script src="{{ url_for('static', filename='Script/Mult_formularios.js') }}"></script>

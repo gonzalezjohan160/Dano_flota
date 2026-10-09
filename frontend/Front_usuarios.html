@@ -27,19 +27,42 @@
 {% endwith %}
 
 <h2>Crear Usuario</h2>
-<form method="POST" class="form-rol">
+<form method="POST" class="form-rol" autocomplete="off">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="text" name="Nombre" placeholder="Nombre" required>
-    <input type="int" name="IDusuario" placeholder="ID" required>
-    <input type="text" name="username" placeholder="Usuario" required>
-    <input type="password" name="password" placeholder="Contraseña" required>
+    <input type="text" name="Nombre" placeholder="Nombre" maxlength="100" required>
+    <input type="number" name="IDusuario" placeholder="ID" min="1" required>
+    <input type="text" name="username" placeholder="Usuario" maxlength="50" required>
+    <input type="password" name="password" placeholder="Contraseña" minlength="10" autocomplete="new-password"
+        title="Mínimo 10 caracteres, con mayúsculas, minúsculas y números" required>
     <select name="UF"  required>
         <option value="" disabled selected hidden>UF</option>
         <option value="10">10</option>
         <option value="16">16</option>
         <option value="TRANSVERSAL">Tranversal</option>
     </select>
-    <input type="text" name="Email" placeholder="correo" required>
+    <input type="email" name="Email" placeholder="correo" maxlength="100" required>
     <button type="submit">Crear Usuario</button>
 </form>
+<p>La contraseña debe tener mínimo 10 caracteres, con mayúsculas, minúsculas y números. El usuario deberá cambiarla en su primer ingreso.</p>
+
+{% if puede_editar %}
+<h2>Editar Usuario existente</h2>
+<form method="POST" action="{{ url_for('Modulo_usuario.editar_usuario') }}" class="form-rol" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="number" name="IDusuario" placeholder="ID del usuario a editar" min="1" required>
+    <input type="text" name="Nombre" placeholder="Nuevo nombre" maxlength="100">
+    <input type="text" name="username" placeholder="Nuevo usuario" maxlength="50">
+    <input type="password" name="password" placeholder="Contraseña temporal" minlength="10" autocomplete="new-password">
+    <select name="UF">
+        <option value="" selected>UF sin cambio</option>
+        <option value="10">10</option>
+        <option value="16">16</option>
+        <option value="TRANSVERSAL">Tranversal</option>
+    </select>
+    <input type="email" name="Email" placeholder="Nuevo correo" maxlength="100">
+    <button type="submit">Guardar cambios</button>
+</form>
+<p>Solo se modifican los campos diligenciados. El estado activo/inactivo se gestiona en Asignar permisos. Una contraseña temporal obliga al usuario a cambiarla en su siguiente ingreso.</p>
+{% endif %}
+</div>
 {% endblock %}

@@ -310,7 +310,7 @@
 
                 {% if puede_eliminar %}
                 <form action="{{ url_for('Tutoriales.eliminar', tutorial_id=tutorial.id) }}" method="post"
-                    onsubmit="return confirm('¿Está seguro de eliminar este video? Esta acción eliminará el archivo y no se puede deshacer.');">
+                    class="form-eliminar-tutorial">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                     <button class="tutoriales-delete" type="submit">

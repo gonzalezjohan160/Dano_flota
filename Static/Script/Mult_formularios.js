@@ -435,7 +435,10 @@ function renderGaleria(galeria, archivos) {
         const div = document.createElement('div');
         div.classList.add('adjunto-item');
 
-        const ext = file.FileName.split('.').pop().toLowerCase();
+        const nombreArchivo = String(file.FileName || "Adjunto");
+        const ext = nombreArchivo.includes(".")
+            ? nombreArchivo.split(".").pop().toLowerCase()
+            : "";
         const url = "/archivo/" + encodeURIComponent(file.Id) + "?tipo=" + encodeURIComponent(file.TipoArchivo);
 
         if (['jpg','jpeg','png','gif','webp'].includes(ext)) {
@@ -446,17 +449,24 @@ function renderGaleria(galeria, archivos) {
             }
             div.appendChild(img);
 
-        } else if (['mp4','mov','avi','webm'].includes(ext)) {
+        } else if (['mp4','webm'].includes(ext)) {
             const video = document.createElement('video');
             video.src = url;
             video.controls = true;
             div.appendChild(video);
 
+        } else if (['mp3','ogg','wav'].includes(ext)) {
+            const audio = document.createElement('audio');
+            audio.src = url;
+            audio.controls = true;
+            div.appendChild(audio);
+
         } else {
             const link = document.createElement('a');
             link.href = url;
-            link.target = '_blank';
-            link.textContent = file.FileName;
+            link.download = nombreArchivo;
+            link.rel = 'noopener noreferrer';
+            link.textContent = nombreArchivo;
             div.appendChild(link);
         }
 

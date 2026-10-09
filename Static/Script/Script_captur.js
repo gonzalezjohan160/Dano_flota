@@ -109,7 +109,9 @@ patioSelect.addEventListener('change', () => {
     longitud.value = lon;
     direccionInput.value = patio.replace("_", " ");
     if (marker) map.removeLayer(marker);
-    marker = L.marker([lat, lon]).addTo(map).bindPopup(`<b>${patio}</b>`).openPopup();
+    const popup = document.createElement('b');
+    popup.textContent = patio;
+    marker = L.marker([lat, lon]).addTo(map).bindPopup(popup).openPopup();
     map.setView([lat, lon], 17);
 });
 
@@ -138,7 +140,9 @@ direccionInput.addEventListener('input', () => {
                     longitud.value = item.lon;
                     sugerencias.innerHTML = '';
                     if (marker) map.removeLayer(marker);
-                    marker = L.marker([item.lat, item.lon]).addTo(map).bindPopup(`<b>${item.nombre}</b>`).openPopup();
+                    const popup = document.createElement('b');
+                    popup.textContent = item.nombre;
+                    marker = L.marker([item.lat, item.lon]).addTo(map).bindPopup(popup).openPopup();
                     map.setView([item.lat, item.lon], 17);
                 };
                 sugerencias.appendChild(div);
@@ -679,23 +683,48 @@ function mostrarModalDuplicado(fecha, movil, codigo, zona_dano) {
         align-items:center; justify-content:center; z-index:99999;
     `;
 
-    modal.innerHTML = `
-        <div style="background:white; padding:25px; border-radius:12px; width:320px; text-align:center; font-family:sans-serif;">
-            <h3 style="color:#d9534f;">⚠ Registro Duplicado</h3>
-            <p>Ya existe un reporte para el móvil <b>${movil}</b> en esta fecha con la zona de daño <b>${zona_dano}</b>.</p>
-            <div style="margin-top:20px;">
-                <button id="btnCancelarModal" style="padding:10px; cursor:pointer;">Cancelar</button>
-                <button id="btnForzarEnvio" style="background:#d9534f; color:white; padding:10px; border:none; border-radius:5px; cursor:pointer;">Enviar de todos modos</button>
-            </div>
-        </div>
-    `;
+    const contenido = document.createElement("div");
+    contenido.style.cssText = "background:white; padding:25px; border-radius:12px; width:320px; text-align:center; font-family:sans-serif;";
 
+    const titulo = document.createElement("h3");
+    titulo.style.color = "#d9534f";
+    titulo.textContent = "⚠ Registro Duplicado";
+    contenido.appendChild(titulo);
+
+    const mensaje = document.createElement("p");
+    mensaje.append("Ya existe un reporte para el móvil ");
+    const movilTexto = document.createElement("b");
+    movilTexto.textContent = movil;
+    mensaje.appendChild(movilTexto);
+    mensaje.append(" en esta fecha con la zona de daño ");
+    const zonaTexto = document.createElement("b");
+    zonaTexto.textContent = zona_dano;
+    mensaje.appendChild(zonaTexto);
+    mensaje.append(".");
+    contenido.appendChild(mensaje);
+
+    const acciones = document.createElement("div");
+    acciones.style.marginTop = "20px";
+
+    const btnCancelar = document.createElement("button");
+    btnCancelar.id = "btnCancelarModal";
+    btnCancelar.style.cssText = "padding:10px; cursor:pointer;";
+    btnCancelar.textContent = "Cancelar";
+
+    const btnForzar = document.createElement("button");
+    btnForzar.id = "btnForzarEnvio";
+    btnForzar.style.cssText = "background:#d9534f; color:white; padding:10px; border:none; border-radius:5px; cursor:pointer;";
+    btnForzar.textContent = "Enviar de todos modos";
+
+    acciones.append(btnCancelar, btnForzar);
+    contenido.appendChild(acciones);
+    modal.appendChild(contenido);
     document.body.appendChild(modal);
-    document.getElementById("btnCancelarModal").onclick = () => modal.remove();
-    document.getElementById("btnForzarEnvio").onclick = () => {
+    btnCancelar.addEventListener("click", () => modal.remove());
+    btnForzar.addEventListener("click", () => {
         modal.remove();
         enviarFormulario();
-    };
+    });
 }
 
 // 5. Función de Compresión (Soporte para enviarFormulario)

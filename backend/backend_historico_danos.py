@@ -3,8 +3,13 @@ import os
 from io import BytesIO
 import pandas as pd
 from config import connect
-from datetime import datetime, timedelta
-from backend_security import login_required, requiere_permiso
+from datetime import datetime
+from backend_security import (
+    login_required,
+    requiere_permiso,
+    usuario_puede_acceder_uf,
+    ufs_autorizadas_sesion,
+)
 from config import BASE_DIR
 
 Historico_danos = Blueprint(
@@ -15,33 +20,73 @@ Historico_danos = Blueprint(
 )
 
 
+ESTADOS_HISTORICO = ('abiertos', 'cerrados', 'eliminados')
+# Al abrir el módulo no se muestran los casos eliminados.
+ESTADOS_POR_DEFECTO = ('abiertos', 'cerrados')
+CONDICION_ESTADO = {
+    'abiertos': "(ISNULL(d.eliminado, 0) = 0 AND ISNULL(d.estado_caso, 0) = 0)",
+    'cerrados': "(ISNULL(d.eliminado, 0) = 0 AND d.estado_caso = 1)",
+    'eliminados': "(ISNULL(d.eliminado, 0) = 1)",
+}
+
+
+class FiltroInvalido(ValueError):
+    """Filtro con formato incorrecto; el mensaje se puede mostrar al usuario."""
+
+
+def _leer_fechas():
+    """Fechas opcionales del evento (AAAA-MM-DD). Vacías = sin filtro de fecha."""
+    fechas = {}
+    for campo, nombre in (('fecha_inicio', 'inicio'), ('fecha_fin', 'fin')):
+        texto = (request.args.get(campo) or '').strip()
+        if not texto:
+            fechas[campo] = None
+            continue
+        try:
+            fechas[campo] = datetime.strptime(texto, "%Y-%m-%d").date()
+        except ValueError:
+            raise FiltroInvalido(f"La fecha de {nombre} no es válida.") from None
+    if fechas['fecha_inicio'] and fechas['fecha_fin'] and fechas['fecha_inicio'] > fechas['fecha_fin']:
+        raise FiltroInvalido("La fecha de inicio no puede ser posterior a la fecha de fin.")
+    return fechas['fecha_inicio'], fechas['fecha_fin']
+
+
+def _leer_estados():
+    """Estados marcados en las casillas; si no llega ninguno se usan los de por defecto."""
+    estados = [e for e in request.args.getlist('estado') if e in ESTADOS_HISTORICO]
+    return list(dict.fromkeys(estados)) or list(ESTADOS_POR_DEFECTO)
+
+
+def _agregar_filtro_fechas(filtros_sql, parametros, fecha_inicio, fecha_fin):
+    if fecha_inicio:
+        filtros_sql.append("d.Fecha_evento >= ?")
+        parametros.append(fecha_inicio)
+    if fecha_fin:
+        # Incluye todo el día final.
+        filtros_sql.append("d.Fecha_evento < DATEADD(day, 1, CAST(? AS date))")
+        parametros.append(fecha_fin)
+
+
+def _agregar_filtro_estados(filtros_sql, estados):
+    condiciones = [CONDICION_ESTADO[e] for e in ESTADOS_HISTORICO if e in estados]
+    filtros_sql.append("(" + " OR ".join(condiciones) + ")" if condiciones else "1 = 0")
+
+
 # 🔹 Mostrar la tabla principal
 @Historico_danos.route('/')
 @login_required
 @requiere_permiso('Ingresar_historico_danos')
 def index():
+    try:
+        fecha_inicio, fecha_fin = _leer_fechas()
+    except FiltroInvalido as error:
+        return str(error), 400
+    estados = _leer_estados()
+
     conn = connect()
     cursor = conn.cursor()
 
-    # 🔹 Recibir fechas desde parámetros GET
-    fecha_inicio_str = request.args.get('fecha_inicio')
-    fecha_fin_str = request.args.get('fecha_fin')
-
-    # Si no envían fechas, por defecto traer los últimos 2 meses
-    if not fecha_inicio_str or not fecha_fin_str:
-        fecha_fin = datetime.today()
-        fecha_inicio = fecha_fin - timedelta(days=62)
-        fecha_inicio_str = fecha_inicio.strftime("%Y-%m-%d")
-        fecha_fin_str = fecha_fin.strftime("%Y-%m-%d")
-    else:
-        fecha_inicio = datetime.fromisoformat(fecha_inicio_str)
-        fecha_fin = datetime.fromisoformat(fecha_fin_str)
-        # Validar máximo 2 meses
-        if fecha_fin - fecha_inicio > timedelta(days=62):
-            return "El rango de fechas no puede superar 2 meses", 400
-        
     filtro_uf = request.args.get('filtro_uf', 'todos')
-    filtro_estado = request.args.get('filtro_estado', 'todos')
     filtros = {
         'id': request.args.get('f_id', '').strip(),
         'fecha': request.args.get('f_fecha', '').strip(),
@@ -55,15 +100,20 @@ def index():
         pagina = 1
     registros_por_pagina = 30
 
-    filtros_sql = ["d.Fecha_evento BETWEEN ? AND ?"]
-    parametros = [fecha_inicio_str, fecha_fin_str]
+    filtros_sql = []
+    parametros = []
+    _agregar_filtro_fechas(filtros_sql, parametros, fecha_inicio, fecha_fin)
+    ufs = ufs_autorizadas_sesion()
+    if ufs:
+        marcadores = ", ".join("?" for _ in ufs)
+        filtros_sql.append(f"d.UF IN ({marcadores})")
+        parametros.extend(ufs)
+    else:
+        filtros_sql.append("1 = 0")
     if filtro_uf in ('10', '16'):
         filtros_sql.append("d.UF = ?")
         parametros.append(filtro_uf)
-    if filtro_estado == 'abiertos':
-        filtros_sql.append("d.estado_caso = 0")
-    elif filtro_estado == 'cerrados':
-        filtros_sql.append("d.estado_caso = 1")
+    _agregar_filtro_estados(filtros_sql, estados)
     if filtros['id']:
         filtros_sql.append("CAST(d.Id AS varchar(20)) LIKE ?")
         parametros.append(f"%{filtros['id']}%")
@@ -94,6 +144,7 @@ def index():
                 d.Id, d.Fecha_evento, d.Movil, d.Fecha_registro, d.UF, d.Codigo, d.Nombre, d.Ruta,
                 d.Tipologia, d.Direccion, d.Version_libre, d.Parte_afectada, d.Dano_ocasionado,
                 d.Zona_dano, d.Registrador, d.Centro_operaciones, d.Area, ISNULL(d.estado_caso, 0) AS estado_caso,
+                ISNULL(d.eliminado, 0) AS eliminado,
                 CASE WHEN ISNULL(d.estado_caso, 0) = 1 THEN COALESCE(
                     (SELECT MAX(l.Fecha_registro) FROM table_info_labora l WHERE l.Id_damage_to_fleet = d.Id),
                     cierre_modulos.Fecha_cierre
@@ -206,10 +257,10 @@ def index():
         registros=registros,
         pagina=pagina,
         total_registros=total_registros,
-        fecha_inicio=fecha_inicio_str,
-        fecha_fin=fecha_fin_str,
+        fecha_inicio=fecha_inicio.isoformat() if fecha_inicio else "",
+        fecha_fin=fecha_fin.isoformat() if fecha_fin else "",
         filtro_uf=filtro_uf,
-        filtro_estado=filtro_estado,
+        estados=estados,
         filtros=filtros
     )
     # Traemos todos los archivos
@@ -227,6 +278,12 @@ def detalle(id_damage):
     registro_main = cursor.fetchone()
     columnas = [col[0] for col in cursor.description]
     registro = dict(zip(columnas, registro_main)) if registro_main else {}
+    if not registro:
+        conn.close()
+        abort(404)
+    if not usuario_puede_acceder_uf(registro.get("UF")):
+        conn.close()
+        abort(403)
 
     # OPERACIONES
     cursor.execute("""
@@ -363,28 +420,26 @@ def exportar_excel():
     if es_exportacion_laboral and 'Ingresar_modulo__laboral' not in session.get('permisos', []):
         abort(403)
 
-    fecha_inicio_str = request.args.get('fecha_inicio')
-    fecha_fin_str = request.args.get('fecha_fin')
-
-    if not fecha_inicio_str or not fecha_fin_str:
-        return "Debe enviar fecha_inicio y fecha_fin", 400
-
-    # Convertir a datetime
-    fecha_inicio = datetime.fromisoformat(fecha_inicio_str)
-    fecha_fin = datetime.fromisoformat(fecha_fin_str)
-
-    # Validar que no supere 2 meses
-    if fecha_fin - fecha_inicio > timedelta(days=62):  # ~2 meses
-        return "El rango de fechas no puede superar 2 meses", 400
+    try:
+        fecha_inicio, fecha_fin = _leer_fechas()
+    except FiltroInvalido as error:
+        return str(error), 400
 
     filtro_uf = request.args.get('filtro_uf', 'todos')
+    # Solo RRLL usa filtro_estado (pendientes / gestionados / cerrados).
     filtro_estado = request.args.get('filtro_estado', 'todos')
 
-    conn = connect()
-    cursor = conn.cursor()
-
-    filtros_sql = ["d.Fecha_evento >= ?", "d.Fecha_evento < DATEADD(day, 1, ?)"]
-    parametros = [fecha_inicio_str, fecha_fin_str]
+    # Los casos eliminados nunca se exportan.
+    filtros_sql = ["ISNULL(d.eliminado, 0) = 0"]
+    parametros = []
+    _agregar_filtro_fechas(filtros_sql, parametros, fecha_inicio, fecha_fin)
+    ufs = ufs_autorizadas_sesion()
+    if ufs:
+        marcadores = ", ".join("?" for _ in ufs)
+        filtros_sql.append(f"d.UF IN ({marcadores})")
+        parametros.extend(ufs)
+    else:
+        filtros_sql.append("1 = 0")
     if filtro_uf in ('10', '16'):
         filtros_sql.append("d.UF = ?")
         parametros.append(filtro_uf)
@@ -438,103 +493,100 @@ def exportar_excel():
             )
         ))""")
     else:
-        if filtro_estado == 'abiertos':
-            filtros_sql.append("d.estado_caso = 0")
-        elif filtro_estado == 'cerrados':
-            filtros_sql.append("d.estado_caso = 1")
+        estados = [e for e in _leer_estados() if e != 'eliminados']
+        if not estados:
+            return "Los casos eliminados no se incluyen en el Excel. Seleccione Abiertos o Cerrados.", 400
+        _agregar_filtro_estados(filtros_sql, estados)
 
-    if es_exportacion_laboral:
-        query = f"""
-            SELECT d.*,
+    where_sql = " AND ".join(filtros_sql)
 
-               (SELECT COUNT(*)
-                FROM table_info_labora l
-                WHERE l.Id_damage_to_fleet = d.Id) AS tiene_laboral,
-
-               ISNULL(d.estado_caso, 0) AS caso_cerrado,
-
+    # Columnas que solo necesita el cálculo del estado de RRLL.
+    columnas_laboral = """,
                CASE WHEN EXISTS (
-                   SELECT 1
-                   FROM table_info_laboral_mult lm
-                   WHERE lm.Id_damage_to_fleet = d.Id
+                   SELECT 1 FROM table_info_laboral_mult lm WHERE lm.Id_damage_to_fleet = d.Id
                ) AND EXISTS (
-                   SELECT 1
-                   FROM table_info_labora l
-                   WHERE l.Id_damage_to_fleet = d.Id
+                   SELECT 1 FROM table_info_labora l2 WHERE l2.Id_damage_to_fleet = d.Id
                ) THEN 1 ELSE 0 END AS cerrado_por_laboral,
-
-               ISNULL((
-                   SELECT TOP 1 estado_oper
-                   FROM table_info_oper o
-                   WHERE o.Id_damage_to_fleet = d.Id
-                   ORDER BY o.Id DESC
-               ), 0) AS estado_oper,
-
-               ISNULL((
-                   SELECT TOP 1 estado_mtto
-                   FROM table_info_mtto m
-                   WHERE m.Id_damage_to_fleet = d.Id
-                   ORDER BY m.Fecha_registro DESC
-               ), 0) AS estado_mtto,
-
-               ISNULL((
-                   SELECT TOP 1 estado_svial
-                   FROM table_info_svial s
-                   WHERE s.Id_damage_to_fleet = d.Id
-                   ORDER BY s.Fecha_registro DESC
-               ), 0) AS estado_svial,
-
-               (
-                   SELECT TOP 1 lm.Pendiente_proceso
-                   FROM table_info_laboral_mult lm
-                   WHERE lm.Id_damage_to_fleet = d.Id
-                   ORDER BY lm.Fecha_registro DESC
-               ) AS pendiente_proceso_actual,
-
+               ISNULL((SELECT TOP 1 estado_oper FROM table_info_oper o2
+                       WHERE o2.Id_damage_to_fleet = d.Id ORDER BY o2.Id DESC), 0) AS estado_oper,
+               ISNULL((SELECT TOP 1 estado_mtto FROM table_info_mtto m2
+                       WHERE m2.Id_damage_to_fleet = d.Id ORDER BY m2.Fecha_registro DESC), 0) AS estado_mtto,
+               ISNULL((SELECT TOP 1 estado_svial FROM table_info_svial s2
+                       WHERE s2.Id_damage_to_fleet = d.Id ORDER BY s2.Fecha_registro DESC), 0) AS estado_svial,
+               (SELECT TOP 1 lm.Pendiente_proceso FROM table_info_laboral_mult lm
+                WHERE lm.Id_damage_to_fleet = d.Id ORDER BY lm.Fecha_registro DESC) AS pendiente_proceso_actual,
                CASE WHEN EXISTS (
-                   SELECT 1
-                   FROM table_mtto_files mf
-                   WHERE mf.DamageToFleetId = d.Id
+                   SELECT 1 FROM table_mtto_files mf WHERE mf.DamageToFleetId = d.Id
                ) THEN 1 ELSE 0 END AS tiene_ot,
+               (SELECT MAX(mf.Fecha_subida) FROM table_mtto_files mf
+                WHERE mf.DamageToFleetId = d.Id) AS fecha_r_laborales""" if es_exportacion_laboral else ""
 
-               (
-                   SELECT TOP 1 o.responsabilidad_operador
-                   FROM table_info_oper o
-                   WHERE o.Id_damage_to_fleet = d.Id
-                   ORDER BY o.Id DESC
-               ) AS responsabilidad_operador,
-
-               (
-                   SELECT TOP 1 o.conciliacion
-                   FROM table_info_oper o
-                   WHERE o.Id_damage_to_fleet = d.Id
-                   ORDER BY o.Id DESC
-               ) AS conciliacion,
-               
-               (
-                   SELECT MAX(mf.Fecha_subida)
-                   FROM table_mtto_files mf 
-                   WHERE mf.DamageToFleetId = d.Id 
-               ) AS fecha_r_laborales
-
-        FROM table_damage_to_fleet d
-        WHERE {' AND '.join(filtros_sql)}
-        ORDER BY d.Id ASC
-    """
-    else:
-        query = f"""
-            SELECT d.*
+    conn = connect()
+    try:
+        cursor = conn.cursor()
+        # Una sola consulta con OUTER APPLY en vez de seis consultas por caso.
+        cursor.execute(f"""
+            SELECT d.Id, d.Fecha_evento, d.Movil, d.Codigo, d.Nombre, d.Area, d.Ruta,
+                   d.Version_libre, d.Zona_dano, d.Parte_afectada, d.Dano_ocasionado,
+                   d.Centro_operaciones, d.Registrador, d.Fecha_registro, d.Direccion,
+                   ISNULL(d.estado_caso, 0) AS estado_caso,
+                   o.Observaciones_operaciones AS oper_observaciones, o.rev_error AS oper_rev_error,
+                   o.Observaciones_correctivos AS oper_correctivos, o.costo_oper AS oper_costo,
+                   o.responsabilidad_operador AS oper_responsabilidad, o.conciliacion AS oper_conciliacion,
+                   o.Fecha_registro AS oper_fecha, o.Usuario_registro_oper AS oper_usuario,
+                   m.Costo AS mtto_costo, m.observaciones AS mtto_observaciones,
+                   m.dano_adicional AS mtto_dano_adicional, m.Fecha_registro AS mtto_fecha,
+                   m.Usuario_registro_mtto AS mtto_usuario,
+                   s.Observaciones_svial AS svial_observaciones,
+                   s.valor_conciliado_terceros AS svial_valor_terceros,
+                   s.conciliado_a_favor AS svial_a_favor, s.Fecha_registro AS svial_fecha,
+                   s.Usuario_registro_svial AS svial_usuario,
+                   l.Tipo_cerrado AS lab_tipo_cerrado, l.Valor_conciliado AS lab_valor_conciliado,
+                   l.Fecha_registro AS lab_fecha, l.Usuario_registro_labora AS lab_usuario
+                   {columnas_laboral}
             FROM table_damage_to_fleet d
-            WHERE {' AND '.join(filtros_sql)}
-            ORDER BY Id ASC
-        """
+            OUTER APPLY (
+                SELECT TOP 1 Observaciones_operaciones, rev_error, Observaciones_correctivos, costo_oper,
+                       responsabilidad_operador, conciliacion, Fecha_registro, Usuario_registro_oper
+                FROM table_info_oper WHERE Id_damage_to_fleet = d.Id
+            ) o
+            OUTER APPLY (
+                SELECT TOP 1 Costo, observaciones, dano_adicional, Fecha_registro, Usuario_registro_mtto
+                FROM table_info_mtto WHERE Id_damage_to_fleet = d.Id
+            ) m
+            OUTER APPLY (
+                SELECT TOP 1 Observaciones_svial, valor_conciliado_terceros, conciliado_a_favor,
+                       Fecha_registro, Usuario_registro_svial
+                FROM table_info_svial WHERE Id_damage_to_fleet = d.Id
+            ) s
+            OUTER APPLY (
+                SELECT TOP 1 Tipo_cerrado, Valor_conciliado, Fecha_registro, Usuario_registro_labora
+                FROM table_info_labora WHERE Id_damage_to_fleet = d.Id
+            ) l
+            WHERE {where_sql}
+            ORDER BY d.Id ASC
+        """, parametros)
+        columnas = [col[0] for col in cursor.description]
+        registros = [dict(zip(columnas, row)) for row in cursor.fetchall()]
 
-    cursor.execute(query, parametros)
-    columnas = [col[0] for col in cursor.description]
-    registros = [dict(zip(columnas, row)) for row in cursor.fetchall()]
+        # Historial de RRLL de todos los casos exportados, en una sola consulta.
+        cursor.execute(f"""
+            SELECT lm.Id_damage_to_fleet, lm.Fecha_presentacion, lm.Pendiente_proceso,
+                   lm.Observaciones_rrll, lm.Fecha_registro, lm.Usuario_registro_laboral
+            FROM table_info_laboral_mult lm
+            WHERE lm.Id_damage_to_fleet IN (SELECT d.Id FROM table_damage_to_fleet d WHERE {where_sql})
+            ORDER BY lm.Id_damage_to_fleet, lm.Fecha_registro
+        """, parametros)
+        columnas_lab = [col[0] for col in cursor.description]
+        laboral_por_caso = {}
+        for row in cursor.fetchall():
+            item = dict(zip(columnas_lab, row))
+            laboral_por_caso.setdefault(item["Id_damage_to_fleet"], []).append(item)
+    finally:
+        conn.close()
 
     def estado_rrll(registro):
-        caso_cerrado = bool(registro.get("caso_cerrado"))
+        caso_cerrado = bool(registro.get("estado_caso"))
         cerrado_por_laboral = bool(registro.get("cerrado_por_laboral"))
 
         estado_oper = bool(registro.get("estado_oper"))
@@ -580,7 +632,7 @@ def exportar_excel():
         # Si no cumple ninguna condición de RRLL,
         # no debe aparecer en la exportación.
         return None
-    
+
     if es_exportacion_laboral:
         for registro in registros:
             registro["estado_excel"] = estado_rrll(registro)
@@ -597,67 +649,7 @@ def exportar_excel():
                 if registro["estado_excel"] == estado_solicitado
             ]
 
-    filas_excel = []
-
-    for r in registros:
-        registro_id = r["Id"]
-
-        estado_excel = r.get("estado_excel") if es_exportacion_laboral else None
-
-        # ================= OPER =================
-        cursor.execute("""
-            SELECT Observaciones_operaciones, rev_error,
-                   Observaciones_correctivos, costo_oper,
-                   responsabilidad_operador, conciliacion, Fecha_registro,
-                   Usuario_registro_oper
-            FROM table_info_oper
-            WHERE Id_damage_to_fleet = ?
-        """, (registro_id,))
-        oper = cursor.fetchone()
-        oper = dict(zip([col[0] for col in cursor.description], oper)) if oper else {}
-
-        # ================= MTTO =================
-        cursor.execute("""
-            SELECT Costo, observaciones, dano_adicional,
-                   Fecha_registro, Usuario_registro_mtto
-            FROM table_info_mtto
-            WHERE Id_damage_to_fleet = ?
-        """, (registro_id,))
-        mtto = cursor.fetchone()
-        mtto = dict(zip([col[0] for col in cursor.description], mtto)) if mtto else {}
-
-        # ================= SVIAL =================
-        cursor.execute("""
-            SELECT Observaciones_svial, valor_conciliado_terceros,
-                   conciliado_a_favor, Fecha_registro,
-                   Usuario_registro_svial
-            FROM table_info_svial
-            WHERE Id_damage_to_fleet = ?
-        """, (registro_id,))
-        svial = cursor.fetchone()
-        svial = dict(zip([col[0] for col in cursor.description], svial)) if svial else {}
-
-        # ================= LABORAL ÚNICO =================
-        cursor.execute("""
-            SELECT Tipo_cerrado, Valor_conciliado,
-                   Fecha_registro, Usuario_registro_labora
-            FROM table_info_labora
-            WHERE Id_damage_to_fleet = ?
-        """, (registro_id,))
-        laboral = cursor.fetchone()
-        laboral = dict(zip([col[0] for col in cursor.description], laboral)) if laboral else {}
-
-        # ================= LABORAL MÚLTIPLE =================
-        cursor.execute("""
-            SELECT Fecha_presentacion, Pendiente_proceso,
-                   Observaciones_rrll, Fecha_registro,
-                   Usuario_registro_laboral
-            FROM table_info_laboral_mult
-            WHERE Id_damage_to_fleet = ?
-        """, (registro_id,))
-        columnas_lab = [col[0] for col in cursor.description]
-        laboralm = [dict(zip(columnas_lab, row)) for row in cursor.fetchall()]
-
+    def construir_fila(r, laboralm):
         proceso_texto = ""
         for item in laboralm:
             proceso_texto += (
@@ -687,54 +679,60 @@ def exportar_excel():
             "DIRECCIÓN": r.get("Direccion"),
 
             # OPER
-            "OBSERVACIÓNES TECNICAS CONTROL OPERACIONAL": oper.get("Observaciones_operaciones"),
-            "LA INFORMACIÓN CARGADA ES CORRECTA?": oper.get("rev_error"),
-            "OBSERVACIÓNES DE DILIGENCIAMIENTO ERRONEO": oper.get("Observaciones_correctivos"),
-            "FECHA REGISTRO OPERACIONES": oper.get("Fecha_registro"),
-            "USUARIO OPERACIONES": oper.get("Usuario_registro_oper"),
+            "OBSERVACIÓNES TECNICAS CONTROL OPERACIONAL": r.get("oper_observaciones"),
+            "LA INFORMACIÓN CARGADA ES CORRECTA?": r.get("oper_rev_error"),
+            "OBSERVACIÓNES DE DILIGENCIAMIENTO ERRONEO": r.get("oper_correctivos"),
+            "FECHA REGISTRO OPERACIONES": r.get("oper_fecha"),
+            "USUARIO OPERACIONES": r.get("oper_usuario"),
 
-            "COSTO DEL DAÑO OPERACIONES": oper.get("costo_oper"),
-            "RESPONSABILIDAD DEL OPERADOR": oper.get("responsabilidad_operador"),
-            "CONCILIACIÓN OPERACIONES": oper.get("conciliacion"),
+            "COSTO DEL DAÑO OPERACIONES": r.get("oper_costo"),
+            "RESPONSABILIDAD DEL OPERADOR": r.get("oper_responsabilidad"),
+            "CONCILIACIÓN OPERACIONES": r.get("oper_conciliacion"),
 
             # MTTO
-            "COSTO DE MANTENIMIENTO": mtto.get("Costo"),
-            "DAÑO ADICIONAL": mtto.get("dano_adicional"),
-            "OBSERVACIONES MTTO": mtto.get("observaciones"),
-            "FECHA REGISTRO COSTO": mtto.get("Fecha_registro"),
-            "USUARIO MTTO": mtto.get("Usuario_registro_mtto"),
+            "COSTO DE MANTENIMIENTO": r.get("mtto_costo"),
+            "DAÑO ADICIONAL": r.get("mtto_dano_adicional"),
+            "OBSERVACIONES MTTO": r.get("mtto_observaciones"),
+            "FECHA REGISTRO COSTO": r.get("mtto_fecha"),
+            "USUARIO MTTO": r.get("mtto_usuario"),
 
             # SVIAL
-            "OBSERVACIONES S. VIAL": svial.get("Observaciones_svial"),
-            "FECHA REGISTRO S. VIAL": svial.get("Fecha_registro"),
-            "USUARIO S. VIAL": svial.get("Usuario_registro_svial"),
+            "OBSERVACIONES S. VIAL": r.get("svial_observaciones"),
+            "FECHA REGISTRO S. VIAL": r.get("svial_fecha"),
+            "USUARIO S. VIAL": r.get("svial_usuario"),
 
-            "VALOR CONCILIADO TERCEROS": svial.get("valor_conciliado_terceros"),
-            "CONCILIADO A FAVOR DE": svial.get("conciliado_a_favor"),
+            "VALOR CONCILIADO TERCEROS": r.get("svial_valor_terceros"),
+            "CONCILIADO A FAVOR DE": r.get("svial_a_favor"),
 
             # LABORAL
-            "VALOR CONCILIADO CON OPERADOR": laboral.get("Valor_conciliado"),
-            "TIPO DE CIERRE": laboral.get("Tipo_cerrado"),
-            "FECHA REGISTRO DEBIDO PROCESO": laboral.get("Fecha_registro"),
-            "USUARIO LABORAL": laboral.get("Usuario_registro_labora"),
+            "VALOR CONCILIADO CON OPERADOR": r.get("lab_valor_conciliado"),
+            "TIPO DE CIERRE": r.get("lab_tipo_cerrado"),
+            "FECHA REGISTRO DEBIDO PROCESO": r.get("lab_fecha"),
+            "USUARIO LABORAL": r.get("lab_usuario"),
             "FECHA R. LABORALES": r.get("fecha_r_laborales"),
             "PROCESO LABORAL MÚLTIPLE": proceso_texto.strip()
-            
         }
 
-        # ESTADO se agrega únicamente al archivo solicitado desde RRLL.
+        # ESTADO va al final: el de RRLL en su exportación; Abierto/Cerrado en el histórico.
         if es_exportacion_laboral:
-            fila["ESTADO"] = estado_excel
+            fila["ESTADO"] = r.get("estado_excel")
+        else:
+            fila["ESTADO"] = "Cerrado" if r.get("estado_caso") == 1 else "Abierto"
+        return fila
 
-        filas_excel.append(fila)
-
-    conn.close()
-
-    df = pd.DataFrame(filas_excel)
+    filas_excel = [construir_fila(r, laboral_por_caso.get(r["Id"], [])) for r in registros]
+    # Con cero resultados se conservan los encabezados.
+    df = pd.DataFrame(filas_excel, columns=list(construir_fila({}, []).keys()))
 
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Historico_Danos")
+        # openpyxl convierte en fórmula todo texto que empiece por "=". Los datos
+        # capturados por usuarios se guardan siempre como texto (inyección de fórmulas).
+        for fila in writer.sheets["Historico_Danos"].iter_rows():
+            for celda in fila:
+                if celda.data_type == "f":
+                    celda.data_type = "s"
 
     output.seek(0)
 
@@ -744,4 +742,3 @@ def exportar_excel():
         as_attachment=True,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-

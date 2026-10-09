@@ -1,10 +1,15 @@
-from flask import Blueprint, render_template, request, jsonify, send_file
+from flask import Blueprint, render_template, request, jsonify, send_file, abort
 import os
 import math
 import io
 from config import connect
 from datetime import datetime, timedelta
-from backend_security import login_required, requiere_permiso
+from backend_security import (
+    login_required,
+    requiere_permiso,
+    usuario_puede_acceder_uf,
+    ufs_autorizadas_sesion,
+)
 from config import BASE_DIR
 from openpyxl import Workbook
 
@@ -82,6 +87,13 @@ def _subquery_danos(filtros):
     """
 
     params = []
+    ufs = ufs_autorizadas_sesion()
+    if ufs:
+        marcadores = ", ".join("?" for _ in ufs)
+        sql += f" AND d.UF IN ({marcadores}) "
+        params.extend(ufs)
+    else:
+        sql += " AND 1 = 0 "
 
     # El móvil es opcional
     if filtros.get('movil'):
@@ -134,6 +146,13 @@ def _subquery_reparaciones(filtros):
     """
 
     params = []
+    ufs = ufs_autorizadas_sesion()
+    if ufs:
+        marcadores = ", ".join("?" for _ in ufs)
+        sql += f" AND p.UF IN ({marcadores}) "
+        params.extend(ufs)
+    else:
+        sql += " AND 1 = 0 "
 
     # El móvil es opcional
     if filtros.get('movil'):
@@ -276,6 +295,12 @@ def detalle(id_damage):
     registro_main = cursor.fetchone()
     columnas = [col[0] for col in cursor.description]
     registro = dict(zip(columnas, registro_main)) if registro_main else {}
+    if not registro:
+        conn.close()
+        abort(404)
+    if not usuario_puede_acceder_uf(registro.get("UF")):
+        conn.close()
+        abort(403)
 
     # OPERACIONES
     cursor.execute("""
@@ -342,6 +367,12 @@ def detalle_reparacion(id):
     registro_main = cursor.fetchone()
     columnas = [col[0] for col in cursor.description]
     registro = dict(zip(columnas, registro_main)) if registro_main else {}
+    if not registro:
+        conn.close()
+        abort(404)
+    if not usuario_puede_acceder_uf(registro.get("UF")):
+        conn.close()
+        abort(403)
 
     # ARCHIVOS REPARACIONES
     cursor.execute("""

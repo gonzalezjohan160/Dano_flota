@@ -3,7 +3,7 @@ from config import connect
 from datetime import datetime
 import folium
 from folium.plugins import HeatMap
-from backend_security import login_required, requiere_permiso
+from backend_security import login_required, requiere_permiso, ufs_autorizadas_sesion
 import traceback
 from config import BASE_DIR
 
@@ -26,23 +26,39 @@ def index():
     f_inicio = request.args.get('fecha_inicio', '2025-01-01')
     f_fin = request.args.get('fecha_fin', '2026-12-31')
     uf_filtro = request.args.get('uf', '')
+    ufs = ufs_autorizadas_sesion()
 
     conn = connect()
     cursor = conn.cursor()
 
     try:
         # --- CONSULTA PARA EL SELECT DE UF (Para llenar el filtro en el HTML) ---
-        cursor.execute("SELECT DISTINCT UF FROM table_damage_to_fleet WHERE UF IS NOT NULL ORDER BY UF")
-        lista_uf = [row[0] for row in cursor.fetchall()]
+        if ufs:
+            marcadores_uf = ", ".join("?" for _ in ufs)
+            cursor.execute(
+                f"SELECT DISTINCT UF FROM table_damage_to_fleet WHERE UF IN ({marcadores_uf}) ORDER BY UF",
+                list(ufs),
+            )
+            lista_uf = [row[0] for row in cursor.fetchall()]
+        else:
+            lista_uf = []
 
         # Preparar base de la condición WHERE para reutilizar
         # Usamos parámetros (?) para evitar inyecciones SQL
         params = [f_inicio, f_fin]
         where_clause = "WHERE d.Fecha_evento BETWEEN ? AND ?"
-        
+        if ufs:
+            where_clause += f" AND d.UF IN ({marcadores_uf})"
+            params.extend(ufs)
+        else:
+            where_clause += " AND 1 = 0"
+
         if uf_filtro:
-            where_clause += " AND d.UF = ?"
-            params.append(uf_filtro)
+            if uf_filtro in {str(uf) for uf in ufs}:
+                where_clause += " AND d.UF = ?"
+                params.append(int(uf_filtro))
+            else:
+                where_clause += " AND 1 = 0"
 
         # --- 1️⃣ CONSULTA: PENDIENTES (Gráfica 1) ---
         
@@ -241,7 +257,20 @@ def index():
         rows_zonas = cursor.fetchall()
         
         # -- CONSULTA: ULTIMOS EVENTOS(62 días)
-        query_ultimos_eventos = """
+        if ufs:
+            filtro_uf_ultimos = f"d.UF IN ({marcadores_uf})"
+            params_ultimos = list(ufs)
+        else:
+            filtro_uf_ultimos = "1 = 0"
+            params_ultimos = []
+        if uf_filtro:
+            if uf_filtro in {str(uf) for uf in ufs}:
+                filtro_uf_ultimos += " AND d.UF = ?"
+                params_ultimos.append(int(uf_filtro))
+            else:
+                filtro_uf_ultimos += " AND 1 = 0"
+
+        query_ultimos_eventos = f"""
             SELECT
                 d.Movil,
                 d.Fecha_evento,
@@ -249,9 +278,10 @@ def index():
                 d.Parte_afectada
             FROM table_damage_to_fleet d
             WHERE d.Fecha_evento >= DATEADD(DAY, -62, GETDATE())
+              AND {filtro_uf_ultimos}
             ORDER BY d.Fecha_evento DESC
         """
-        cursor.execute(query_ultimos_eventos)
+        cursor.execute(query_ultimos_eventos, params_ultimos)
         rows_ultimos_eventos = cursor.fetchall()
         
         # --- 5️⃣ CONSULTA: MAPA DE CALOR ---
