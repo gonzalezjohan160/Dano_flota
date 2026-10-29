@@ -1,12 +1,9 @@
-from flask import Blueprint, flash, redirect, url_for, render_template, session, request, jsonify, send_from_directory, send_file, abort, url_for
-import os
-from mimetypes import guess_type
+from flask import Blueprint, render_template, session, request, jsonify
 from config import connect
-from datetime import datetime
-from backend_security import login_required, requiere_permiso
+from backend_security import login_required, validar_politica_password
 from werkzeug.security import generate_password_hash, check_password_hash
 from config import BASE_DIR
-from logger import logger
+from logger import logger, contexto_peticion
 
 
 Profile = Blueprint(
@@ -62,6 +59,10 @@ def cambiar_password():
     if new_password != confirm_password:
         return jsonify({'status': 'error', 'message': 'Las nuevas contraseñas no coinciden.'})
 
+    error = validar_politica_password(new_password, current_user)
+    if error:
+        return jsonify({'status': 'error', 'message': error})
+
     conn = connect()
     cursor = conn.cursor()
     cursor.execute("SELECT PasswordHash FROM Table_usuarios WHERE Username = ?", (current_user,))
@@ -79,13 +80,15 @@ def cambiar_password():
                 conn.rollback()
                 return jsonify({'status': 'error', 'message': 'No fue posible actualizar la contraseña.'}), 500
             conn.commit()
+            logger.info("cambio_contrasena_perfil %s", contexto_peticion())
         except Exception:
             conn.rollback()
-            logger.exception("error_cambiar_password_perfil")
+            logger.exception("error_cambiar_password_perfil %s", contexto_peticion())
             return jsonify({'status': 'error', 'message': 'No fue posible actualizar la contraseña.'}), 500
         finally:
             conn.close()
         return jsonify({'status': 'success', 'message': 'Contraseña actualizada con éxito.'})
     
     conn.close()
+    logger.warning("cambio_contrasena_perfil_rechazado %s", contexto_peticion())
     return jsonify({'status': 'error', 'message': 'La contraseña actual es incorrecta.'})

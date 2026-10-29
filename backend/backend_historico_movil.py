@@ -1,9 +1,9 @@
 from flask import Blueprint, render_template, request, jsonify, send_file, abort
-import os
 import math
 import io
 from config import connect
-from datetime import datetime, timedelta
+from datetime import timedelta
+from fechas import FechaInvalida, leer_rango_fechas
 from backend_security import (
     login_required,
     requiere_permiso,
@@ -32,8 +32,7 @@ def _leer_filtros():
     uf = request.args.get('uf', 'todos').strip().lower()
     if uf not in ('todos', '10', '16'):
         uf = 'todos'
-    fecha_inicio = request.args.get('fecha_inicio', '').strip()
-    fecha_fin = request.args.get('fecha_fin', '').strip()
+    fecha_inicio, fecha_fin = leer_rango_fechas(request.args)
 
     try:
         page = int(request.args.get('page', 1))
@@ -46,21 +45,13 @@ def _leer_filtros():
         'movil': movil,
         'tipo': tipo,
         'uf': uf,
-        'fecha_inicio': fecha_inicio,
-        'fecha_fin': fecha_fin,
+        # Texto AAAA-MM-DD ya validado para la pantalla; date para las consultas.
+        'fecha_inicio': fecha_inicio.isoformat() if fecha_inicio else '',
+        'fecha_fin': fecha_fin.isoformat() if fecha_fin else '',
+        'desde': fecha_inicio,
+        'hasta': fecha_fin,
         'page': page,
     }
-
-def parse_fecha(valor):
-    if not valor:
-        return None
-    
-    for fmt in ('%Y-%m-%d', '%Y-%m-%dT%H:%M'):
-        try:
-            return datetime.strptime(valor, fmt)
-        except ValueError:
-            continue
-    raise ValueError(f"Formato de fecha no reconocido: {valor}")
 
 def _subquery_danos(filtros):
     """Arma el SELECT de daños con sus filtros. Devuelve (sql, params)."""
@@ -83,7 +74,7 @@ def _subquery_danos(filtros):
             WHERE f.DamageId = d.Id
         ) AS archivos_count
     FROM table_damage_to_fleet d
-    WHERE 1 = 1
+    WHERE ISNULL(d.eliminado, 0) = 0
     """
 
     params = []
@@ -91,7 +82,7 @@ def _subquery_danos(filtros):
     if ufs:
         marcadores = ", ".join("?" for _ in ufs)
         sql += f" AND d.UF IN ({marcadores}) "
-        params.extend(ufs)
+        params.extend(str(uf) for uf in ufs)  # UF es varchar: comparar como texto
     else:
         sql += " AND 1 = 0 "
 
@@ -105,22 +96,14 @@ def _subquery_danos(filtros):
         params.append(filtros['uf'])
 
     
-    if filtros.get('fecha_inicio'):
-        try:
-            fecha_inicio = parse_fecha(filtros['fecha_inicio'])
-            sql += " AND d.Fecha_evento >= ? "
-            params.append(fecha_inicio)
-        except ValueError:
-            return jsonify({"error": "Fecha de inicio inválida"}), 400    
+    if filtros['desde']:
+        sql += " AND d.Fecha_evento >= ? "
+        params.append(filtros['desde'])
 
-    if filtros['fecha_fin']:
-        fin = datetime.strptime(
-            filtros['fecha_fin'],
-            "%Y-%m-%d"
-        ) + timedelta(days=1)
-
+    if filtros['hasta']:
+        # Incluye todo el día final.
         sql += " AND d.Fecha_evento < ? "
-        params.append(fin.strftime("%Y-%m-%d"))
+        params.append(filtros['hasta'] + timedelta(days=1))
 
     return sql, params
 
@@ -150,7 +133,7 @@ def _subquery_reparaciones(filtros):
     if ufs:
         marcadores = ", ".join("?" for _ in ufs)
         sql += f" AND p.UF IN ({marcadores}) "
-        params.extend(ufs)
+        params.extend(str(uf) for uf in ufs)  # UF es varchar: comparar como texto
     else:
         sql += " AND 1 = 0 "
 
@@ -163,22 +146,14 @@ def _subquery_reparaciones(filtros):
         sql += " AND p.UF = ? "
         params.append(filtros['uf'])
 
-    if filtros.get('fecha_inicio'):
-        try:
-            fecha_inicio = parse_fecha(filtros['fecha_inicio'])    
-            sql += " AND p.Fecha_registro >= ? "
-            params.append(fecha_inicio)
-        except ValueError:
-            return jsonify({"error": "Fecha de inicio inválida"}), 400    
+    if filtros['desde']:
+        sql += " AND p.Fecha_registro >= ? "
+        params.append(filtros['desde'])
 
-    if filtros['fecha_fin']:
-        fin = datetime.strptime(
-            filtros['fecha_fin'],
-            "%Y-%m-%d"
-        ) + timedelta(days=1)
-
+    if filtros['hasta']:
+        # Incluye todo el día final.
         sql += " AND p.Fecha_registro < ? "
-        params.append(fin.strftime("%Y-%m-%d"))
+        params.append(filtros['hasta'] + timedelta(days=1))
 
     return sql, params
 
@@ -207,7 +182,10 @@ def _construir_union(filtros):
 @requiere_permiso('Ingresar_danos_vs_reparaciones')
 
 def index():
-    filtros = _leer_filtros()
+    try:
+        filtros = _leer_filtros()
+    except FechaInvalida as error:
+        return str(error), 400
     movil_filtro = filtros['movil']
 
     registros = []
@@ -242,34 +220,8 @@ def index():
     columns = [col[0] for col in cursor.description]
     registros = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
-    # 🔹 Traer oper, mtto y svial únicamente para los registros de DAÑO
-    for r in registros:
-        if r['tipo'] != 'DAÑO':
-            r['oper'] = []
-            r['mtto'] = []
-            r['svial'] = []
-            continue
-
-        registro_id = r['id']
-
-        # Operaciones
-        cursor.execute("SELECT * FROM table_info_oper WHERE Id_damage_to_fleet = ?", registro_id)
-        oper = cursor.fetchall()
-        columnas_oper = [col[0] for col in cursor.description]
-        r['oper'] = [dict(zip(columnas_oper, row)) for row in oper]  # lista vacía si no hay
-
-        # Mantenimiento
-        cursor.execute("SELECT * FROM table_info_mtto WHERE Id_damage_to_fleet = ?", registro_id)
-        mtto = cursor.fetchall()
-        columnas_mtto = [col[0] for col in cursor.description]
-        r['mtto'] = [dict(zip(columnas_mtto, row)) for row in mtto]
-
-        # Seguridad vial
-        cursor.execute("SELECT * FROM table_info_svial WHERE Id_damage_to_fleet = ?", registro_id)
-        svial = cursor.fetchall()
-        columnas_svial = [col[0] for col in cursor.description]
-        r['svial'] = [dict(zip(columnas_svial, row)) for row in svial]
-
+    # El listado solo muestra estas columnas; Operaciones, Mantenimiento y S. Vial
+    # de cada daño los trae /detalle/<id> al abrirlo (B-12).
     conn.close()
 
     return render_template(
@@ -301,6 +253,10 @@ def detalle(id_damage):
     if not usuario_puede_acceder_uf(registro.get("UF")):
         conn.close()
         abort(403)
+    # Un caso eliminado no se muestra en el Histórico móvil (decisión de negocio M-16).
+    if registro.get("eliminado"):
+        conn.close()
+        abort(404)
 
     # OPERACIONES
     cursor.execute("""
@@ -396,7 +352,10 @@ def detalle_reparacion(id):
 @login_required
 @requiere_permiso('Ingresar_danos_vs_reparaciones')
 def exportar_excel():
-    filtros = _leer_filtros()
+    try:
+        filtros = _leer_filtros()
+    except FechaInvalida as error:
+        return str(error), 400
 
     conn = connect()
     cursor = conn.cursor()

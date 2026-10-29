@@ -1,13 +1,11 @@
 import os
 from pathlib import Path
-from flask import Blueprint, request, render_template, session, jsonify, send_file, abort
+from flask import Blueprint, request, render_template, session, jsonify
 from datetime import datetime
-from mimetypes import guess_type
 from config import connect
 from werkzeug.utils import secure_filename
 from attachment_security import AttachmentValidationError, store_upload, validate_uploads
 from logger import logger
-import traceback
 from backend_security import (
     login_required,
     requiere_permiso,
@@ -29,8 +27,6 @@ Capturador_rep = Blueprint(
 # Ruta donde se guardan los archivos
 FILES_DIR = UPLOAD_FOLDERS["Reparaciones"]
 
-# Crear la carpeta si no existe
-FILES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 
@@ -65,7 +61,7 @@ def get_flota():
         conn.close()
         return jsonify({"Tipologia_interno": row[0] if row else None})
     except Exception:
-    
+        logger.exception("error_consultar_flota_reparaciones")
         return jsonify({"Tipologia_interno": None})
 
       
@@ -118,7 +114,8 @@ def submit_form():
         Zona_inter = request.form.get('Zona_inter')
         parte_intervenida = request.form.get('Parte_intervenida')
         costo = request.form.get('costo')
-        registrador = request.form.get('Usuario')
+        # El registrador es siempre el usuario de la sesión, nunca el campo del formulario.
+        registrador = session.get('usuario')
         fecha_registro = datetime.now()
 
 

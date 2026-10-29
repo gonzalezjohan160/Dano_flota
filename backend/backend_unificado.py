@@ -5,11 +5,11 @@ from flask import (
     request,
     jsonify,
     send_file,
-    abort
+    abort,
+    make_response
 )
 from werkzeug.utils import secure_filename
 import os
-import time
 import json
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +19,8 @@ from backend_security import (
     requiere_permiso,
     usuario_puede_acceder_uf,
     ufs_autorizadas_sesion,
+    PERMISO_ADJUNTOS_LABORALES,
+    puede_ver_adjuntos_laborales,
 )
 from config import BASE_DIR
 from config import UPLOAD_FOLDERS
@@ -183,22 +185,39 @@ def obtener_filtro_uf():
     return f"d.UF IN ({marcadores})", list(ufs)
 
 
-def verificar_acceso_uf_caso(id_caso):
+def verificar_acceso_uf_caso(id_caso, exigir_abierto=False):
+    """Carga el caso por Id y valida UF y estado antes de consultarlo o gestionarlo.
+
+    404 si no existe o fue eliminado, 403 si es de otra UF y, cuando la acción
+    registra o modifica gestiones (exigir_abierto), 409 si el caso está cerrado.
+    """
     id_texto = str(id_caso)
     if not id_texto.isascii() or not id_texto.isdecimal():
         abort(404)
     conn = connect()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT UF FROM table_damage_to_fleet WHERE Id = ?", [id_caso])
+        cursor.execute("""
+            SELECT UF, ISNULL(eliminado, 0), ISNULL(estado_caso, 0)
+            FROM table_damage_to_fleet
+            WHERE Id = ?
+        """, [id_caso])
         registro = cursor.fetchone()
     finally:
         conn.close()
 
     if not registro:
         abort(404)
-    if not usuario_puede_acceder_uf(registro[0]):
+    uf, eliminado, cerrado = registro
+    if not usuario_puede_acceder_uf(uf):
         abort(403)
+    if eliminado:
+        abort(404)
+    if exigir_abierto and cerrado:
+        abort(make_response(jsonify({
+            "status": "error",
+            "message": "El caso está cerrado. Debe reabrirse antes de registrar o modificar gestiones."
+        }), 409))
 
 
 def fila_a_dict(cursor, fila):
@@ -252,6 +271,28 @@ def evento_pendiente_para_modulo(evento, modulo):
         evento.get("Pendiente_proceso"), validar=False
     )
     return proceso_modulo in procesos
+
+
+# Los valores en dinero se guardan en columnas int de SQL Server.
+MAXIMO_INT_SQL = 2_147_483_647
+
+
+def leer_valor_monetario(valor, nombre):
+    """Convierte un valor en pesos ("$ 1.500.000") a entero.
+
+    Un valor vacío se conserva como llegó. Si no es un entero válido lanza
+    ValueError con un mensaje para el usuario (la vista responde 400).
+    """
+    texto = (valor or "").strip()
+    if not texto:
+        return valor
+    texto = texto.replace("$", "").replace(" ", "").replace(".", "").replace(",", "")
+    if not texto.isascii() or not texto.isdecimal():
+        raise ValueError(f"{nombre} debe ser un número entero en pesos, sin decimales.")
+    numero = int(texto)
+    if numero > MAXIMO_INT_SQL:
+        raise ValueError(f"{nombre} supera el valor máximo permitido.")
+    return numero
 
 
 def requiere_relaciones_laborales(responsabilidad, conciliacion):
@@ -569,12 +610,9 @@ def detalle(modulo, id):
     verificar_acceso_modulo(modulo)
     verificar_acceso_uf_caso(id)
 
-    t0 = time.perf_counter()
-    t_etapa = time.perf_counter()
     conn = connect()
     cursor = conn.cursor()
 
-    t_etapa = time.perf_counter()
     cursor.execute("""
         SET NOCOUNT ON;
 
@@ -632,7 +670,6 @@ def detalle(modulo, id):
         SELECT Id, FileName, 'laboral' AS TipoArchivo FROM table_laboral_files WHERE DamageToFleetId = ?;
     """, [id, id, id, id, id, id])
 
-    t_etapa = time.perf_counter()
     detalle_principal = fila_a_dict(cursor, cursor.fetchone())
 
     registro = {
@@ -662,7 +699,6 @@ def detalle(modulo, id):
         "Valor_conciliado": detalle_principal.get("Valor_conciliado_laboral")
     }
 
-    t_etapa = time.perf_counter()
     cursor.nextset()
     laboral_eventos = filas_a_lista(cursor, cursor.fetchall())
     laboral_pendientes = [
@@ -670,26 +706,24 @@ def detalle(modulo, id):
         if evento_pendiente_para_modulo(evento, modulo)
     ]
 
-    t_etapa = time.perf_counter()
     cursor.nextset()
     archivos = filas_a_lista(cursor, cursor.fetchall())
 
 
-    t_etapa = time.perf_counter()
     cursor.nextset()
     archivos_mtto = filas_a_lista(cursor, cursor.fetchall())
 
-    t_etapa = time.perf_counter()
     cursor.nextset()
     archivos_svial = filas_a_lista(cursor, cursor.fetchall())
 
-    t_etapa = time.perf_counter()
     cursor.nextset()
     archivos_laboral = filas_a_lista(cursor, cursor.fetchall())
+    # Fuera de RRLL no se listan, para que la galería no muestre archivos que no abren.
+    if not puede_ver_adjuntos_laborales():
+        archivos_laboral = []
 
     conn.close()
 
-    t_etapa = time.perf_counter()
     respuesta = {
         "registro": registro,
         "oper": oper,
@@ -707,7 +741,6 @@ def detalle(modulo, id):
     }
 
 
-    t_etapa = time.perf_counter()
     respuesta_json = jsonify(respuesta)
 
     return respuesta_json
@@ -741,6 +774,7 @@ def actualizar_evento(modulo, id):
     verificar_acceso_modulo(modulo)
     if modulo != "Operaciones":
         abort(404)
+    verificar_acceso_uf_caso(id, exigir_abierto=True)
     error_adjuntos = validar_adjuntos_de_solicitud()
     if error_adjuntos:
         return error_adjuntos
@@ -771,6 +805,7 @@ def actualizar_evento(modulo, id):
 
     conn = connect()
     cursor = conn.cursor()
+    rutas_guardadas = []
     try:
         cursor.execute("SELECT * FROM table_damage_to_fleet WHERE Id = ?", [id])
         actual = fila_a_dict(cursor, cursor.fetchone())
@@ -778,6 +813,19 @@ def actualizar_evento(modulo, id):
             return jsonify({"status": "error", "message": "No se encontró el evento."}), 404
         if not usuario_puede_acceder_uf(actual.get("UF")):
             return jsonify({"status": "error", "message": "No tiene acceso a este caso."}), 403
+
+        # La fecha del evento no puede quedar después de la fecha en que se registró el caso.
+        if "Fecha_evento" in cambios:
+            try:
+                nueva_fecha_evento = datetime.strptime(str(cambios["Fecha_evento"]), "%Y-%m-%dT%H:%M")
+            except ValueError:
+                return jsonify({"status": "error", "message": "La fecha del evento no es válida."}), 400
+            fecha_registro = actual.get("Fecha_registro")
+            if fecha_registro and nueva_fecha_evento > fecha_registro:
+                return jsonify({"status": "error", "message": (
+                    "La fecha del evento no puede ser posterior a la fecha en que se registró el caso "
+                    f"({fecha_registro:%d/%m/%Y %H:%M}). Revise el día y si la hora es AM o PM."
+                )}), 400
 
         # La UI calcula estos valores, pero se validan y recalculan también
         # en el servidor para impedir guardar datos incoherentes.
@@ -856,11 +904,13 @@ def actualizar_evento(modulo, id):
                   str(valor or ""), usuario, datetime.now(), motivo))
             
             
-        guardar_archivos(cursor, id, "table_damage_files", "DamageId", UPLOAD_FOLDERS["Operaciones"])
+        guardar_archivos(cursor, id, "table_damage_files", "DamageId", UPLOAD_FOLDERS["Operaciones"],
+                         rutas_guardadas)
         conn.commit()
         return jsonify({"status": "success", "message": "Información del evento actualizada.", "cambios": len(cambios_reales)})
     except Exception:
         conn.rollback()
+        borrar_archivos(rutas_guardadas)
         logger.exception("error_actualizar_evento")
         return jsonify({"status": "error", "message": "No fue posible actualizar el evento."}), 500
     finally:
@@ -896,7 +946,7 @@ def eliminar_evento(id):
     cursor = conn.cursor()
     try:
         cursor.execute("""
-            SELECT ISNULL(eliminado, 0), UF
+            SELECT ISNULL(eliminado, 0), UF, ISNULL(estado_caso, 0)
             FROM table_damage_to_fleet
             WHERE Id = ?
         """, [id])
@@ -907,6 +957,8 @@ def eliminar_evento(id):
             return jsonify({"status": "error", "message": "No tiene acceso a este caso."}), 403
         if evento[0]:
             return jsonify({"status": "error", "message": "El evento ya se encuentra eliminado."}), 409
+        if evento[2]:
+            return jsonify({"status": "error", "message": "El caso está cerrado. Debe reabrirse antes de eliminarlo."}), 409
 
         usuario = session.get("usuario", "")
         cursor.execute("""
@@ -955,10 +1007,14 @@ def reabrir_caso(id, modulo):
                            WHERE l.Id_damage_to_fleet = d.Id
                        ) THEN 1 ELSE 0 END
                 FROM table_damage_to_fleet d
-                WHERE d.Id = ?
+                WHERE d.Id = ? AND ISNULL(d.eliminado, 0) = 0
             """, [id])
         else:
-            cursor.execute("SELECT UF, estado_caso, 1 FROM table_damage_to_fleet WHERE Id = ?", [id])
+            cursor.execute("""
+                SELECT UF, estado_caso, 1
+                FROM table_damage_to_fleet
+                WHERE Id = ? AND ISNULL(eliminado, 0) = 0
+            """, [id])
         caso = cursor.fetchone()
         if not caso:
             return jsonify({"status": "error", "message": "No se encontró el evento."}), 404
@@ -1006,25 +1062,36 @@ def reabrir_evento_laboral(id):
 # VER ARCHIVO
 # ==========================================================
 
+# Los adjuntos de Operaciones (incluido el capturador), Mantenimiento y Seguridad
+# Vial los ve cualquier usuario con acceso a una pantalla de casos, sin importar
+# qué módulo los subió (regla de negocio). Los de Relaciones Laborales solo los ve
+# RRLL. Se exige además la UF del caso, para que un usuario sin acceso a casos no
+# pueda descargarlos recorriendo identificadores.
+PERMISOS_VER_ADJUNTOS_CASO = (
+    "Ingresar_modulo__oper", "Ingresar_modulo__mtto", "Ingresar_modulo__svial",
+    "Ingresar_modulo__laboral", "Ingresar_historico_danos",
+    "Ingresar_danos_vs_reparaciones", "Ingresar_captur_danos",
+)
+
 ARCHIVOS_POR_TIPO = {
     "operaciones": {
         "tabla": "table_damage_files", "campo_padre": "DamageId",
-        "tabla_padre": "table_damage_to_fleet", "permiso": ("Ingresar_modulo__oper", "Ingresar_captur_danos"),
+        "tabla_padre": "table_damage_to_fleet", "permiso": PERMISOS_VER_ADJUNTOS_CASO,
         "carpeta": "Operaciones",
     },
     "mtto": {
         "tabla": "table_mtto_files", "campo_padre": "DamageToFleetId",
-        "tabla_padre": "table_damage_to_fleet", "permiso": ("Ingresar_modulo__mtto",),
+        "tabla_padre": "table_damage_to_fleet", "permiso": PERMISOS_VER_ADJUNTOS_CASO,
         "carpeta": "Mtto",
     },
     "svial": {
         "tabla": "table_svial_files", "campo_padre": "DamageId",
-        "tabla_padre": "table_damage_to_fleet", "permiso": ("Ingresar_modulo__svial",),
+        "tabla_padre": "table_damage_to_fleet", "permiso": PERMISOS_VER_ADJUNTOS_CASO,
         "carpeta": "Svial",
     },
     "laboral": {
         "tabla": "table_laboral_files", "campo_padre": "DamageToFleetId",
-        "tabla_padre": "table_damage_to_fleet", "permiso": ("Ingresar_modulo__laboral",),
+        "tabla_padre": "table_damage_to_fleet", "permiso": (PERMISO_ADJUNTOS_LABORALES,),
         "carpeta": "laboral",
     },
     "reparaciones": {
@@ -1088,13 +1155,27 @@ def descargar_archivo(file_id):
         )
         return apply_attachment_headers(respuesta)
     except Exception:
+        logger.exception("error_enviar_adjunto file_id=%s", file_id)
         abort(500)
 
 # ==========================================================
 # GUARDAR ARCHIVOS (usada por los inserts)
 # ==========================================================
 
-def guardar_archivos(cursor, codigo, tabla_files, campo_id, carpeta_base):
+def borrar_archivos(rutas):
+    """Borra del disco los adjuntos escritos en una operación que no se confirmó."""
+    for ruta in rutas:
+        try:
+            Path(ruta).unlink(missing_ok=True)
+        except OSError:
+            logger.exception("error_borrar_adjunto_huerfano")
+
+
+def guardar_archivos(cursor, codigo, tabla_files, campo_id, carpeta_base, rutas_guardadas=None):
+    """Guarda los adjuntos y anota cada ruta en rutas_guardadas para que el
+    llamador los borre si la operación falla después, antes del commit."""
+    if rutas_guardadas is None:
+        rutas_guardadas = []
     archivos = request.files.getlist("archivos")
     validate_uploads(archivos)
     codigo_seguro = str(codigo)
@@ -1105,7 +1186,6 @@ def guardar_archivos(cursor, codigo, tabla_files, campo_id, carpeta_base):
     if carpeta.parent != carpeta_base:
         raise AttachmentValidationError("La ruta de almacenamiento no es válida.")
     carpeta.mkdir(parents=True, exist_ok=True)
-    rutas_guardadas = []
 
     try:
         for archivo in archivos:
@@ -1123,8 +1203,7 @@ def guardar_archivos(cursor, codigo, tabla_files, campo_id, carpeta_base):
                 VALUES(?,?,?,?)
             """, (codigo, archivo.filename, str(ruta), datetime.now()))
     except Exception:
-        for ruta in rutas_guardadas:
-            ruta.unlink(missing_ok=True)
+        borrar_archivos(rutas_guardadas)
         raise
 
 
@@ -1200,9 +1279,11 @@ def verificar_reincidencia_operador(id):
 def agregar(modulo, accion):
 
     verificar_acceso_modulo(modulo)
+    # Toda gestión se registra sobre un caso existente, de la UF del usuario y abierto.
     id_registro_solicitado = request.form.get("Id_damage_to_fleet")
-    if id_registro_solicitado:
-        verificar_acceso_uf_caso(id_registro_solicitado)
+    if not id_registro_solicitado:
+        return jsonify({"status": "error", "message": "Falta el identificador del registro."}), 400
+    verificar_acceso_uf_caso(id_registro_solicitado, exigir_abierto=True)
     error_adjuntos = validar_adjuntos_de_solicitud()
     if error_adjuntos:
         return error_adjuntos
@@ -1222,11 +1303,12 @@ def agregar(modulo, accion):
         abort(404)
 
     id_registro = request.form.get("Id_damage_to_fleet")
-    usuario = request.form.get("Usuario_registro_oper")
+    usuario = session.get("usuario", "")  # nunca el campo del formulario
 
     if not id_registro:
         return jsonify({"status": "error", "message": "Falta el identificador del registro."}), 400
 
+    campos_monetarios = {"Costo": "El costo", "valor_conciliado_terceros": "El valor conciliado"}
     valores = []
     for campo in ICFG["campos"]:
         origen = campo["origen"]
@@ -1236,8 +1318,11 @@ def agregar(modulo, accion):
             valores.append(usuario)
         else:
             valor = request.form.get(origen)
-            if origen == "valor_conciliado_terceros" and valor:
-                valor = int(valor.replace(".", "").replace(",", ""))
+            if origen in campos_monetarios:
+                try:
+                    valor = leer_valor_monetario(valor, campos_monetarios[origen])
+                except ValueError as error:
+                    return jsonify({"status": "error", "message": str(error)}), 400
 
             valores.append(valor)
 
@@ -1256,6 +1341,7 @@ def agregar(modulo, accion):
         """, (id_registro, tabla, campo, str(anterior or ""), str(nuevo or ""),
               usuario, datetime.now(), motivo_modificacion))
 
+    rutas_guardadas = []
     try:
         # Mantenimiento puede tener un costo preliminar registrado por
         # Operaciones. En ese caso se completa la misma fila y se marca la
@@ -1300,12 +1386,14 @@ def agregar(modulo, accion):
                 cursor.execute("UPDATE table_info_svial SET estado_svial = 1 WHERE Id_damage_to_fleet = ?", [id_registro])
         else:
             cursor.execute(ICFG["sql"], valores)
-        guardar_archivos(cursor, id_registro, ICFG["tabla_files"], ICFG["campo_files"], UPLOAD_FOLDERS[modulo])
+        guardar_archivos(cursor, id_registro, ICFG["tabla_files"], ICFG["campo_files"], UPLOAD_FOLDERS[modulo],
+                         rutas_guardadas)
         if modulo in ("Mtto", "Svial"):
             cerrar_caso_automaticamente(cursor, id_registro, usuario)
         conn.commit()
     except Exception:
         conn.rollback()
+        borrar_archivos(rutas_guardadas)
         logger.exception("error_operacion_modulo")
 
         conn.close()
@@ -1340,10 +1428,11 @@ def agregar(modulo, accion):
 
 def agregar_relaciones_laborales():
     conn = None
+    rutas_guardadas = []
     try:
         codigo = request.form.get("Id_damage_to_fleet")
         observaciones_1 = request.form.get("observaciones_1")
-        usuario = request.form.get("Usuario_registro_oper")
+        usuario = session.get("usuario", "")  # nunca el campo del formulario
         fecha_presentacion = request.form.get("Fecha_presentacion_input")
         try:
             pendiente_proceso, procesos_pendientes = normalizar_procesos_pendientes(
@@ -1355,10 +1444,13 @@ def agregar_relaciones_laborales():
 
         rev_inf = request.form.get("Revinf", "NO")
         tipo_cerrado = request.form.get("Tipo_cerrado_input", "")
-        costo = request.form.get("Costo")
+        try:
+            costo = leer_valor_monetario(request.form.get("Costo"), "El valor conciliado")
+        except ValueError as error:
+            return jsonify({"status": "error", "message": str(error)}), 400
 
         if not codigo or not observaciones_1 or not usuario:
-            return jsonify({"status": "error", "message": "Faltan datos obligatorios."})
+            return jsonify({"status": "error", "message": "Faltan datos obligatorios."}), 400
 
         conn = connect()
         cursor = conn.cursor()
@@ -1432,20 +1524,22 @@ def agregar_relaciones_laborales():
                     [codigo]
                 )
 
+        guardar_archivos(cursor, codigo, "table_laboral_files", "DamageToFleetId", UPLOAD_FOLDERS["laboral"],
+                         rutas_guardadas)
+        # Un solo commit: la gestión y sus archivos se guardan juntos o no se guarda nada.
         conn.commit()
-
-        guardar_archivos(cursor, codigo, "table_laboral_files", "DamageToFleetId", UPLOAD_FOLDERS["laboral"])
-        conn.commit()
-        conn.close()
 
         return jsonify({"status": "success", "message": "✅ Información de RRLL y archivos guardados correctamente."})
 
     except Exception:
         if conn:
             conn.rollback()
-            conn.close()
+        borrar_archivos(rutas_guardadas)
         logger.exception("error_guardar_relaciones_laborales")
-        return jsonify({"status": "error", "message": "No fue posible guardar la información de Relaciones Laborales."})
+        return jsonify({"status": "error", "message": "No fue posible guardar la información de Relaciones Laborales."}), 500
+    finally:
+        if conn:
+            conn.close()
 
 
 # ==========================================================
@@ -1458,10 +1552,12 @@ def agregar_relaciones_laborales():
 # table_info_mtto, a veces no) que el mecanismo genérico no soporta.
 
 def agregar_operaciones():
+    conn = None
+    rutas_guardadas = []
     try:
         codigo = request.form.get("Id_damage_to_fleet")
         observaciones_1 = request.form.get("observaciones_1")
-        usuario = request.form.get("Usuario_registro_oper")
+        usuario = session.get("usuario", "")  # nunca el campo del formulario
         observaciones_extra = request.form.get("observacionesExtra")
         rev_inf = request.form.get("Revinf", "SI")
         motivo_modificacion = (request.form.get("Motivo_modificacion") or "").strip()
@@ -1475,10 +1571,12 @@ def agregar_operaciones():
         conciliacion = request.form.get("conciliacion")  # SI / NO (solo si responsabilidad = SI y no hay reincidencia)
         valor_conciliado_oper = request.form.get("valor_conciliado_oper")  # solo si conciliacion = SI
         motivo_cierre_oper = request.form.get("motivo_cierre_oper", "")
-        if valor_conciliado_oper:
-            valor_conciliado_oper = int(
-            valor_conciliado_oper.replace(".", "").replace(",", "")
-        )
+        # Se validan antes de abrir la conexión: un valor inválido responde 400.
+        try:
+            costo_valor = leer_valor_monetario(costo_valor, "El costo del daño")
+            valor_conciliado_oper = leer_valor_monetario(valor_conciliado_oper, "El valor conciliado")
+        except ValueError as error:
+            return jsonify({"status": "error", "message": str(error)}), 400
 
         if not codigo or not observaciones_1 or not usuario:
             return jsonify({"status": "error", "message": "Faltan datos obligatorios."}), 400
@@ -1490,7 +1588,6 @@ def agregar_operaciones():
             if motivo_cierre_oper not in ("RETIRO", "EXONERACIÓN"):
                 return jsonify({"status": "error", "message": "Completa este campo"}), 400
 
-        conn = None
         conn = connect()
         cursor = conn.cursor()
 
@@ -1604,7 +1701,8 @@ def agregar_operaciones():
                 """, (codigo, tipo_cerrado, valor_conciliado_oper, usuario))
 
         
-        guardar_archivos(cursor, codigo, "table_damage_files", "DamageId", UPLOAD_FOLDERS["Operaciones"])
+        guardar_archivos(cursor, codigo, "table_damage_files", "DamageId", UPLOAD_FOLDERS["Operaciones"],
+                         rutas_guardadas)
         
 
         if termina_en_operaciones:
@@ -1659,5 +1757,6 @@ def agregar_operaciones():
         if conn:
             conn.rollback()
             conn.close()
+        borrar_archivos(rutas_guardadas)
         logger.exception("error_guardar_operaciones")
         return jsonify({"status": "error", "message": "No fue posible guardar la información de Operaciones."}), 500

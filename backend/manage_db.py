@@ -3,7 +3,7 @@
 import argparse
 import sys
 
-from config import connect
+from config import connect, crear_carpetas_media, UPLOAD_FOLDERS
 from schema_migrations import (
     HISTORY_TABLE,
     MigrationError,
@@ -14,9 +14,20 @@ from schema_migrations import (
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Validación y migraciones explícitas de SQL Server.")
-    parser.add_argument("command", choices=("migrate", "validate", "status"))
+    parser = argparse.ArgumentParser(
+        description="Validación y migraciones explícitas de SQL Server, y preparación de carpetas.")
+    parser.add_argument("command", choices=("migrate", "validate", "status", "preparar-carpetas"))
     args = parser.parse_args(argv)
+
+    if args.command == "preparar-carpetas":
+        try:
+            crear_carpetas_media()
+        except OSError as exc:
+            print(f"ERROR: no fue posible crear las carpetas de adjuntos: {exc}", file=sys.stderr)
+            return 1
+        for carpeta in UPLOAD_FOLDERS.values():
+            print(f"Lista: {carpeta}")
+        return 0
 
     try:
         conn = connect()

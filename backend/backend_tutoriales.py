@@ -134,6 +134,7 @@ def subir():
     stored_name = f"{uuid4().hex}{extension}"
     stored_path = VIDEO_DIR / stored_name
 
+    VIDEO_DIR.mkdir(parents=True, exist_ok=True)
     upload.save(stored_path)
 
     conn = None

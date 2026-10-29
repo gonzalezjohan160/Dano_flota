@@ -2,6 +2,7 @@
 
 import shutil
 import warnings
+from functools import lru_cache
 from pathlib import Path
 from uuid import uuid4
 
@@ -215,28 +216,60 @@ def store_upload(upload, directory, filename):
     return target
 
 
-def inline_type_for_path(path):
-    """Devuelve MIME seguro solo si extensión y contenido real son permitidos."""
-    path = Path(path)
+class _ArchivoComoUpload:
+    """Envuelve un archivo abierto para reutilizar las validaciones de subida."""
+
+    def __init__(self, path, stream):
+        self.filename = path.name
+        self.stream = stream
+
+
+def _imagen_con_formato_esperado(stream, extension):
+    """Al mostrar basta con leer la cabecera: no se decodifica la imagen completa
+    (eso ya se hizo al subirla). El navegador es quien la dibuja."""
+    esperado = {
+        ".jpg": "JPEG", ".jpeg": "JPEG", ".png": "PNG", ".gif": "GIF", ".webp": "WEBP",
+    }[extension]
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", Image.DecompressionBombWarning)
+            with Image.open(stream) as image:
+                return image.format == esperado
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+        return False
+
+
+@lru_cache(maxsize=4096)
+def _tipo_en_linea(ruta, _modificado_ns, _tamano):
+    """Resultado de la validación por archivo; la clave incluye fecha de
+    modificación y tamaño, así que un archivo que cambia se vuelve a validar."""
+    path = Path(ruta)
     extension = path.suffix.lower()
-    allowed = INLINE_TYPES.get(extension)
-    if not allowed:
+    with path.open("rb") as stream:
+        if extension in {".jpg", ".jpeg", ".png", ".gif", ".webp"}:
+            valido = _imagen_con_formato_esperado(stream, extension)
+        else:
+            valido = _valid_signature(_ArchivoComoUpload(path, stream), extension)
+    return INLINE_TYPES[extension][0] if valido else None
+
+
+def inline_type_for_path(path):
+    """Devuelve MIME seguro solo si extensión y contenido real son permitidos.
+
+    No hay límite de tamaño: los 5 MB aplican al subir, y los adjuntos antiguos
+    más pesados también se muestran en la galería (decisión de negocio B-16).
+    PDF, .mov y .avi siguen entregándose solo como descarga.
+    """
+    path = Path(path)
+    if path.suffix.lower() not in INLINE_TYPES:
         return None
     try:
-        if path.stat().st_size <= 0 or path.stat().st_size > MAX_ATTACHMENT_BYTES:
+        info = path.stat()
+        if info.st_size <= 0:
             return None
-        with path.open("rb") as stream:
-            class UploadView:
-                filename = path.name
-
-                def __init__(self, file_stream):
-                    self.stream = file_stream
-
-            if not _valid_signature(UploadView(stream), extension):
-                return None
+        return _tipo_en_linea(str(path), info.st_mtime_ns, info.st_size)
     except (OSError, ValueError):
         return None
-    return allowed[0]
 
 
 def apply_attachment_headers(response):

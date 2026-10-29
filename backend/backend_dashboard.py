@@ -1,10 +1,9 @@
-from flask import Blueprint, render_template, request, jsonify, send_from_directory, send_file, abort, json
+from flask import Blueprint, render_template, request
 from config import connect
-from datetime import datetime
-import folium
-from folium.plugins import HeatMap
 from backend_security import login_required, requiere_permiso, ufs_autorizadas_sesion
-import traceback
+from logger import logger
+from datetime import date
+from fechas import FechaInvalida, leer_rango_fechas
 from config import BASE_DIR
 
 Front_dashboard = Blueprint(
@@ -15,7 +14,6 @@ Front_dashboard = Blueprint(
 )
 
 
-from flask import render_template, request
 
 @Front_dashboard.route('/')
 @login_required
@@ -23,10 +21,16 @@ from flask import render_template, request
 def index():
     # 1. Obtener parámetros de los filtros desde la URL
     # Si no se envían, puedes definir fechas por defecto
-    f_inicio = request.args.get('fecha_inicio', '2025-01-01')
-    f_fin = request.args.get('fecha_fin', '2026-12-31')
+    try:
+        f_inicio, f_fin = leer_rango_fechas(request.args)
+    except FechaInvalida as error:
+        return str(error), 400
+    # Sin fechas se usa el rango por defecto de siempre.
+    f_inicio = f_inicio or date(2025, 1, 1)
+    f_fin = f_fin or date(2026, 12, 31)
     uf_filtro = request.args.get('uf', '')
     ufs = ufs_autorizadas_sesion()
+    error_carga = False
 
     conn = connect()
     cursor = conn.cursor()
@@ -46,7 +50,8 @@ def index():
         # Preparar base de la condición WHERE para reutilizar
         # Usamos parámetros (?) para evitar inyecciones SQL
         params = [f_inicio, f_fin]
-        where_clause = "WHERE d.Fecha_evento BETWEEN ? AND ?"
+        # Los casos eliminados no cuentan en ningún indicador (decisión de negocio M-16).
+        where_clause = "WHERE d.Fecha_evento BETWEEN ? AND ? AND ISNULL(d.eliminado, 0) = 0"
         if ufs:
             where_clause += f" AND d.UF IN ({marcadores_uf})"
             params.extend(ufs)
@@ -278,6 +283,7 @@ def index():
                 d.Parte_afectada
             FROM table_damage_to_fleet d
             WHERE d.Fecha_evento >= DATEADD(DAY, -62, GETDATE())
+              AND ISNULL(d.eliminado, 0) = 0
               AND {filtro_uf_ultimos}
             ORDER BY d.Fecha_evento DESC
         """
@@ -353,16 +359,24 @@ def index():
 
         # Procesamiento Mapa
         heat_data = []
+        coordenadas_invalidas = 0
         for row in coords_rows:
             if row[0] and ',' in row[0]:
                 try:
                     parts = row[0].split(',')
                     lat, lon = float(parts[0].strip()), float(parts[1].strip())
                     heat_data.append([lat, lon])
-                except: continue
-    
-    except Exception as e:
-        traceback.print_exc()
+                except ValueError:
+                    # Dirección guardada sin "lat,lon" numéricos: se omite del mapa.
+                    coordenadas_invalidas += 1
+        if coordenadas_invalidas:
+            logger.warning("dashboard_coordenadas_invalidas cantidad=%s", coordenadas_invalidas)
+
+    except Exception:
+        # Se registra en app.log y la pantalla avisa que no se pudieron cargar
+        # los datos, en vez de mostrar el panel vacío como si no hubiera eventos.
+        logger.exception("error_cargar_dashboard")
+        error_carga = True
         registros_final, costos_final, valores_final, operaciones_final, ranking, heat_data, lista_uf, franjas_final, rrll_final, ultimos_eventos, ranking_rutas, ranking_registradores, vehiculos_final, zonas_final = [], [], [], [], [], [], [], [], [], [], [], [], [], []
     
     finally:
@@ -385,4 +399,5 @@ def index():
                            ultimos_eventos = ultimos_eventos,
                            vehiculos = vehiculos_final,
                            zonas = zonas_final,
-                           f_inicio=f_inicio, f_fin=f_fin, uf_sel=uf_filtro)
+                           f_inicio=f_inicio, f_fin=f_fin, uf_sel=uf_filtro,
+                           error_carga=error_carga)

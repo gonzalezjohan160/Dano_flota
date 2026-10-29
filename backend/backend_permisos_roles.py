@@ -55,6 +55,7 @@ def asignar_permisos():
             flash('Permisos y estado actualizados correctamente', 'success')
         except Exception:
             conn.rollback()
+            logger.exception("error_actualizar_permisos")
             flash('No fue posible actualizar los permisos y el estado', 'error')
         finally:
             conn.close()
@@ -85,9 +86,11 @@ def eliminar_usuario():
             raise ValueError('El usuario seleccionado no existe.')
         conn.commit()
         flash('Usuario y permisos asociados eliminados correctamente', 'success')
-    except Exception as error:
+    except Exception:
         conn.rollback()
-        flash(f'No fue posible eliminar el usuario: {error}', 'error')
+        # El detalle técnico va al log; al usuario, un mensaje genérico.
+        logger.exception("error_eliminar_usuario")
+        flash('No fue posible eliminar el usuario.', 'error')
     finally:
         conn.close()
 

@@ -1,11 +1,8 @@
 import os
-from flask import Blueprint, request, session, render_template, jsonify, send_file, abort
-from datetime import datetime, date, timedelta
-from mimetypes import guess_type
+from flask import Blueprint, request, session, render_template, jsonify
+from datetime import datetime, timedelta
 from config import connect
-import pyodbc
 import requests
-import traceback
 from backend_security import (
     login_required,
     requiere_permiso,
@@ -14,7 +11,6 @@ from backend_security import (
 )
 from pathlib import Path
 from werkzeug.utils import secure_filename
-from flask import Flask
 from config import BASE_DIR
 from config import UPLOAD_FOLDERS
 from attachment_security import (
@@ -23,7 +19,6 @@ from attachment_security import (
     validate_uploads,
 )
 from logger import logger
-from backend_historico_movil import parse_fecha
 
 
 Capturador = Blueprint(
@@ -46,10 +41,6 @@ DANOS_OCASIONADOS_POR = (
     "CONDUCTA OPERACIONAL", "INFRAESTRUCTURA PATIO", "INFRAESTRUCTURA VIAL",
     "VANDALISMO", "MECÁNICO", "SINIESTRO VIAL", "ALISTAMIENTO",
 )
-
-
-FILES_DIR.mkdir(parents=True, exist_ok=True)
-
 
 
 # 🔹 Página principal
@@ -115,7 +106,7 @@ def get_conductor():
         conn.close()
         return jsonify({"nombre": row[0] if row else None})
     except Exception:
-        
+        logger.exception("error_consultar_conductor")
         return jsonify({"nombre": None})
 
 # 🔹 Obtener tipología de móvil
@@ -145,7 +136,7 @@ def get_flota():
             "movil_valido": bool(row)
         })
     except Exception:
-        
+        logger.exception("error_consultar_flota")
         return jsonify({"Tipologia_interno": None, "movil_valido": False})
       
 
@@ -178,7 +169,8 @@ def validar_duplicado():
 
         return jsonify({"duplicado": existe})
 
-    except Exception as e:
+    except Exception:
+        logger.exception("error_validar_duplicado")
         return jsonify({"duplicado": False})      
 
 # --- Definir constantes de restricción ---
@@ -233,7 +225,8 @@ def submit_form():
         parte_afectada = request.form.get('Parte_afectada')
         dano_ocasionado = request.form.get('Dano_ocasionado_por')
         Zona_dano = request.form.get('Zona_dano')
-        registrador = request.form.get('Inspector')
+        # El registrador es siempre el usuario de la sesión, nunca el campo del formulario.
+        registrador = session.get('usuario')
         centro_operaciones = request.form.get('Centro_de_operaciones')
         lat = request.form.get('Latitud')
         lon = request.form.get('Longitud')
@@ -275,6 +268,12 @@ def submit_form():
 
         if not fecha_evento_dt >= fecha_pasada:
             return jsonify({"error": "La fecha ingresada es superior a 2 meses."}), 400
+
+        # El evento no puede ser posterior a su registro (es "ahora"). Los casos
+        # que llegaron así eran confusiones de AM/PM o del día cerca de medianoche.
+        if fecha_evento_dt > fecha_registro:
+            return jsonify({"error": "La fecha del evento no puede ser posterior a la fecha y hora actuales. "
+                                     "Revise el día y si la hora es AM o PM."}), 400
             
 
         # --- 4. INSERTAR EN DB (REGISTRO PRINCIPAL) ---

@@ -1,14 +1,16 @@
 from flask import Blueprint, render_template, request, jsonify, send_file, abort, session
-import os
 from io import BytesIO
 import pandas as pd
 from config import connect
 from datetime import datetime
+from fechas import FechaInvalida, leer_rango_fechas, parse_fecha
+from logger import logger
 from backend_security import (
     login_required,
     requiere_permiso,
     usuario_puede_acceder_uf,
     ufs_autorizadas_sesion,
+    puede_ver_adjuntos_laborales,
 )
 from config import BASE_DIR
 
@@ -30,25 +32,13 @@ CONDICION_ESTADO = {
 }
 
 
-class FiltroInvalido(ValueError):
-    """Filtro con formato incorrecto; el mensaje se puede mostrar al usuario."""
+# Filtro con formato incorrecto; el mensaje se puede mostrar al usuario.
+FiltroInvalido = FechaInvalida
 
 
 def _leer_fechas():
     """Fechas opcionales del evento (AAAA-MM-DD). Vacías = sin filtro de fecha."""
-    fechas = {}
-    for campo, nombre in (('fecha_inicio', 'inicio'), ('fecha_fin', 'fin')):
-        texto = (request.args.get(campo) or '').strip()
-        if not texto:
-            fechas[campo] = None
-            continue
-        try:
-            fechas[campo] = datetime.strptime(texto, "%Y-%m-%d").date()
-        except ValueError:
-            raise FiltroInvalido(f"La fecha de {nombre} no es válida.") from None
-    if fechas['fecha_inicio'] and fechas['fecha_fin'] and fechas['fecha_inicio'] > fechas['fecha_fin']:
-        raise FiltroInvalido("La fecha de inicio no puede ser posterior a la fecha de fin.")
-    return fechas['fecha_inicio'], fechas['fecha_fin']
+    return leer_rango_fechas(request.args)
 
 
 def _leer_estados():
@@ -79,6 +69,7 @@ def _agregar_filtro_estados(filtros_sql, estados):
 def index():
     try:
         fecha_inicio, fecha_fin = _leer_fechas()
+        fecha_exacta = parse_fecha(request.args.get('f_fecha'), "la columna Fecha")
     except FiltroInvalido as error:
         return str(error), 400
     estados = _leer_estados()
@@ -89,7 +80,7 @@ def index():
     filtro_uf = request.args.get('filtro_uf', 'todos')
     filtros = {
         'id': request.args.get('f_id', '').strip(),
-        'fecha': request.args.get('f_fecha', '').strip(),
+        'fecha': fecha_exacta.isoformat() if fecha_exacta else '',
         'movil': request.args.get('f_movil', '').strip(),
         'codigo': request.args.get('f_codigo', '').strip(),
         'nombre': request.args.get('f_nombre', '').strip(),
@@ -137,14 +128,26 @@ def index():
     pagina = min(pagina, total_paginas)
     desplazamiento = (pagina - 1) * registros_por_pagina
 
-    # Solo se recupera la página solicitada. Los filtros se aplican antes
-    # del OFFSET para no cargar todo el histórico en el navegador.
+    # Los documentos de RRLL solo cuentan para quien puede abrirlos (M-17).
+    conteo_laboral = (
+        "(SELECT COUNT(*) FROM table_laboral_files f WHERE f.DamageToFleetId = d.Id)"
+        if puede_ver_adjuntos_laborales() else "0"
+    )
+
+    # Solo se recupera la página solicitada, en UNA consulta y con las columnas
+    # que muestra la tabla (B-12). Los filtros se aplican antes del OFFSET para
+    # no cargar todo el histórico; el resto de cada caso lo trae /detalle/<id>.
     query_main = f"""
             SELECT 
-                d.Id, d.Fecha_evento, d.Movil, d.Fecha_registro, d.UF, d.Codigo, d.Nombre, d.Ruta,
-                d.Tipologia, d.Direccion, d.Version_libre, d.Parte_afectada, d.Dano_ocasionado,
-                d.Zona_dano, d.Registrador, d.Centro_operaciones, d.Area, ISNULL(d.estado_caso, 0) AS estado_caso,
+                d.Id, d.Fecha_evento, d.Movil, d.Fecha_registro, d.UF, d.Codigo, d.Nombre,
+                ISNULL(d.estado_caso, 0) AS estado_caso,
                 ISNULL(d.eliminado, 0) AS eliminado,
+                CASE WHEN EXISTS (SELECT 1 FROM table_info_oper o WHERE o.Id_damage_to_fleet = d.Id)
+                     THEN 1 ELSE 0 END AS tiene_oper,
+                CASE WHEN EXISTS (SELECT 1 FROM table_info_mtto m WHERE m.Id_damage_to_fleet = d.Id)
+                     THEN 1 ELSE 0 END AS tiene_mtto,
+                CASE WHEN EXISTS (SELECT 1 FROM table_info_svial s WHERE s.Id_damage_to_fleet = d.Id)
+                     THEN 1 ELSE 0 END AS tiene_svial,
                 CASE WHEN ISNULL(d.estado_caso, 0) = 1 THEN COALESCE(
                     (SELECT MAX(l.Fecha_registro) FROM table_info_labora l WHERE l.Id_damage_to_fleet = d.Id),
                     cierre_modulos.Fecha_cierre
@@ -153,7 +156,7 @@ def index():
                     (SELECT COUNT(*) FROM table_damage_files f WHERE f.DamageId = d.Id) +
                     (SELECT COUNT(*) FROM table_mtto_files f WHERE f.DamageToFleetId = d.Id) +
                     (SELECT COUNT(*) FROM table_svial_files f WHERE f.DamageId = d.Id) +
-                    (SELECT COUNT(*) FROM table_laboral_files f WHERE f.DamageToFleetId = d.Id)
+                    {conteo_laboral}
                 ) AS archivos_count
             FROM table_damage_to_fleet d
             OUTER APPLY (
@@ -189,8 +192,9 @@ def index():
             try:
                 fecha_obj_r = datetime.fromisoformat(fecha_r.split('.')[0])
                 r['fecha_r'] = fecha_obj_r.strftime("%d/%m/%Y %H:%M:%S")
-            except:
-                r['fecha_r'] = r['fecha']  # fallback
+            except ValueError:
+                logger.warning("historico_fecha_registro_invalida id=%s", r.get('Id'))
+                r['fecha_r'] = r['fecha']  # se muestra la fecha del evento
         else:
             r['fecha_r'] = None
         del r['Fecha_registro']
@@ -202,54 +206,14 @@ def index():
             try:
                 fecha_obj_cierre = datetime.fromisoformat(fecha_cierre.split('.')[0])
                 r['fecha_cierre'] = fecha_obj_cierre.strftime("%d/%m/%Y %H:%M:%S")
-            except:
+            except ValueError:
+                logger.warning("historico_fecha_cierre_invalida id=%s", r.get('Id'))
                 r['fecha_cierre'] = None
         else:
             r['fecha_cierre'] = None
         del r['Fecha_cierre']
 
 
-
-    # 🔹 NUEVO: Traer oper, mtto y svial para cada registro
-    for r in registros:
-        registro_id = r['Id']
-        pass
-        
-        # Operaciones
-        cursor.execute("SELECT * FROM table_info_oper WHERE Id_damage_to_fleet = ?", registro_id)
-        oper = cursor.fetchall()
-        columnas_oper = [col[0] for col in cursor.description]
-        r['oper'] = [dict(zip(columnas_oper, row)) for row in oper]  # lista vacía si no hay
-        
-        # Mantenimiento
-        cursor.execute("SELECT * FROM table_info_mtto WHERE Id_damage_to_fleet = ?", registro_id)
-        mtto = cursor.fetchall()
-        columnas_mtto = [col[0] for col in cursor.description]
-        r['mtto'] = [dict(zip(columnas_mtto, row)) for row in mtto]
-        
-        # Seguridad vial
-        cursor.execute("SELECT * FROM table_info_svial WHERE Id_damage_to_fleet = ?", registro_id)
-        svial = cursor.fetchall()
-        columnas_svial = [col[0] for col in cursor.description]
-        r['svial'] = [dict(zip(columnas_svial, row)) for row in svial]
-
-        # Laboral unico
-        cursor.execute("SELECT * FROM table_info_labora WHERE Id_damage_to_fleet = ?", registro_id)
-        laboral = cursor.fetchall()
-        columnas_labora = [col[0] for col in cursor.description]
-        r['laboral'] = [dict(zip(columnas_labora, row)) for row in laboral]
-
-        # Laboral multiple
-        cursor.execute("SELECT * FROM table_info_laboral_mult WHERE Id_damage_to_fleet = ?", registro_id)
-        laboralm = cursor.fetchall()
-        columnas_laboralm = [col[0] for col in cursor.description]
-        r['laboralm'] = [dict(zip(columnas_laboralm, row)) for row in laboralm]
-
-        # Laboral multiple
-        cursor.execute("SELECT * FROM table_auditoria_correcciones WHERE Id_damage = ?", registro_id)
-        correcciones = cursor.fetchall()
-        columnas_correcciones = [col[0] for col in cursor.description]
-        r['correcciones'] = [dict(zip(columnas_correcciones, row)) for row in correcciones]
 
     conn.close()
     return render_template(
@@ -371,6 +335,9 @@ def detalle(id_damage):
     """, (id_damage,))
     columns_files_laboral = [col[0] for col in cursor.description]
     files_laboral = [dict(zip(columns_files_laboral, row)) for row in cursor.fetchall()]
+    # Los documentos de Relaciones Laborales solo se listan a RRLL.
+    if not puede_ver_adjuntos_laborales():
+        files_laboral = []
 
         # ARCHIVOS MTTO
     cursor.execute("""
