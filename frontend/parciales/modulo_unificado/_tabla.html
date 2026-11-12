@@ -1,0 +1,57 @@
+{# Módulo unificado: tabla principal de casos y paginación. #}
+<div class="table-card">
+    <table id="tabla-registros">
+        <thead>
+            <tr class="encabezado">
+                <th>
+                    ID
+                    <input type="text" data-col="0" placeholder="F ID">
+                </th>
+                <th>
+                    FECHA EVENTO
+                    <input type="date" data-col="1">
+                </th>
+                <th>
+                    MÓVIL
+                    <input type="text" data-col="2" placeholder="FILTRAR MÓVIL">
+                </th>
+                <th>
+                    CÓDIGO
+                    <input type="text" data-col="3" placeholder="FILTRAR CÓDIGO">
+                </th>
+                <th>
+                    NOMBRE
+                    <input type="text" data-col="4" placeholder="FILTRAR NOMBRE">
+                </th>
+                <th>
+                    DURACIÓN DESDE REGISTRO
+                    <input class="u-fondo-transparente u-borde-ninguno" disabled>
+                </th>
+                <th>
+                    DURACIÓN DESDE EVENTO
+                    <input class="u-fondo-transparente u-borde-ninguno" disabled>
+                </th>
+                <th class="col-fecha-laboral">
+                    FECHA R. LABORALES
+                    <input class="u-fondo-transparente u-borde-ninguno" disabled>
+                </th>
+                <th>
+                    ADJUNTOS
+                    <input class="u-fondo-transparente u-borde-ninguno" disabled>
+                </th>
+                <th>
+                    ACCIONES
+                    <input class="u-fondo-transparente u-borde-ninguno" disabled>
+                </th>
+            </tr>
+        </thead>
+
+        <tbody id="tablaRegistros"></tbody>
+    </table>
+
+    <div id="paginacionTabla" class="paginacion-tabla">
+        <span id="paginacionInfo">0–0 de 0</span>
+        <button id="btnPaginaAnterior" type="button" class="btn-paginacion" title="Página anterior">&#8249;</button>
+        <button id="btnPaginaSiguiente" type="button" class="btn-paginacion" title="Página siguiente">&#8250;</button>
+    </div>
+</div>

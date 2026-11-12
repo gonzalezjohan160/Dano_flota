@@ -1,0 +1,50 @@
+/* Clases de utilidad: antes eran atributos style="" en las plantillas.
+   Llevan !important para conservar la prioridad que tenía el estilo en línea.
+   display sigue en línea porque el JavaScript lo cambia con element.style.display. */
+
+.u-alinear-centro { text-align: center !important; }
+.u-alinear-derecha { text-align: right !important; }
+.u-alto-100 { height: 100px !important; }
+.u-ancho-100 { width: 100% !important; }
+.u-ancho-max-100 { max-width: 100% !important; }
+.u-ancho-max-80 { max-width: 80% !important; }
+.u-borde-1-solido-ccc { border: 1px solid #ccc !important; }
+.u-borde-1-solido-transparente { border: 1px solid transparent !important; }
+.u-borde-izq-5-solido-007bff { border-left: 5px solid #007bff !important; }
+.u-borde-ninguno { border: none !important; }
+.u-color-333 { color: #333 !important; }
+.u-color-356a3e { color: #356a3e !important; }
+.u-color-b30000 { color: #b30000 !important; }
+.u-color-c00 { color: #c00 !important; }
+.u-color-c33 { color: #c33 !important; }
+.u-color-c62828 { color: #c62828 !important; }
+.u-color-fff { color: #fff !important; }
+.u-color-red { color: red !important; }
+.u-fondo-c62828 { background: #c62828 !important; }
+.u-fondo-e0e0e0 { background: #e0e0e0 !important; }
+.u-fondo-f7f7f7 { background: #f7f7f7 !important; }
+.u-fondo-ffeaea { background: #ffeaea !important; }
+.u-fondo-transparente { background: transparent !important; }
+.u-fuente-monoespaciada { font-family: monospace !important; }
+.u-grosor-letra-600 { font-weight: 600 !important; }
+.u-grosor-letra-bold { font-weight: bold !important; }
+.u-margen-0-0-10 { margin: 0 0 10px !important; }
+.u-margen-20-0 { margin: 20px 0 !important; }
+.u-margen-abajo-12 { margin-bottom: 12px !important; }
+.u-margen-abajo-15 { margin-bottom: 15px !important; }
+.u-margen-arriba-10 { margin-top: 10px !important; }
+.u-margen-arriba-12 { margin-top: 12px !important; }
+.u-margen-arriba-15 { margin-top: 15px !important; }
+.u-margen-arriba-20 { margin-top: 20px !important; }
+.u-margen-arriba-4 { margin-top: 4px !important; }
+.u-margen-arriba-5 { margin-top: 5px !important; }
+.u-margen-izq-12 { margin-left: 12px !important; }
+.u-posicion-relativa { position: relative !important; }
+.u-redondeo-2 { border-radius: 2px !important; }
+.u-redondeo-4 { border-radius: 4px !important; }
+.u-redondeo-6 { border-radius: 6px !important; }
+.u-redondeo-8 { border-radius: 8px !important; }
+.u-relleno-10 { padding: 10px !important; }
+.u-relleno-15 { padding: 15px !important; }
+.u-tamano-letra-13 { font-size: 13px !important; }
+.u-tamano-letra-20 { font-size: 20px !important; }

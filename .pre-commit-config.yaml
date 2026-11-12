@@ -1,0 +1,12 @@
+# Revisión antes de cada commit: imports y variables sin uso (B-03).
+# Instalación una vez por equipo: pip install -r requirements-dev.txt && pre-commit install
+repos:
+  - repo: local
+    hooks:
+      - id: pyflakes
+        name: pyflakes (código muerto)
+        entry: pyflakes
+        language: python
+        additional_dependencies: [pyflakes==4.0.3]
+        types: [python]
+        exclude: ^venv/

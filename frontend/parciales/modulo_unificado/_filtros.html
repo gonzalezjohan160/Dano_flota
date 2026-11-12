@@ -1,0 +1,31 @@
+{# Módulo unificado: filtros sobre la tabla (UF, estado y exportación). #}
+<div class="u-alinear-derecha u-margen-abajo-15">
+    <label for="filtroUF">Filtrar por UF:</label>
+    <select id="filtroUF" class="btn">
+        <option value="todos">Todos</option>
+        <option value="10">UF 10</option>
+        <option value="16">UF 16</option>
+    </select>
+    <label class="u-margen-izq-12" for="filtroEstado">Estado:</label>
+    <select id="filtroEstado" class="btn">
+        <option value="pendientes" selected>Pendientes</option>
+        {% if modulo == 'Mtto' %}
+            <option value="pendiente_ot">Pendientes OT</option>
+        {% endif %}
+        <option value="gestionados">Gestionados</option>
+        {% if modulo == 'laboral' %}
+            <option value="comite">Comite</option>
+        {% endif %}
+        <option value="cerrados">Cerrados</option>
+        <option value="todos">Todos</option>
+    </select>
+    {% if modulo == 'laboral' %}
+    <span class="filtros-fecha-rrll">
+        <label for="filtroFechaDesde">Inicio:</label>
+        <input type="date" id="filtroFechaDesde">
+        <label for="filtroFechaHasta">Fin:</label>
+        <input type="date" id="filtroFechaHasta">
+    </span>
+    <button id="btnExportarLaboral" type="button" class="btn">Excel</button>
+    {% endif %}
+</div>

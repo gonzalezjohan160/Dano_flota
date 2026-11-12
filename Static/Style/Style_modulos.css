@@ -141,12 +141,43 @@ form select {
 }
 
 .adjunto-item {
+    position: relative;
     background: #f9f9f9;
     border: 1px solid #ddd;
     border-radius: 8px;
     text-align: center;
     padding: 10px;
     transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.adjunto-eliminar-imagen {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    z-index: 2;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: #c62828;
+    color: #fff;
+    font-size: 24px;
+    line-height: 24px;
+    cursor: pointer;
+}
+
+.adjunto-eliminar-imagen:hover,
+.adjunto-eliminar-imagen:focus-visible {
+    background: #8e1515;
+    outline: 2px solid #111;
+    outline-offset: 2px;
+}
+
+.galeria-aviso-eliminacion {
+    grid-column: 1 / -1;
+    color: #8e1515;
+    text-align: center;
 }
 
 .adjunto-item:hover {
@@ -677,12 +708,12 @@ tbody tr:hover {
     flex-wrap: nowrap;
     align-items: center;
     gap: 20px;
-    background-color: white; 
+    background-color: white;
     padding: 8px 20px;
     border-radius: 4px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     margin-bottom: 20px;
-    
+
     /* AJUSTE DE CAPAS: Bajamos el z-index para que el modal pase por encima */
     position: relative;
     z-index: 10; /* Antes estaba en 1000, lo bajamos a 10 */

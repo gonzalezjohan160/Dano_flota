@@ -9,6 +9,10 @@ from unittest.mock import patch
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
+# Las pruebas escriben su log aparte, no en backend/logs/app.log.
+os.environ.setdefault("APP_LOG_DIR", tempfile.mkdtemp(prefix="dano-flota-logs-"))
+# Las pruebas validan la configuración de producción, sin importar el .env local.
+os.environ["APP_ENV"] = "prod"
 os.environ.setdefault("SECRET_KEY", "n07-test-only")
 os.environ.setdefault("MEDIA_DIR", tempfile.mkdtemp(prefix="dano-flota-n07-csp-"))
 sys.path.insert(0, str(PROJECT_DIR / "backend"))
@@ -29,7 +33,14 @@ class DashboardCspTests(unittest.TestCase):
                 pass
 
             def fetchone(self):
-                return (0,)
+                # Activo, UF, Cambio_password_obligatorio
+                return (1, "10", 0)
+
+            def fetchall(self):
+                # Permisos de las páginas que recorre la prueba (la autorización
+                # central se aplica aunque la vista esté reemplazada).
+                return [("Ingresar_dashboard",), ("Ingresar_historico_danos",),
+                        ("Ingresar_danos_vs_reparaciones",), ("Ingresar_modulo__oper",)]
 
             def close(self):
                 pass

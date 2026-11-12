@@ -1,0 +1,29 @@
+# Sitio nginx para Daño Flota.
+# Plantilla: solo se reemplazan las variables listadas en readme.md, sección 3.8
+# (envsubst con lista explícita, para no tocar $host, $scheme, etc. de nginx).
+
+server {
+    listen 80;
+    server_name ${SERVER_NAME};
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name ${SERVER_NAME};
+
+    ssl_certificate     ${SSL_CERT};
+    ssl_certificate_key ${SSL_KEY};
+
+    # Igual que Flask: 10 MB de archivos más margen para el formulario multipart.
+    client_max_body_size 11m;
+
+    location / {
+        proxy_pass http://unix:${GUNICORN_SOCKET};
+        proxy_set_header Host $host;
+        # ProxyFix (backend_interfaz.py) confía en estas cabeceras de un solo proxy.
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 180s;
+    }
+}

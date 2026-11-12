@@ -7,19 +7,7 @@
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous"
     />
-    <style>
-        .paginacion-tabla { display:flex; align-items:center; justify-content:flex-end; gap:6px; padding:10px 4px; font-size:13px; color:#5f6368; }
-        .btn-paginacion { width:28px; height:28px; border:none; border-radius:50%; background:transparent; color:#5f6368; font-size:16px; cursor:pointer; }
-        .btn-paginacion:hover:not(:disabled) { background:#eee; }
-        .btn-paginacion:disabled { color:#ccc; cursor:not-allowed; }
-        .filtro-estados { display:flex; align-items:center; gap:10px; border:none; margin:0; padding:0; }
-        .filtro-estados legend { float:left; padding:0; margin-right:4px; font-weight:bold; }
-        .filtro-estados label { display:flex; align-items:center; gap:3px; font-size:13px; cursor:pointer; white-space:nowrap; }
-        .estado-caso { font-weight:bold; }
-        .estado-abierto { color:#1a73e8; }
-        .estado-cerrado { color:#188038; }
-        .estado-eliminado { color:#c5221f; }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='Style/Style_historico_danos.css') }}">
 {% endblock %}
    
    
@@ -93,31 +81,31 @@
                     </th>
                     <th>
                         DURACIÓN DESDE REGISTRO
-                        <input disabled style="background:transparent; border:none;">
+                        <input class="u-fondo-transparente u-borde-ninguno" disabled>
                     </th>
                     <th>
                         DURACIÓN DESDE EVENTO
-                        <input disabled style="background:transparent; border:none;">
+                        <input class="u-fondo-transparente u-borde-ninguno" disabled>
                     </th>
                                         <th>
                         OPER.
-                        <input disabled style="background:transparent; border:none;">
+                        <input class="u-fondo-transparente u-borde-ninguno" disabled>
                     </th>
                     <th>
                         MTTO
-                        <input disabled style="background:transparent; border:none;">
+                        <input class="u-fondo-transparente u-borde-ninguno" disabled>
                     </th>
                     <th>
                         S. VIAL
-                        <input disabled style="background:transparent; border:none;">
+                        <input class="u-fondo-transparente u-borde-ninguno" disabled>
                     </th>
                     <th>
                         ADJUNTOS
-                        <input disabled style="background:transparent; border:none;">
+                        <input class="u-fondo-transparente u-borde-ninguno" disabled>
                     </th>
                     <th>
                         ESTADO
-                        <input disabled style="background:transparent; border:none;">
+                        <input class="u-fondo-transparente u-borde-ninguno" disabled>
                     </th>
                 </tr>
             </thead>
@@ -134,10 +122,10 @@
 
     <!-- Modal de Adjuntos -->
     <div id="modalAdjuntos" class="modal">
-        <div class="modal-content" style="max-width: 80%;">
+        <div class="modal-content u-ancho-max-80">
             <span class="close" data-csp-action="cerrar-modal-adjuntos">&times;</span>
 
-            <h3 style="text-align:center;">📝 INFORMACIÓN DEL EVENTO <span id="modal_laboral1"></span></h3>
+            <h3 class="u-alinear-centro">📝 INFORMACIÓN DEL EVENTO <span id="modal_laboral1"></span></h3>
             <div class="tabla-estilo">
                 <table id="infoEvento">
                     <thead>
@@ -150,10 +138,10 @@
             </div>
 
                     <!-- MAPA -->
-            <h3 style="text-align:center;">🗺️ UBICACIÓN DEL EVENTO</h3>
+            <h3 class="u-alinear-centro">🗺️ UBICACIÓN DEL EVENTO</h3>
             <div id="map"></div>
 
-            <h3 style="text-align:center;">📋 INFORMACIÓN DE CONTROL OPERACIONAL</h3>
+            <h3 class="u-alinear-centro">📋 INFORMACIÓN DE CONTROL OPERACIONAL</h3>
             <div class="tabla-estilo">
                 <table id="info_oper">
                     <thead>
@@ -165,7 +153,7 @@
                 </table>
             </div>            
 
-            <h3 style="text-align:center;">👨‍🔧 INFORMACIÓN DE MANTENIMIENTO</h3>
+            <h3 class="u-alinear-centro">👨‍🔧 INFORMACIÓN DE MANTENIMIENTO</h3>
             <div class="tabla-estilo">
                 <table id="info_mtto">
                     <thead>
@@ -177,7 +165,7 @@
                 </table>
             </div>
 
-            <h3 style="text-align:center;">👮‍♂️ INFORMACIÓN DE SEGURIDAD VÍAL</h3>
+            <h3 class="u-alinear-centro">👮‍♂️ INFORMACIÓN DE SEGURIDAD VÍAL</h3>
             <div class="tabla-estilo">
                 <table id="info_svial">
                     <thead>
@@ -189,7 +177,7 @@
                 </table>
             </div>
 
-            <h3 style="text-align:center;">⚖️ INFORMACIÓN DEBIDO PROCESO</h3>
+            <h3 class="u-alinear-centro">⚖️ INFORMACIÓN DEBIDO PROCESO</h3>
             <div class="tabla-estilo">
                 <table id="info_laboral">
                     <thead>
@@ -201,7 +189,7 @@
                 </table>
             </div>
             
-            <h3 style="text-align:center;">🔄 CORRECCIONES</h3>
+            <h3 class="u-alinear-centro">🔄 CORRECCIONES</h3>
             <div class="tabla-estilo">
                 <table id="info_correcciones">
                     <thead>
@@ -213,7 +201,7 @@
                 </table>
             </div>  
 
-            <h3 style="text-align:center;">📎 ARCHIVOS ADJUNTOS</h3>
+            <h3 class="u-alinear-centro">📎 ARCHIVOS ADJUNTOS</h3>
             
             <!-- Galería -->
             <div id="galeriaAdjuntos" class="galeria"></div>
@@ -249,9 +237,12 @@
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous">
     </script>
 
-    <script src="{{ url_for('static', filename='Script/Mult_formularios.js') }}"></script>
+    <script src="{{ url_for('static', filename='Script/Historicos_comun/lightbox_mapa.js') }}"></script>
+    <script src="{{ url_for('static', filename='Script/Historicos_comun/festivos_adjuntos.js') }}"></script>
+    <script src="{{ url_for('static', filename='Script/Historicos_comun/duraciones_galeria.js') }}"></script>
     <script src="{{ url_for('static', filename='Script/Script_utils.js') }}"></script>
-    <script src="{{ url_for('static', filename='Script/Script_historico_danos.js') }}"></script>
+    <script src="{{ url_for('static', filename='Script/Historico_danos/tabla.js') }}"></script>
+    <script src="{{ url_for('static', filename='Script/Historico_danos/detalle.js') }}"></script>
 
 {% endblock %}
    

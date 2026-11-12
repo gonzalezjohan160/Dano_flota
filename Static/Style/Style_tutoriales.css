@@ -1,0 +1,259 @@
+/* Tutoriales: estilos de la pantalla (antes en un <style> de frontend/tutoriales.html). */
+
+.tutoriales-page {
+    padding: 28px 32px;
+    color: #162d4d;
+}
+
+.tutoriales-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 22px;
+}
+
+.tutoriales-heading h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 500;
+    text-transform: lowercase;
+}
+
+.tutoriales-upload,
+.tutoriales-watch,
+.tutoriales-submit,
+.tutoriales-delete {
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font: inherit;
+    cursor: pointer;
+}
+
+.tutoriales-upload,
+.tutoriales-submit {
+    background: #20ad61;
+    color: #fff;
+}
+
+.tutoriales-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    gap: 20px;
+}
+
+.tutorial-card {
+    overflow: hidden;
+    border: 1px solid #d9dee4;
+    border-radius: 13px;
+    background: #fff;
+}
+
+.tutorial-thumb {
+    position: relative;
+    height: 145px;
+    display: grid;
+    place-items: center;
+    background: #203e64;
+    color: white;
+}
+
+.tutorial-thumb-mark {
+    font-size: 36px;
+    line-height: 1;
+}
+
+.tutorial-duration {
+    position: absolute;
+    right: 10px;
+    bottom: 8px;
+    padding: 3px 7px;
+    border-radius: 5px;
+    background: #101820;
+    color: white;
+    font-size: 13px;
+}
+
+.tutorial-card-body {
+    padding: 13px 16px 15px;
+}
+
+.tutorial-card h2 {
+    margin: 0 0 9px;
+    font-size: 17px;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+.tutorial-category {
+    display: inline-block;
+    border-radius: 20px;
+    padding: 4px 11px;
+    background: #e2f3eb;
+    color: #176442;
+    font-size: 13px;
+}
+
+.tutorial-description {
+    margin: 9px 0 0;
+    color: #596574;
+    font-size: 14px;
+}
+
+.tutoriales-watch {
+    width: 100%;
+    margin-top: 12px;
+    background: #347fea;
+    color: #fff;
+}
+
+.tutoriales-delete {
+    width: 100%;
+    margin-top: 8px;
+    background: #c62828;
+    color: #fff;
+}
+
+.tutoriales-watch:hover {
+    background: #286ac8;
+}
+
+.tutoriales-delete:hover {
+    background: #a91f1f;
+}
+
+.tutoriales-empty {
+    padding: 30px 18px;
+    border: 1px dashed #bbc5cf;
+    border-radius: 12px;
+    color: #596574;
+    text-align: center;
+}
+
+.tutoriales-flashes {
+    margin-bottom: 14px;
+}
+
+.tutoriales-flash {
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: #edf5ff;
+}
+
+.tutorial-dialog {
+    width: min(760px, 94vw);
+    border: 0;
+    border-radius: 12px;
+    padding: 18px;
+}
+
+.tutorial-dialog::backdrop {
+    background: #101820bb;
+}
+
+.tutorial-dialog video {
+    width: 100%;
+    max-height: 70vh;
+    background: #111;
+}
+
+.tutorial-dialog-close {
+    float: right;
+    margin-bottom: 10px;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+}
+
+.tutorial-upload-dialog {
+    width: min(520px, 94vw);
+    border: 0;
+    border-radius: 14px;
+    padding: 0 26px 28px;
+    overflow: hidden;
+}
+
+.tutorial-upload-dialog::backdrop {
+    background: #10182099;
+}
+
+.tutorial-upload-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 -26px 26px;
+    padding: 17px 24px;
+    background: #0c2340;
+    color: #fff;
+}
+
+.tutorial-upload-head h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 500;
+}
+
+.tutorial-upload-head button {
+    border: 0;
+    color: #fff;
+    background: transparent;
+    font-size: 25px;
+    cursor: pointer;
+}
+
+.tutorial-upload-form {
+    display: grid;
+    gap: 12px;
+}
+
+.tutorial-upload-form label {
+    display: grid;
+    gap: 8px;
+    color: #777;
+}
+
+.tutorial-upload-form input[type="text"] {
+    width: 100%;
+    padding: 13px;
+    border: 1px solid #cbd3dc;
+    border-radius: 9px;
+    font: inherit;
+}
+
+.tutorial-upload-form input[type="file"] {
+    width: 100%;
+    min-height: 92px;
+    padding: 22px 12px;
+    border: 2px dashed #cbd3dc;
+    border-radius: 9px;
+    font: inherit;
+}
+
+.tutorial-upload-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.tutorial-upload-cancel {
+    padding: 10px 20px;
+    border: 1px solid #cbd3dc;
+    border-radius: 8px;
+    background: #fff;
+    color: #666;
+    font: inherit;
+    cursor: pointer;
+}
+
+@media (max-width:600px) {
+    .tutoriales-page {
+        padding: 20px 14px;
+    }
+
+    .tutoriales-heading {
+        align-items: flex-start;
+    }
+}

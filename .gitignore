@@ -23,3 +23,11 @@ __pycache__/
 
 # Logs
 *.log
+*.log.[0-9]*
+*.log.lock
+backend/logs/
+# Herramientas personales del equipo de desarrollo (B-04)
+frontend/start_venv.ps1
+# Soluciones y proyectos de SQL Server Management Studio
+*.ssmssln
+*.ssmssqlproj

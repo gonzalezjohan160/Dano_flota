@@ -5,13 +5,7 @@
         <title>Login – GDAMAGES</title>
         <link rel="stylesheet" href="{{ url_for('Modulo_login.static', filename='Style/Style_login.css') }}">
 
-        <style>
-            body {
-                /* Flask renderizará esta ruta correctamente aquí */
-                background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), 
-                                url("{{ url_for('Modulo_login.static', filename='Images/Fondo_login.jpg') }}");
-            }
-        </style>
+        <link rel="stylesheet" href="{{ url_for('Modulo_login.static', filename='Style/Style_login_fondo.css') }}">
     </head>
     <body>
         <div class="login-container">

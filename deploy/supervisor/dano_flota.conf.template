@@ -1,0 +1,21 @@
+; Programa de Supervisor para Daño Flota.
+; Plantilla: las variables ${...} se reemplazan con envsubst (ver readme.md, sección 3.8).
+; Las claves (SECRET_KEY, DB_PASSWORD, SMTP_PASSWORD...) van en el .env, no aquí.
+
+[program:dano_flota]
+command=${VENV_DIR}/bin/gunicorn -c ${APP_DIR}/gunicorn.conf.py wsgi:app
+directory=${APP_DIR}
+; Usuario de servicio sin shell; nunca root (gunicorn.conf.py se niega a arrancar).
+user=${APP_USER}
+autostart=true
+autorestart=true
+; Tiempo que debe seguir arriba para considerarse iniciado, y reintentos antes
+; de quedar en FATAL (el 9 de octubre se agotaron y la app quedó caída).
+startsecs=10
+startretries=10
+stopasgroup=true
+killasgroup=true
+redirect_stderr=true
+stdout_logfile=${LOG_DIR}/gunicorn.log
+stdout_logfile_maxbytes=20MB
+stdout_logfile_backups=5

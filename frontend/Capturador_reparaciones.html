@@ -15,8 +15,9 @@
         <!-- Unidad Funcional y Móvil -->
         <select name="UF" id="UF_input" required>
             <option value="" disabled selected hidden>SELECCIONE LA UNIDAD FUNCIONAL</option>
-            <option value="10">10</option>
-            <option value="16">16</option>
+            {% for uf in unidades_funcionales %}
+            <option value="{{ uf }}">{{ uf }}</option>
+            {% endfor %}
         </select>
 
         <input type="text" name="Movil" id="Movil_input" placeholder="INGRESE EL ID MÓVIL" required autocomplete="off">
@@ -72,10 +73,10 @@
             <button type="button" id="btnStopVideo" disabled>⏹ Detener</button>
         </div><br><br>
         <!-- indicador de inicio de grabación -->
-        <div id="camara_container" style="position:relative; width:100%; display:flex;">
+        <div class="u-posicion-relativa u-ancho-100" id="camara_container" style="display:flex;">
             <div id="camara_recordDot"></div>
             <div id="camara_timer">00:00</div>
-            <video id="camara" autoplay playsinline style="width:100%; border-radius:8px;"></video>
+            <video class="u-ancho-100 u-redondeo-8" id="camara" autoplay playsinline></video>
         </div>
 
         <!-- Visualizador de fotos -->
@@ -115,6 +116,12 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 
-<script src="{{ url_for('static', filename='Script/Script_captur_rep.js') }}"></script>
+<!-- Catálogos de la base: prefijo del móvil por UF -->
+<script id="catalogos-json" type="application/json">
+    {{ catalogos_formulario|tojson|safe }}
+</script>
+<script src="{{ url_for('static', filename='Script/Capturador_reparaciones/formulario_fotos.js') }}"></script>
+<script src="{{ url_for('static', filename='Script/Capturador_reparaciones/video_audio.js') }}"></script>
+<script src="{{ url_for('static', filename='Script/Capturador_reparaciones/adjuntos_envio.js') }}"></script>
 
 {% endblock %}

@@ -1,0 +1,113 @@
+{# Módulo unificado: modal de detalle cruzado y adjuntos del caso. #}
+<!-- Modal de Adjuntos / Detalle cruzado -->
+<div id="modalAdjuntos" class="modal">
+    <div class="modal-content u-ancho-max-80">
+        <span class="close" data-csp-action="cerrar-modal-adjuntos">&times;</span>
+        <div id="seccionLaboralPendiente" style="display:none;">
+            <h3 class="u-alinear-centro">⚖️ RELACIONES LABORALES</h3>
+            <div class="tabla-estilo">
+                <table id="info_laboral_pendiente">
+                    <thead>
+                        <tr></tr>
+                    </thead>
+                    <tbody id="infoEventoLaboralPendiente"></tbody>
+                </table>
+            </div>
+            <hr>
+        </div>
+        <div id="seccionGeneral">
+            <h3 class="u-alinear-centro" id="tituloInformacionEvento">📝 INFORMACIÓN DEL EVENTO <span id="modal_registro1"></span></h3>
+            <div class="tabla-estilo">
+                <table id="infoEvento">
+                    <thead>
+                        <tr></tr>
+                    </thead>
+                    <tbody id="infoEventoBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- MAPA -->
+        <h3 class="u-alinear-centro">🗺️ UBICACIÓN DEL EVENTO</h3>
+        <p class="u-alinear-centro u-margen-0-0-10 u-color-356a3e" id="mensajeMapaEdicion" style="display:none;">
+            Haga clic en el mapa para establecer la ubicación manual del evento.
+        </p>
+        <div id="map"></div>
+
+        <div id="seccionOper" data-seccion="oper">
+            <h3 class="u-alinear-centro">🛠️ INFORMACIÓN OPERACIONAL</h3>
+            <div class="tabla-estilo">
+                <table id="info_oper">
+                    <thead>
+                        <tr></tr>
+                    </thead>
+                    <tbody id="infoEventooper"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="seccionMTTO" data-seccion="mtto">
+            <h3 class="u-alinear-centro">👨‍🔧 INFORMACIÓN DE MANTENIMIENTO</h3>
+            <div class="tabla-estilo">
+                <table id="info_mtto">
+                    <thead>
+                        <tr></tr>
+                    </thead>
+                    <tbody id="infoEventomtto"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="seccionSvial" data-seccion="svial">
+            <h3 class="u-alinear-centro">👮‍♂️ INFORMACIÓN DE SEGURIDAD VÍAL</h3>
+            <div class="tabla-estilo">
+                <table id="info_svial">
+                    <thead>
+                        <tr></tr>
+                    </thead>
+                    <tbody id="infoEventosvial"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="seccionLaboral" data-seccion="laboral">
+            <h3 class="u-alinear-centro">⚖️ RELACIONES LABORALES</h3>
+            <div class="tabla-estilo">
+                <table id="info_laboral">
+                    <thead>
+                        <tr></tr>
+                    </thead>
+                    <tbody id="infoEventolaboral"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <h3 class="u-alinear-centro">📎 ARCHIVOS ADJUNTOS</h3>
+        <div id="galeriaAdjuntos" class="galeria"></div>
+
+        <div class="u-alinear-centro u-margen-arriba-15" id="accionesModificacion" style="display:none;">
+            {% if modulo == 'Operaciones' and 'Corregir_info_oper' in session.get('permisos', []) %}
+            <button id="btn_editar_informacion" type="button" class="btn btn-success">Editar información</button>
+            {% endif %}
+            {% if modulo == 'Operaciones' and 'Eliminar_evento' in session.get('permisos', []) %}
+            <button id="btn_eliminar_evento" type="button" class="btn u-fondo-c62828 u-color-fff">Eliminar caso</button>
+            {% endif %}
+            <button id="btn_guardar_modificacion" type="button" class="btn btn-success" style="display:none;">Guardar información</button>
+            <label id="btn_elegir_archivos_edicion" for="archivos_edicion" class="btn u-fondo-e0e0e0 u-color-333" style="display:none;">Elegir archivos</label>
+            <input type="file" id="archivos_edicion" accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mp3,.ogg,.wav,.pdf,.avi,.mov,.opus" multiple style="display:none;">
+            <button id="btn_cancelar_modificacion" type="button" class="btn" style="display:none;">Cancelar</button>
+        </div>
+        <div class="u-margen-arriba-12" id="lista_archivos_edicion" style="display:none;"></div>
+
+        <!-- ================= MOTIVO DE LA MODIFICACIÓN ================= -->
+        <div id="seccionMotivoModificacion" style="display:none;">
+            <h3 class="u-alinear-centro">📝 Motivo de la modificación o eliminación</h3>
+            <div class="form-group">
+                <label for="motivo_modificacion">Motivo de la modificación o eliminación *</label>
+                <textarea class="u-ancho-100" id="motivo_modificacion" name="motivo_modificacion" rows="3"
+                    placeholder="Escriba el motivo por el cual está realizando esta modificación o eliminación..." required></textarea>
+            </div>
+        </div>
+
+    </div>
+</div>

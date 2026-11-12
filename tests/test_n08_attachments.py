@@ -12,6 +12,10 @@ from werkzeug.datastructures import FileStorage
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
+# Las pruebas escriben su log aparte, no en backend/logs/app.log.
+os.environ.setdefault("APP_LOG_DIR", tempfile.mkdtemp(prefix="dano-flota-logs-"))
+# Las pruebas validan la configuración de producción, sin importar el .env local.
+os.environ["APP_ENV"] = "prod"
 TEST_MEDIA_DIR = tempfile.TemporaryDirectory(prefix="dano-flota-n08-")
 os.environ["MEDIA_DIR"] = TEST_MEDIA_DIR.name
 os.environ.setdefault("SECRET_KEY", "n08-test-only")
@@ -43,6 +47,9 @@ class FakeCursor:
 
     def fetchone(self):
         return self.result
+
+    def close(self):
+        self.cerrado = True
 
 
 class FakeConnection:
@@ -104,6 +111,29 @@ class AttachmentValidationTests(unittest.TestCase):
         with self.assertRaises(security.AttachmentValidationError):
             security.validate_uploads(uploads)
 
+    def test_upload_batch_limits_video_and_other_files_separately(self):
+        limit = security.MAX_ATTACHMENT_BYTES
+        video_header = b"\x1a\x45\xdf\xa3webm"
+        video = file_storage("evidencia.webm", video_header.ljust(limit, b"\0"))
+        audio_header = bytes.fromhex(
+            "1a45dfa3 87 4282 84 7765626d 18538067 ff 1654ae6b 85 ae83 838102"
+        )
+        audio = file_storage("grabacion.webm", audio_header.ljust(limit // 4, b"\0"))
+        docs = [audio] + [
+            file_storage(f"{index}.pdf", b"%PDF-".ljust(limit // 4, b" ")) for index in range(3)
+        ]
+        self.assertEqual(security.validate_uploads([video, *docs]), [video, *docs])
+
+        cases = (
+            ([video, file_storage("segundo.webm", video_header)], "un video"),
+            ([file_storage("grande.webm", video_header.ljust(limit + 1, b"\0"))], "5 MB"),
+            ([file_storage("grande.pdf", b"%PDF-".ljust(limit, b" ")), docs[0]], "en conjunto"),
+            ([*docs, file_storage("otro.pdf", b"%PDF-")], "cuatro archivos"),
+        )
+        for uploads, message in cases:
+            with self.subTest(message=message), self.assertRaisesRegex(security.AttachmentValidationError, message):
+                security.validate_uploads(uploads)
+
     def test_path_like_filename_is_sanitized_for_storage(self):
         upload = file_storage("../../evidencia.jpg", make_image("JPEG"))
         security.validate_upload(upload)
@@ -126,7 +156,7 @@ class AttachmentValidationTests(unittest.TestCase):
             ):
                 cursor = FakeCursor(None)
                 with self.assertRaises(security.AttachmentValidationError):
-                    unificado.guardar_archivos(cursor, 1, "table_damage_files", "DamageId", Path(folder))
+                    unificado.guardar_archivos(cursor, 1, Path(folder))
             self.assertFalse(target.exists())
             self.assertEqual(cursor.sql, "")
 
@@ -135,7 +165,7 @@ class AttachmentValidationTests(unittest.TestCase):
             with Flask("n08-invalid-case-path").test_request_context("/upload", method="POST"):
                 with self.assertRaises(security.AttachmentValidationError):
                     unificado.guardar_archivos(
-                        FakeCursor(None), "../../outside", "table_damage_files", "DamageId", Path(folder)
+                        FakeCursor(None), "../../outside", Path(folder)
                     )
             self.assertEqual(list(Path(folder).iterdir()), [])
 

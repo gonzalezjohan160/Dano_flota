@@ -1,0 +1,178 @@
+{# Módulo unificado: modal "Añadir info" con el formulario de la gestión del módulo. #}
+<!-- Modal de operaciones (formulario "Añadir info" de la sección propia del módulo) -->
+<div id="miModal" class="modal">
+    <div class="modal-content">
+        <span class="close" data-csp-action="cerrar-modal">&times;</span>
+        <h3>
+            <b>AGREGUE INFORMACIÓN SOBRE EL EVENTO: </b>
+            <span id="modal_registro"></span>
+        </h3>
+
+        <form id="formModal" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <!-- ================= INFORMACIÓN DEL CASO ================= -->
+            <div id="cardInfoCaso" class="card-seccion">
+                <div class="card-seccion-header">📌 Información del caso</div>
+
+                <!-- Campos extra específicos de Relaciones Laborales -->
+                <div id="bloqueCamposLaboral" style="display:none;">
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="fecha_presentacion">Fecha de presentación</label>
+                            <input type="date" id="fecha_presentacion">
+                        </div>
+                        <div class="form-group">
+                            <label for="estado_caso_toggle">Caso pendiente por el proceso</label>
+                            <div id="estado_caso_multiselect" class="multiselect">
+                                <button type="button" id="estado_caso_toggle" class="multiselect-toggle">
+                                    <span id="estado_caso_label">Seleccione estados</span>
+                                    <span class="multiselect-flecha">&#9662;</span>
+                                </button>
+                                <div id="estado_caso_opciones" class="multiselect-opciones">
+                                    <label class="multiselect-opcion">
+                                        <input type="checkbox" value="MANTENIMIENTO"> MANTENIMIENTO
+                                    </label>
+                                    <label class="multiselect-opcion">
+                                        <input type="checkbox" value="SEGURIDAD VIAL"> SEGURIDAD VIAL
+                                    </label>
+                                    <label class="multiselect-opcion">
+                                        <input type="checkbox" value="OPERACIONES"> OPERACIONES
+                                    </label>
+                                    <label class="multiselect-opcion">
+                                        <input type="checkbox" value="COMITE"> COMITE
+                                    </label>
+                                    <label class="multiselect-opcion">
+                                        <input type="checkbox" value="COMPLETO"> COMPLETO
+                                    </label>
+                                </div>
+                                <input type="hidden" id="estado_caso" value="">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="bloqueCampoPrincipal">
+                    <label id="lblCampoPrincipal" for="campo_principal"></label>
+                    <textarea class="u-ancho-100" id="campo_principal" rows="3" required></textarea>
+
+                    <!-- Solo Mantenimiento: el campo principal es un valor
+                         monetario, así que se reemplaza
+                         el textarea de arriba por este input con formato
+                         de miles. -->
+                    <input class="u-ancho-100" type="text" id="campo_principal_costo_display" placeholder="Ingrese solo número"
+                        inputmode="numeric" style="display:none;">
+                </div>
+
+                <div class="u-margen-arriba-12" id="bloqueConciliadoFavor" style="display:none;">
+
+                    <label for="conciliado_a_favor">
+                        CONCILIADO A FAVOR
+                    </label>
+
+                    <select class="u-ancho-100" id="conciliado_a_favor">
+                        <option value="">-- Seleccione una opción --</option>
+                        <option value="terceros">A favor de terceros</option>
+                        <option value="empresa">A favor de la empresa</option>
+                    </select>
+
+                    <br><br>
+
+                    <label for="valor_conciliado_terceros">
+                        VALOR CONCILIADO
+                    </label>
+
+                    <input class="u-ancho-100" type="text" id="valor_conciliado_terceros" placeholder="Ingrese el valor" inputmode="numeric"
+                        disabled>
+
+                </div>
+
+                <!-- Solo Mantenimiento -->
+                <div id="bloqueDanoAdicional" style="display:none;">
+                    <label class="form-label">¿EXISTE ALGÚN DAÑO MÁS ASOCIADO AL EVENTO?</label>
+                    <div class="radio-buttons pastilla">
+                        <label>
+                            <input type="radio" name="DanoAdicional" value="NO" checked>
+                            <span>NO</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="DanoAdicional" value="SI">
+                            <span>SÍ</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= CIERRE DEL CASO ================= -->
+            <div id="cardCierre" class="card-seccion card-cierre">
+                <div class="card-seccion-header">🔒 Cierre del caso</div>
+
+                <label id="lblRevision" class="form-label">¿LA INFORMACIÓN CARGADA ES CORRECTA?</label>
+                <div id="bloqueRevision">
+                    <div class="radio-buttons">
+                        <label>
+                            <input type="radio" name="Revinf" value="SI" checked>
+                            <span>SI</span>
+                        </label>
+
+                        <label>
+                            <input type="radio" name="Revinf" value="NO">
+                            <span>NO</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Solo Relaciones Laborales -->
+                <div id="bloqueLaboralCierre" style="display:none;">
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="motivo_cierre">Motivo del cierre</label>
+                            <select id="motivo_cierre" disabled>
+                                <option value="" disabled selected>Seleccione el motivo</option>
+                                <option value="RECOMENDACIÓN DE T.H">RECOMENDACIÓN DE T.H</option>
+                                <option value="LLAMADO DE ATENCIÓN">LLAMADO DE ATENCIÓN</option>
+                                <option value="SUSPENSIÓN">SUSPENSIÓN</option>
+                                <option value="TERMINACIÓN DE CONTRATO">TERMINACIÓN DE CONTRATO</option>
+                                <option value="CONCILIACIÓN">CONCILIACIÓN</option>
+                                <option value="CONCILIACIÓN Y DISCIPLINARIOS">CONCILIACIÓN Y DISCIPLINARIOS</option>
+                                <option value="EXTEMPORÁNEO">EXTEMPORÁNEO</option>
+                                <option value="EXTEMPORÁNEO_CONCILIACIÓN">EXTEMPORÁNEO_CONCILIACIÓN</option>
+                                <option value="EXONERACIÓN">EXONERACIÓN</option>
+                                <option value="RETIRO">RETIRO</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="valor_conciliado_display">Valor conciliado</label>
+                            <input type="text" id="valor_conciliado_display" placeholder="Ingrese solo número"
+                                inputmode="numeric" disabled>
+                            <input type="hidden" id="valor_conciliado" value="">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="bloqueObservaciones">
+                <label class="u-margen-arriba-10" for="observaciones">OBSERVACIONES:</label>
+                <textarea class="u-ancho-100" id="observaciones" rows="3" disabled></textarea><br><br>
+            </div>
+
+            {% include "parciales/modulo_unificado/_flujo_operaciones.html" %}
+
+            <div id="cardEvidencias" class="card-seccion">
+                <div class="card-seccion-header">📎 Evidencias</div>
+                <label id="lblEvidencia" for="evidencia">SUBA LAS EVIDENCIAS:</label><br>
+                <input type="file" id="evidencia" accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mp3,.ogg,.wav,.pdf,.avi,.mov,.opus" multiple><br><br>
+                <div id="lista_adjuntos"></div>
+            </div>
+
+            <div id="bloqueMotivoGestion" class="card-seccion" style="display:none;">
+                <label for="motivo_gestion">MOTIVO DEL CAMBIO</label>
+                <textarea class="u-ancho-100" id="motivo_gestion" rows="3"></textarea>
+            </div>
+
+            <div class="u-alinear-derecha">
+                <button id="btnGuardar" type="submit" class="btn btn-success">💾 Guardar información</button>
+            </div>
+        </form>
+    </div>
+</div>

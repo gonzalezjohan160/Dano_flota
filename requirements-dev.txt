@@ -1,0 +1,4 @@
+# Herramientas de desarrollo; no se instalan en el servidor.
+-r requirements.txt
+pyflakes==4.0.3
+pre-commit==4.3.0

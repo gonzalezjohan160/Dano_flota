@@ -14,6 +14,10 @@
 <div class="dashboard-container">
     <h1 class="dashboard-title">Panel de Control - Daños a la Flota</h1>
 
+    {% if error_carga %}
+    <div class="flash error">No fue posible cargar los datos del panel. Inténtelo nuevamente; si persiste, informe a TI.</div>
+    {% endif %}
+
     <form class="filter-bar" method="GET">
         <div class="filter-group">
             <label>Fecha Inicio</label>
@@ -86,14 +90,21 @@
         </div>
 
         <div class="card">
-            <div class="card-header">Costo daños vs conciliado</div>
+            <div class="card-header">Costo daños vs conciliado (últimos 6 meses)</div>
             <div class="card-body">
                 <canvas id="barChart2"></canvas>
             </div>
         </div>
 
         <div class="card">
-            <div class="card-header">Total de casos vs casos cerrados</div>
+            <div class="card-header">Costo del daño (últimos 6 meses)</div>
+            <div class="card-body">
+                <canvas id="lineChartCostoDano"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Total de casos vs casos cerrados (últimos 6 meses)</div>
             <div class="card-body">
                 <canvas id="barChartRRLL"></canvas>
             </div>
@@ -266,8 +277,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
 <!-- JSON de registros -->
 <script id="registros-json" type="application/json">{{ registros | tojson }}</script>
-<script id="costos-json" type="application/json">{{ costos | tojson }}</script>
 <script id="franjas-json" type="application/json">{{ franjas | tojson }}</script>
+<script id="mantenimiento-json" type="application/json">{{ mantenimiento | default([]) | tojson }}</script>
 <script id="valores-json" type="application/json">{{ valores | tojson }}</script>
 <script id="operaciones-json" type="application/json">{{ operaciones | tojson }}</script>
 <script id="rr-json" type="application/json">{{ rrll | tojson }}</script>
@@ -280,7 +291,7 @@
 <canvas id="barChart"></canvas>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js" integrity="sha384-mFKkGiGvT5vo1fEyGCD3hshDdKmW3wzXW/x+fWriYJArD0R3gawT6lMvLboM22c0" crossorigin="anonymous"></script>
-<script src="{{ url_for('Front_dashboard.static', filename='Script/Script_dashboard.js') }}"></script>
+<script src="{{ url_for('Front_dashboard.static', filename='Script/Script_dashboard.js', v=dashboard_script_version | default('6meses-2')) }}"></script>
 
 
 {% endblock %}

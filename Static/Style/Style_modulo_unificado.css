@@ -1,0 +1,268 @@
+/* Módulo unificado: estilos propios de la pantalla (antes en un <style> de
+   frontend/Modulo_unificado.html). Los compartidos siguen en Style_modulos.css.
+   El nuevo look del modal "Añadir info" de RRLL va bajo #formModal.form-laboral. */
+
+#formModal .card-seccion-header {
+    display: none;
+}
+
+#formModal.form-laboral .card-seccion {
+    background: #f7f8fa;
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 18px;
+}
+
+#formModal.form-laboral .card-cierre {
+    background: #eaf2ff;
+    border-left: 4px solid #2f6fed;
+}
+
+#formModal.form-laboral .card-seccion-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    color: #2f6fed;
+    margin-bottom: 14px;
+    font-size: 15px;
+}
+
+#formModal.form-laboral .form-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+#formModal.form-laboral .form-group label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-size: 14px;
+}
+
+#formModal.form-laboral .form-group input,
+#formModal.form-laboral .form-group select {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+}
+
+#formModal.form-laboral #bloqueCampoPrincipal label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-size: 14px;
+}
+
+/* Caso pendiente
+   por el proceso: Mantenimiento / S.Vial / Operaciones / Completo */
+#formModal.form-laboral .multiselect {
+    position: relative;
+}
+
+#formModal.form-laboral .multiselect-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    background: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    text-align: left;
+    color: #333;
+}
+
+#formModal.form-laboral .multiselect-flecha {
+    color: #888;
+    margin-left: 8px;
+}
+
+#formModal.form-laboral .multiselect-opciones {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+    z-index: 20;
+    padding: 6px 0;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+#formModal.form-laboral .multiselect-opciones.abierto {
+    display: block;
+}
+
+#formModal.form-laboral .multiselect-opcion {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    font-weight: 500;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+#formModal.form-laboral .multiselect-opcion:hover {
+    background: #f2f5fb;
+}
+
+#formModal.form-laboral .multiselect-opcion input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+#formModal.form-laboral #lblEvidencia {
+    display: none;
+}
+
+/* Toggle NO/SÍ tipo pastilla, en vez del radio button plano */
+#formModal.form-laboral #bloqueRevision .radio-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-direction: row-reverse;
+    /* en RRLL se ve NO primero, luego SI */
+}
+
+#formModal.form-laboral #bloqueRevision .radio-buttons label {
+    padding: 8px 24px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    background: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    color: #333;
+}
+
+#formModal.form-laboral #bloqueRevision .radio-buttons input[type="radio"] {
+    display: none;
+}
+
+#formModal.form-laboral #bloqueRevision .radio-buttons label:has(input:checked) {
+    background: #28a745;
+    color: #fff;
+    border-color: #28a745;
+}
+
+/* Toggle NO/SÍ tipo pastilla reutilizable */
+.radio-buttons.pastilla {
+    display: flex;
+    gap: 10px;
+    margin: 6px 0 16px;
+}
+
+.radio-buttons.pastilla label {
+    padding: 8px 24px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    background: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    color: #333;
+}
+
+.radio-buttons.pastilla input[type="radio"] {
+    display: none;
+}
+
+.radio-buttons.pastilla label:has(input:checked) {
+    background: #28a745;
+    color: #fff;
+    border-color: #28a745;
+}
+
+#formModal.form-laboral select:disabled,
+#formModal.form-laboral input:disabled {
+    background: #eee;
+    color: #888;
+    cursor: not-allowed;
+}
+
+/* Barra de paginación: texto de rango + flechas
+   circulares, alineada a la derecha debajo de la tabla. */
+.paginacion-tabla {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    padding: 10px 4px;
+    font-size: 13px;
+    color: #5f6368;
+}
+
+.btn-paginacion {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #5f6368;
+    font-size: 16px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.btn-paginacion:hover:not(:disabled) {
+    background: #eee;
+}
+
+.btn-paginacion:disabled {
+    color: #ccc;
+    cursor: not-allowed;
+}
+
+.filtros-fecha-rrll {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: 12px;
+}
+
+.filtros-fecha-rrll label {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #303030;
+}
+
+.filtros-fecha-rrll input[type="date"] {
+    width: 190px;
+    height: 48px;
+    padding: 0 14px;
+    border: 1px solid #c8c8c8;
+    border-radius: 8px;
+    background: #fff;
+    color: #202124;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+
+#btnExportarLaboral {
+    margin-left: 12px;
+    padding: 12px 22px;
+    border-radius: 6px;
+    background: #28a745;
+    color: #fff;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+#btnExportarLaboral:hover {
+    background: #218838;
+}

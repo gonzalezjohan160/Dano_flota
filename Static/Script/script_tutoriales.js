@@ -45,7 +45,7 @@
         const submitButton = document.querySelector(".tutoriales-submit");
         const mensajePesoVideo = document.getElementById("mensajePesoVideo");
 
-        const MAX_SIZE = 20 * 1024 * 1024; // 20 MB
+        const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 
         titleInput.addEventListener("input", () => {
             titleInput.value = titleInput.value.slice(0, 200);

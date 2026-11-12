@@ -25,9 +25,8 @@ class FakeCursor:
         elif "sys.default_constraints AS dc" in normalized and "TYPE_NAME(c.user_type_id)" in normalized:
             self.result = list(self.connection.schema_rows)
         elif "FROM sys.tables" in normalized:
-            self.result = [(name,) for name in (
-                self.connection.available_tables
-            )]
+            # Requisito previo: cuántas de las tablas pedidas existen.
+            self.result = [(sum(1 for nombre in params if nombre in self.connection.available_tables),)]
         elif "CREATE TABLE dbo.SchemaMigrations" in normalized:
             self.connection.history_exists = True
         elif normalized.startswith("SELECT Version, FileName, ContentHash"):
@@ -57,11 +56,12 @@ class FakeCursor:
     def fetchall(self):
         return self.result or []
 
+    def nextset(self):
+        return False
+
 
 class FakeConnection:
-    def __init__(self, schema_rows=(), available_tables=(
-        "Table_usuarios", "table_damage_to_fleet", "table_info_oper"
-    )):
+    def __init__(self, schema_rows=(), available_tables=("usuario.Table_usuarios",)):
         self.schema_rows = schema_rows
         self.available_tables = available_tables
         self.history = {}
@@ -87,21 +87,32 @@ class FakeConnection:
 
 def complete_schema():
     return [
-        ("Table_usuarios", "Cambio_password_obligatorio", "bit", 1, 0, "((0))"),
-        ("table_damage_to_fleet", "eliminado", "bit", 1, 1, "((0))"),
-        ("table_tutoriales", "Titulo", "nvarchar", 400, 1, None),
-        ("table_info_oper", "responsabilidad_operador", "varchar", 20, 1, None),
-        ("table_info_oper", "conciliacion", "varchar", 10, 1, None),
+        ("usuario", "Table_usuarios", "Cambio_password_obligatorio", "bit", 1, 0, "((0))"),
+        ("flota", "table_damage_to_fleet", "eliminado", "bit", 1, 0, "((0))"),
+        ("usuario", "Table_usuarios", "Alcance_UF", "varchar", 20, 1, None),
+        ("flota", "table_damage_to_fleet", "estado_caso", "bit", 1, 0, "((0))"),
+        ("flota", "table_damage_to_fleet", "usuario_id", "int", 4, 1, None),
+        ("proceso", "table_info_oper", "usuario_id", "int", 4, 0, None),
+        ("proceso", "table_info_mtto", "usuario_id", "int", 4, 1, None),
+        ("proceso", "table_info_svial", "usuario_id", "int", 4, 0, None),
+        ("proceso", "table_info_labora", "usuario_id", "int", 4, 0, None),
+        ("proceso", "table_info_laboral_mult", "usuario_id", "int", 4, 1, None),
+        ("proceso", "table_auditoria_correcciones", "usuario_id", "int", 4, 1, None),
+        ("proceso", "table_intervenciones", "usuario_id", "int", 4, 0, None),
+        ("usuario", "table_tutoriales", "Titulo", "nvarchar", 400, 1, None),
+        ("proceso", "table_info_oper", "responsabilidad_operador", "varchar", 20, 1, None),
+        ("proceso", "table_info_oper", "conciliacion", "varchar", 10, 1, None),
     ]
 
 
 class SchemaMigrationTests(unittest.TestCase):
     def test_migration_files_are_ordered_safe_single_batches(self):
         migrations = load_migrations()
-        self.assertEqual([1, 2, 3, 4, 5], [m.version for m in migrations])
+        self.assertEqual(list(range(1, 13)), [m.version for m in migrations])
         for migration in migrations:
             self.assertNotRegex(migration.sql, r"(?im)^\s*GO\s*$")
-            self.assertIn("OBJECT_ID", migration.sql)
+            # Cada una revisa primero el estado de la base (no corre a ciegas).
+            self.assertRegex(migration.sql, r"OBJECT_ID|SCHEMA_ID|DATABASE_PRINCIPAL_ID", migration.filename)
         self.assertIn("DF_Table_usuarios_Cambio_password_obligatorio", migrations[0].sql)
         self.assertIn("DEFAULT (0)", migrations[0].sql)
         self.assertIn("varchar(20) NULL", migrations[2].sql)
@@ -174,8 +185,8 @@ class SchemaMigrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             directory = Path(temp)
             (directory / "001_first.sql").write_text("SELECT 1;", encoding="utf-8")
-            conn = FakeConnection(available_tables=("Table_usuarios",))
-            with self.assertRaisesRegex(MigrationError, "(?i)faltan tablas requeridas"):
+            conn = FakeConnection(available_tables=())
+            with self.assertRaisesRegex(MigrationError, "Falta la tabla de usuarios"):
                 apply_migrations(conn, directory)
             self.assertFalse(conn.history_exists)
 
@@ -184,20 +195,23 @@ class SchemaMigrationTests(unittest.TestCase):
         validate_required_schema(conn)
 
         missing = FakeConnection(complete_schema()[:-1])
-        with self.assertRaisesRegex(SchemaValidationError, "falta dbo.table_info_oper.conciliacion"):
+        with self.assertRaisesRegex(SchemaValidationError, "falta proceso.table_info_oper.conciliacion"):
             validate_required_schema(missing)
 
         wrong_type_rows = complete_schema()
-        wrong_type_rows[0] = ("Table_usuarios", "Cambio_password_obligatorio", "varchar", 1, 0, None)
+        wrong_type_rows[0] = ("usuario", "Table_usuarios", "Cambio_password_obligatorio", "varchar", 1, 0, None)
         with self.assertRaisesRegex(SchemaValidationError, "debe ser bit"):
             validate_required_schema(FakeConnection(wrong_type_rows))
 
         wrong_default_rows = complete_schema()
-        wrong_default_rows[1] = (
-            "table_damage_to_fleet", "eliminado", "bit", 1, 1, "((1))"
-        )
+        wrong_default_rows[1] = ("flota", "table_damage_to_fleet", "eliminado", "bit", 1, 0, "((1))")
         with self.assertRaisesRegex(SchemaValidationError, r"valor predeterminado \(0\)"):
             validate_required_schema(FakeConnection(wrong_default_rows))
+
+    def test_alcance_uf_admite_nvarchar_de_20_caracteres(self):
+        filas = complete_schema()
+        filas[2] = ("usuario", "Table_usuarios", "Alcance_UF", "nvarchar", 40, 1, None)
+        validate_required_schema(FakeConnection(filas))
 
     def test_connection_error_is_distinct_from_schema_incompatibility(self):
         def fail_to_connect():
@@ -226,11 +240,73 @@ class SchemaMigrationTests(unittest.TestCase):
         # Sin rutas de archivo de una instancia concreta: debe correr en cualquier servidor.
         self.assertNotIn("FILENAME", script)
 
+    # Solo estas migraciones pueden modificar o borrar datos o estructura, con la
+    # aprobación de negocio que explica cada una en su encabezado:
+    #   006: limpieza (S. Vial duplicada auditada, intervenciones de prueba, adjuntos
+    #        duplicados, textos 'NULL' o vacíos, espacios sobrantes, SAN ÁNDRES y
+    #        enlaces de recuperación vencidos).
+    #   008: renombrado; quita UF y tipología del caso (son las del móvil) y traduce
+    #        el historial de correcciones a los nombres nuevos.
+    #   009: quita y recrea restricciones y columnas calculadas para cambiar tipos.
+    MIGRACIONES_QUE_MODIFICAN = {
+        "006_limpieza_datos_auditoria.sql",
+        "008_renombrar_tablas_y_columnas.sql",
+        "009_tipos_de_datos.sql",
+    }
+
     def test_migrations_do_not_update_or_delete_historical_data(self):
         for migration in load_migrations():
-            self.assertNotRegex(migration.sql, r"(?i)\b(?:UPDATE|DELETE|DROP)\b")
-            self.assertNotRegex(migration.sql, r"(?i)\bWITH\s+VALUES\b")
+            if migration.filename in self.MIGRACIONES_QUE_MODIFICAN:
+                continue
+            # Dar permisos a un rol (GRANT) no modifica datos, y la cascada de una clave
+            # foránea solo propaga cambios futuros.
+            codigo = "\n".join(l for l in migration.sql.splitlines()
+                               if not l.lstrip().startswith(("--", "GRANT ")))
+            codigo = codigo.replace("ON UPDATE CASCADE", "")
+            self.assertNotRegex(codigo, r"(?i)\b(?:UPDATE|DELETE|DROP)\b", migration.filename)
+            self.assertNotRegex(codigo, r"(?i)\bWITH\s+VALUES\b", migration.filename)
 
+    def _sql(self, version):
+        migracion = {m.version: m for m in load_migrations()}[version]
+        return "\n".join(l for l in migracion.sql.splitlines() if not l.lstrip().startswith("--"))
+
+    def test_migracion_006_audita_la_gestion_de_svial_antes_de_borrarla(self):
+        sql = self._sql(6)
+        # Solo S. Vial se depura (la más reciente se conserva); los demás duplicados detienen la migración.
+        self.assertIn("ORDER BY s.Fecha_registro DESC, s.Id DESC", sql)
+        self.assertIn("THROW 51062", sql)
+        self.assertLess(sql.index("INSERT INTO proceso.table_auditoria_correcciones"), sql.index("DELETE FROM ordenadas"))
+        self.assertIn("'SAN ANDRÉS'", sql)
+
+    def test_migracion_008_verifica_uf_y_tipologia_antes_de_quitarlas(self):
+        sql = self._sql(8)
+        self.assertIn("THROW 51082", sql)
+        self.assertLess(sql.index("THROW 51082"), sql.index("DROP COLUMN UF, Tipologia"))
+
+    def test_migracion_009_franja_horaria_persistida(self):
+        # BD-18: la fórmula debe ser determinista para admitir PERSISTED.
+        sql = self._sql(9)
+        self.assertIn("DATEPART(HOUR, fecha_registro)", sql)
+        self.assertEqual(sql.count("PERSISTED"), 2)
+        self.assertNotIn("CONVERT(TIME", sql, "la conversión desde texto no es determinista")
+        self.assertIn("ALTER COLUMN fecha_registro datetime2(0) NOT NULL", sql)
+
+    def test_migracion_010_relaciones_y_claves_foraneas(self):
+        sql = self._sql(10)
+        for tabla in ("gestion_operaciones", "gestion_mantenimiento", "gestion_seguridad_vial", "cierre_laboral"):
+            self.assertIn(f"CONSTRAINT UQ_{tabla}_caso_id UNIQUE (caso_id)", sql)
+        self.assertIn("FOREIGN KEY (movil) REFERENCES flota.movil (numero) ON UPDATE CASCADE", sql)
+        self.assertIn("FOREIGN KEY (registrado_por) REFERENCES usuario.usuario (nombre_usuario) ON UPDATE CASCADE", sql)
+        # El código del operador no es clave foránea: el maestro solo tiene a los activos.
+        self.assertNotIn("FOREIGN KEY (codigo_operador)", sql)
+        # Las correcciones de casos borrados antes del borrado lógico se conservan.
+        self.assertIn("proceso.correccion WITH NOCHECK ADD", sql)
+        # Decisión de negocio: no hay regla entre fecha del evento y fecha de registro.
+        self.assertNotRegex(sql, r"CHECK \(fecha_evento")
+
+    def test_ya_no_hay_migraciones_pendientes_fuera_de_la_secuencia(self):
+        carpeta = Path(__file__).resolve().parents[1] / "backend" / "migrations" / "pendientes"
+        self.assertFalse(carpeta.exists())
 
 if __name__ == "__main__":
     unittest.main()

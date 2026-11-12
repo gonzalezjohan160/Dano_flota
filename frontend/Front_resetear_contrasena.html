@@ -9,6 +9,11 @@
     <div class="login-container">
         <h2>Crear nueva contraseña</h2>
 
+        {% if error %}
+        <div class="flash error">{{ error }}</div>
+        {% endif %}
+        <p>Mínimo 10 caracteres, con mayúsculas, minúsculas y al menos un número, sin incluir su usuario.</p>
+
         <form method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="password" name="password" placeholder="Nueva contraseña" required>

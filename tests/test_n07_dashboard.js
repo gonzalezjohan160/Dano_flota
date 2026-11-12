@@ -39,7 +39,7 @@ class Element {
 const xss = "<img src=x onerror=alert(1)>";
 const jsonData = {
     "registros-json": [[2026, 10, 1, 2, 3, 4]],
-    "costos-json": [[2026, 10, 200]],
+    "mantenimiento-json": [[2026, 8, 200], [2026, 9, 0], [2026, 10, 300]],
     "valores-json": [[2026, 10, 100]],
     "operaciones-json": [[2026, 10, 50]],
     "heat-data-json": [[4.7, -74]],
@@ -70,7 +70,8 @@ const document = {
 let chartsCreated = 0;
 let mapTilesCreated = 0;
 let heatLayersCreated = 0;
-function Chart() { chartsCreated += 1; }
+const chartConfigs = [];
+function Chart(element, config) { chartsCreated += 1; chartConfigs.push(config); }
 const L = {
     map: () => ({ setView() { return this; }, invalidateSize() {} }),
     tileLayer: () => ({ addTo() { mapTilesCreated += 1; } }),
@@ -83,7 +84,19 @@ vm.runInNewContext(script, {
 });
 document.ready();
 
-assert.strictEqual(chartsCreated, 4);
+assert.strictEqual(chartsCreated, 5);
+const maintenanceChart = chartConfigs.find(config =>
+    config.data.datasets.some(series => series.label === "Costo Mantenimiento"));
+assert.strictEqual(maintenanceChart.type, "line");
+assert.deepStrictEqual(Array.from(maintenanceChart.data.labels),
+    ["2026-08", "2026-09", "2026-10"]);
+assert.deepStrictEqual(Array.from(maintenanceChart.data.datasets[0].data), [200, 0, 300]);
+const financialChart = chartConfigs.find(config => config.type === "line" &&
+    config.data.datasets.some(series => series.label === "Costo Operaciones"));
+assert.deepStrictEqual(Array.from(financialChart.data.datasets, series => series.label),
+    ["Costo Operaciones", "Valor Conciliado"]);
+assert.deepStrictEqual(Array.from(financialChart.data.datasets[0].data), [50]);
+assert.deepStrictEqual(Array.from(financialChart.data.datasets[1].data), [100]);
 assert.strictEqual(mapTilesCreated, 1);
 assert.strictEqual(heatLayersCreated, 1);
 

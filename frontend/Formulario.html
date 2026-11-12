@@ -23,15 +23,16 @@
         <!-- Unidad Funcional y Móvil -->
         <select name="UF" id="UF_input" required>
             <option value="" disabled selected hidden>SELECCIONE LA UNIDAD FUNCIONAL</option>
-            <option value="10">10</option>
-            <option value="16">16</option>
+            {% for uf in unidades_funcionales %}
+            <option value="{{ uf }}">{{ uf }}</option>
+            {% endfor %}
         </select>
 
         <input type="text" name="Movil" id="Movil_input" placeholder="INGRESE EL ID MÓVIL" required autocomplete="off">
 
-        <div style="text-align:center; margin:20px 0;">
-            <img src="/Static/Images/Tabla_codigos.jpg" alt="Tabla de códigos"
-                style="max-width: 100%; height: 100px; border-radius:2px;">
+        <div class="u-alinear-centro u-margen-20-0">
+            <img class="u-ancho-max-100 u-alto-100 u-redondeo-2" src="/Static/Images/Tabla_codigos.jpg" alt="Tabla de códigos"
+               >
         </div>
 
         <!-- Código y Nombre -->
@@ -64,7 +65,7 @@
         </select>
 
         <!-- Dirección -->
-        <div style="position: relative;">
+        <div class="u-posicion-relativa">
             <input type="text" id="direccion" name="Direccion" placeholder="INGRESE LA DIRECCIÓN" required
                 autocomplete="off">
             <div id="sugerencias"></div>
@@ -82,7 +83,7 @@
 
         <select name="Zona_dano" id="Zona_dano_input" required>
             <option value="" disabled selected hidden>SELECCIONE LA ZONA AFECTADA</option>
-            {% for zona in zonas_dano %}
+            {% for zona in listas.zonas_dano %}
             <option value="{{ zona }}">{{ zona }}</option>
             {% endfor %}
         </select><br>
@@ -92,7 +93,7 @@
 
         <select name="Dano_ocasionado_por" id="Dano_ocasionado_por_input" required>
             <option value="" disabled selected hidden>SELECCIONE LA CAUSA DEL DAÑO</option>
-            {% for causa in danos_ocasionados_por %}
+            {% for causa in listas.tipos_dano %}
             <option value="{{ causa }}">{{ causa }}</option>
             {% endfor %}
         </select><br>
@@ -102,10 +103,9 @@
 
         <select name="Centro_de_operaciones" id="Centro_de_operaciones_input" required>
             <option value="" disabled selected hidden>SELECCIONE EL CENTRO DE OPERACIÓNES</option>
-            <option value="GAITANA">GAITANA</option>
-            <option value="SAN ÁNDRES">SAN ÁNDRES</option>
-            <option value="BILBAO">BILBAO</option>
-            <option value="SAN BERNARDINO">SAN BERNARDINO</option>
+            {% for centro in listas.centros_operacion %}
+            <option value="{{ centro }}">{{ centro }}</option>
+            {% endfor %}
         </select><br>
 
         <!-- Evidencias -->
@@ -127,10 +127,10 @@
             <button type="button" id="btnStopVideo" disabled>⏹ Detener</button>
         </div><br>
         <!-- indicador de inicio de grabación -->
-        <div id="camara_container" style="position:relative; width:100%; display:flex;">
+        <div class="u-posicion-relativa u-ancho-100" id="camara_container" style="display:flex;">
             <div id="camara_recordDot"></div>
             <div id="camara_timer">00:00</div>
-            <video id="camara" autoplay playsinline style="width:100%; border-radius:8px;"></video>
+            <video class="u-ancho-100 u-redondeo-8" id="camara" autoplay playsinline></video>
         </div>
 
         <!-- Visualizador de fotos -->
@@ -162,13 +162,7 @@
         </div>
         <div id="audios_preview"></div><br>
         <div id="lista_audios"></div>
-        <div id="audio_timer" style="
-            display:none;
-            font-size: 20px;
-            font-weight: bold;
-            margin-top: 5px;
-            color: red;
-        ">
+        <div class="u-tamano-letra-20 u-grosor-letra-bold u-margen-arriba-5 u-color-red" id="audio_timer" style="display:none;">
             ● 00:00
         </div>
         <div class="botones-video">
@@ -176,14 +170,7 @@
         </div>
         <p id="mensaje"></p>
 
-        <div id="debug_envio" style="
-            background:#f7f7f7;
-            padding:15px;
-            margin-top:20px;
-            border-left:5px solid #007bff;
-            font-family: monospace;
-            display:none;
-        ">
+        <div class="u-fondo-f7f7f7 u-relleno-15 u-margen-arriba-20 u-borde-izq-5-solido-007bff u-fuente-monoespaciada" id="debug_envio" style="display:none;">
             <h3>📦 Resumen del envío</h3>
             <pre id="debug_text"></pre>
         </div>
@@ -218,6 +205,13 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 
-<script src="{{ url_for('static', filename='Script/Script_captur.js') }}"></script>
+<!-- Catálogos de la base: rutas por UF, áreas por código y prefijo del móvil -->
+<script id="catalogos-json" type="application/json">
+    {{ catalogos_formulario|tojson|safe }}
+</script>
+<script src="{{ url_for('static', filename='Script/Capturador/formulario.js') }}"></script>
+<script src="{{ url_for('static', filename='Script/Capturador/camara_fotos.js') }}"></script>
+<script src="{{ url_for('static', filename='Script/Capturador/video_audio.js') }}"></script>
+<script src="{{ url_for('static', filename='Script/Capturador/adjuntos_envio.js') }}"></script>
 
 {% endblock %}

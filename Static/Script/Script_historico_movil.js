@@ -314,7 +314,7 @@ document.addEventListener("DOMContentLoaded", () => {
         body.innerHTML = `
                 <tr><td>FECHA</td><td>${escaparHtml(fechaFormateadarep || "-")}</td></tr>
                 <tr><td>MÓVIL</td><td>${escaparHtml(registro.Movil || "-")}</td></tr>
-                <tr><td>COSTO</td><td>${formatoCOP(registro.Costo_intervencion) || "-"}</td></tr>
+                <tr><td>COSTO</td><td>${escaparHtml(formatoCOP(registro.Costo_intervencion) || "-")}</td></tr>
                 <tr><td>ZONA INTERVENIDA</td><td>${escaparHtml(registro.Zona_intervenida || "-")}</td></tr>
                 <tr><td>PARTE INTERVENIDA</td><td>${escaparHtml(registro.Parte_intervenida || "-")}</td></tr>
             `;

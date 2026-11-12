@@ -39,7 +39,7 @@ class Element {
     }
 }
 
-const source = fs.readFileSync("Static/Script/Script_captur.js", "utf8");
+const source = fs.readFileSync("Static/Script/Capturador/adjuntos_envio.js", "utf8");
 const start = source.indexOf("function mostrarModalDuplicado(");
 const end = source.indexOf("// 5. Función de Compresión", start);
 assert(start >= 0 && end > start, "Debe existir la función del modal de duplicados");

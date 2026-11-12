@@ -1,0 +1,84 @@
+/* Permisos y roles. Antes en un <style> de frontend/Front_permisos_roles.html. */
+
+.flash-messages {
+    margin: 12px 0;
+}
+
+.flash-message {
+    padding: 12px 18px;
+    border-radius: 6px;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.flash-message.flash-success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #28a745;
+}
+
+.flash-message.flash-error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #dc3545;
+}
+
+.selector-usuarios {
+    position: relative;
+    width: 100%;
+}
+
+.selector-usuarios-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 10px !important;
+    color: #111 !important;
+    font-size: 14px !important;
+    font-weight: 400 !important;
+    text-align: left;
+    background: #fff !important;
+    border: 1px solid #dcdfe6 !important;
+    border-radius: 6px !important;
+}
+
+.selector-usuarios-toggle:hover {
+    background: #fff !important;
+}
+
+.lista-usuarios-cambio-password {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 20;
+    width: 100%;
+    max-height: 220px;
+    overflow-y: auto;
+    overflow-x: auto;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    background: #fff;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.selector-usuarios.abierto .lista-usuarios-cambio-password {
+    display: block;
+}
+
+.lista-usuarios-cambio-password label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 0;
+    white-space: nowrap;
+}
+
+.btn-forzar-cambio-password {
+    margin-top: 10px;
+    background: #6c757d !important;
+    color: #fff !important;
+    border: 1px solid #6c757d !important;
+}

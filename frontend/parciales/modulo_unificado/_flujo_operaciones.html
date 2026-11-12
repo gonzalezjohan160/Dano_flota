@@ -1,0 +1,120 @@
+{# Módulo unificado: tarjeta del flujo de Operaciones dentro del modal de gestión (solo CFG.propia === "oper"). #}
+            <!-- ================= NUEVO FLUJO OPERACIONES ================= -->
+            <!-- Solo visible cuando CFG.propia === "oper" -->
+            <div id="cardFlujoOper" class="card-seccion" style="display:none;">
+
+                <div id="bloqueCostoSupera">
+                    <label class="form-label">¿EL COSTO DEL DAÑO SUPERA EL VALOR DE $2.000.000?</label>
+                    <div class="radio-buttons pastilla">
+                        <label>
+                            <input type="radio" name="CostoSupera2M" value="SI">
+                            <span>SI</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="CostoSupera2M" value="NO">
+                            <span>NO</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Solo si CostoSupera2M = NO -->
+                <div id="bloqueCostoDano" style="display:none;">
+                    <label for="costo_dano_display">COSTO DEL DAÑO</label>
+                    <input class="u-ancho-100" type="text" id="costo_dano_display" placeholder="Ingrese solo número" inputmode="numeric"
+                       >
+                    <input type="hidden" id="costo_dano" value="">
+                    <div class="u-color-c00 u-tamano-letra-13 u-margen-arriba-4" id="msgCostoDano" style="display:none;"></div>
+                </div>
+
+                <!-- Solo si CostoSupera2M = NO -->
+                <div id="bloqueResponsabilidad" style="display:none;">
+                    <label class="form-label">¿OPERADOR ACEPTA LA RESPONSABILIDAD?</label>
+                    <div class="radio-buttons pastilla">
+                        <label>
+                            <input type="radio" name="ResponsabilidadOperador" value="SI">
+                            <span>SI</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="ResponsabilidadOperador" value="NO">
+                            <span>NO</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="ResponsabilidadOperador" value="NO APLICA">
+                            <span>NO APLICA</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Mensaje de bloqueo por reincidencia (3 eventos en 2 meses) -->
+                <div id="mensajeReincidencia" class="badge u-fondo-ffeaea u-color-b30000 u-relleno-10 u-redondeo-6 u-margen-abajo-12"
+                    style="display:none;">
+                </div>
+
+                <!-- si acepta responsabilidad = NO APLICA -->
+                <div id="bloqueValorConciliadoTerceros" style="display:none;">
+                    <label for="valor_conciliado_terceros_display">
+                        VALOR CONCILIADO CON TERCEROS
+                    </label>
+
+                    <input class="u-ancho-100"
+                        type="text"
+                        id="valor_conciliado_terceros_display"
+                        placeholder="Ingrese solo número"
+                        inputmode="numeric"
+
+                    >
+
+                    <input
+                        type="hidden"
+                        id="valor_conciliado_terceros"
+                        value=""
+                    >
+                </div>
+
+
+                <!-- Solo si responsabilidad = SI y no hay reincidencia -->
+                <div id="bloqueConciliacion" style="display:none;">
+                    <label class="form-label">¿SE LLEGA A CONCILIACIÓN?</label>
+                    <div class="radio-buttons pastilla">
+                        <label>
+                            <input type="radio" name="Conciliacion" value="SI">
+                            <span>SI</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="Conciliacion" value="NO">
+                            <span>NO</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Solo si Conciliacion = SI -->
+                <div id="bloqueValorConciliadoOper" style="display:none;">
+                    <label id="lblValorConciliadoOper" for="valor_conciliado_oper_display">
+                        VALOR CONCILIADO
+                    </label>
+
+                    <input class="u-ancho-100"
+                        type="text"
+                        id="valor_conciliado_oper_display"
+                        placeholder="Ingrese solo número"
+                        inputmode="numeric"
+
+                    >
+
+                    <input type="hidden" id="valor_conciliado_oper" value="">
+                </div>
+
+                <div id="bloqueMotivoCierreOper" style="display:none;">
+                    <label for="motivo_cierre_oper">MOTIVO DE CIERRE</label>
+                    <select class="u-ancho-100" id="motivo_cierre_oper">
+                        <option value="" selected disabled>Seleccione el motivo</option>
+                        <option value="RETIRO">RETIRO</option>
+                        <option value="EXONERACIÓN">EXONERACIÓN</option>
+                    </select>
+                </div>
+
+                <!-- Solo si ResponsabilidadOperador = NO APLICA. Reutiliza
+                     exactamente el mismo campo oculto (#valor_conciliado_oper)
+                     que "Valor conciliado", ya que ambos se guardan en la
+                     misma columna (table_info_labora.Valor_conciliado). -->
+            </div>

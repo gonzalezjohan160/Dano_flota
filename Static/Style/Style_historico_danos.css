@@ -1,0 +1,13 @@
+/* Histórico de daños: paginación, filtro de estados y estado del caso. Antes en un <style> de frontend/Front_historico_danos.html. */
+
+.paginacion-tabla { display:flex; align-items:center; justify-content:flex-end; gap:6px; padding:10px 4px; font-size:13px; color:#5f6368; }
+.btn-paginacion { width:28px; height:28px; border:none; border-radius:50%; background:transparent; color:#5f6368; font-size:16px; cursor:pointer; }
+.btn-paginacion:hover:not(:disabled) { background:#eee; }
+.btn-paginacion:disabled { color:#ccc; cursor:not-allowed; }
+.filtro-estados { display:flex; align-items:center; gap:10px; border:none; margin:0; padding:0; }
+.filtro-estados legend { float:left; padding:0; margin-right:4px; font-weight:bold; }
+.filtro-estados label { display:flex; align-items:center; gap:3px; font-size:13px; cursor:pointer; white-space:nowrap; }
+.estado-caso { font-weight:bold; }
+.estado-abierto { color:#1a73e8; }
+.estado-cerrado { color:#188038; }
+.estado-eliminado { color:#c5221f; }

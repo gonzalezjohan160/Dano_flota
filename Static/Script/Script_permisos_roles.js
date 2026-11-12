@@ -102,18 +102,10 @@
         return true;
     }
 
-    function confirmarEliminacionUsuario() {
-        if (!validarUsuarioUnico()) {
-            return false;
-        }
-        return confirm('¿Está seguro de que desea eliminar este usuario? Esta acción eliminará también todos los permisos asociados y no se puede deshacer.');
-    }
-
     // Reemplazan los onclick="return ..." que la CSP ya no permite.
     const validaciones = {
         'btn-asignar-permisos': validarUsuarioUnico,
         'btn-forzar-cambio-password': validarSeleccionCambioPassword,
-        'btn-eliminar-usuario': confirmarEliminacionUsuario,
     };
     Object.entries(validaciones).forEach(([id, validar]) => {
         const boton = document.getElementById(id);

@@ -1,0 +1,7 @@
+/* Fondo de las pantallas de inicio de sesión y recuperación de contraseña.
+   Antes en un <style> de Front_login.html y Front_olvido_contrasena.html. */
+
+body {
+    background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)),
+                      url("../Images/Fondo_login.jpg");
+}

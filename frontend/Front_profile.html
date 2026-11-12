@@ -27,7 +27,7 @@
     Cambiar Contraseña
 </button>
 
-<div id="form-password" style="display:none; margin-top: 20px; border: 1px solid #ccc; padding: 15px;">
+<div class="u-margen-arriba-20 u-borde-1-solido-ccc u-relleno-15" id="form-password" style="display:none;">
     <form id="changePasswordForm" data-url="{{ url_for('Profile.cambiar_password') }}"
         data-alerta-cambio="{{ 'true' if mostrar_alerta_cambio_password else 'false' }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -49,7 +49,7 @@
         <button type="submit" class="btn-verde-sm">Actualizar Contraseña</button>
         <button type="button" class="btn-azul-sm" id="btn-ocultar-form-password">Cancelar</button>
         
-        <div id="mensaje-alerta" style="margin-top: 15px; padding: 10px; display: none; border: 1px solid transparent; border-radius: 4px;"></div>
+        <div class="u-margen-arriba-15 u-relleno-10 u-borde-1-solido-transparente u-redondeo-4" id="mensaje-alerta" style="display:none;"></div>
     </form>
 </div>
 

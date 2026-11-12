@@ -21,7 +21,7 @@ const document = {
     },
 };
 
-const source = fs.readFileSync("Static/Script/Mult_formularios.js", "utf8");
+const source = fs.readFileSync("Static/Script/Historicos_comun/duraciones_galeria.js", "utf8");
 const start = source.indexOf("function renderGaleria(");
 assert(start >= 0, "renderGaleria debe existir");
 const context = { document, encodeURIComponent, String };
@@ -44,7 +44,7 @@ assert.strictEqual(unsafeFileLink.rel, "noopener noreferrer");
 assert.strictEqual(gallery.children[4].children[0].textContent, "<img src=x onerror=alert(1)>");
 assert.strictEqual(gallery.children[4].children[0].download, "<img src=x onerror=alert(1)>");
 
-for (const filename of ["Static/Script/Script_oper.js", "Static/Script/Script_historico_danos.js"]) {
+for (const filename of ["Static/Script/Modulo_unificado/adjuntos.js", "Static/Script/Historico_danos/detalle.js"]) {
     const script = fs.readFileSync(filename, "utf8");
     assert(!/target\s*=\s*["']_blank["']/.test(script), `${filename} no debe abrir adjuntos en pestañas nuevas`);
     assert(script.includes(".download"), `${filename} debe ofrecer descarga para formatos no inline`);
