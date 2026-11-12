@@ -1,11 +1,19 @@
-import os
+from conexiones import transaccion
+from repositories.flota import consultar_tipologia
+from repositories.sesiones import sesion_bd
+from contextlib import closing
 from pathlib import Path
-from flask import Blueprint, request, render_template, session, jsonify
+from flask import Blueprint, request, render_template, jsonify
 from datetime import datetime
 from config import connect
 from werkzeug.utils import secure_filename
 from attachment_security import AttachmentValidationError, store_upload, validate_uploads
 from logger import logger
+from modelos import catalogos as modelo_catalogos
+from modelos import flota as modelo_flota
+from modelos import reparaciones as modelo_reparaciones
+from servicios.montos import leer_valor_monetario
+from backend_security import usuario_id_sesion
 from backend_security import (
     login_required,
     requiere_permiso,
@@ -35,7 +43,15 @@ FILES_DIR = UPLOAD_FOLDERS["Reparaciones"]
 @login_required
 @requiere_permiso('Ingresar_captur_reparaciones')
 def index():
-    return render_template('Capturador_reparaciones.html')
+    # UF y prefijo del móvil salen del catálogo; solo se ofrecen las UF de la sesión.
+    with sesion_bd(connect) as conn, closing(conn.cursor()) as cursor:
+        unidades = modelo_catalogos.listar_unidades_funcionales(cursor)
+    ufs_permitidas = {str(uf) for uf in ufs_autorizadas_sesion()}
+    return render_template(
+        'Capturador_reparaciones.html',
+        unidades_funcionales=[uf for uf, _ in unidades if str(uf) in ufs_permitidas],
+        catalogos_formulario={"prefijos_movil": {str(uf): prefijo for uf, prefijo in unidades}},
+    )
 
 # 🔹 Obtener tipología de móvil
 @Capturador_rep.route('/getFlota')
@@ -49,27 +65,14 @@ def get_flota():
     if not ufs:
         return jsonify({"Tipologia_interno": None})
     try:
-        conn = connect()
-        cursor = conn.cursor()
-        marcadores = ", ".join("?" for _ in ufs)
-        cursor.execute(
-            f"SELECT Tipologia_Movil FROM table_Moviles WHERE No_Movil = ? AND UF IN ({marcadores})",
-            (No_interno, *ufs),
-        )
-        row = cursor.fetchone()
-        cursor.close()
-        conn.close()
+        row = consultar_tipologia(No_interno, ufs, connect)
         return jsonify({"Tipologia_interno": row[0] if row else None})
     except Exception:
         logger.exception("error_consultar_flota_reparaciones")
         return jsonify({"Tipologia_interno": None})
 
-      
 
-# --- Definir constantes de restricción ---
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB por archivo
-MAX_FILES_COUNT = 5               # Máximo 5 archivos por reporte        
-  
+
 
 # 🔹 Recibir formulario y archivos
 @Capturador_rep.route('/submit', methods=['POST'])
@@ -77,7 +80,6 @@ MAX_FILES_COUNT = 5               # Máximo 5 archivos por reporte
 @requiere_permiso('Ingresar_captur_reparaciones')
 def submit_form():
     rutas_guardadas = []
-    conn = None
 
     try:
 
@@ -91,17 +93,6 @@ def submit_form():
 
         validate_uploads([f for _, f in all_files])
 
-        # --- 2. VALIDACIONES ---
-        if len(all_files) > MAX_FILES_COUNT:
-            return jsonify({"error": f"Máximo {MAX_FILES_COUNT} archivos permitidos."}), 400
-
-        for key, f in all_files:
-            f.seek(0, os.SEEK_END)
-            size = f.tell()
-            f.seek(0) # IMPORTANTE: Volver al inicio para poder guardarlo después
-            if size > MAX_FILE_SIZE:
-                return jsonify({"error": f"El archivo {f.filename} es muy pesado."}), 400
-
         # --------------------------------------
         # RECIBIR DATOS NORMALES DEL FORMULARIO
         # --------------------------------------
@@ -110,101 +101,80 @@ def submit_form():
         UF = request.form.get('UF')
         if not usuario_puede_acceder_uf(UF):
             return jsonify({"error": "No tiene autorización para registrar en esa UF."}), 403
-        tipologia = request.form.get('Tipologia')
         Zona_inter = request.form.get('Zona_inter')
         parte_intervenida = request.form.get('Parte_intervenida')
-        costo = request.form.get('costo')
+        try:
+            costo = leer_valor_monetario(request.form.get('costo'), 'El costo de la reparación')
+        except ValueError as error:
+            return jsonify({"error": str(error)}), 400
         # El registrador es siempre el usuario de la sesión, nunca el campo del formulario.
-        registrador = session.get('usuario')
+        registrador = usuario_id_sesion()
         fecha_registro = datetime.now()
 
 
         # --------------------------------------
         # CONEXIÓN SQL
         # --------------------------------------
-        conn = connect()
-        cursor = conn.cursor()
+        # El helper revierte antes de cerrar y conserva el error para la respuesta.
+        with sesion_bd(connect) as conn:
+            with closing(conn.cursor()) as cursor:
+                if not modelo_flota.movil_pertenece_a_uf(cursor, Movil, UF):
+                    return jsonify({"error": "El móvil no pertenece a la UF seleccionada."}), 400
 
-        cursor.execute(
-            "SELECT 1 FROM table_Moviles WHERE No_Movil = ? AND UF = ?",
-            (Movil, UF),
-        )
-        if not cursor.fetchone():
-            conn.close()
-            conn = None
-            return jsonify({"error": "El móvil no pertenece a la UF seleccionada."}), 400
+                with transaccion(conn):
+                    repair_id = modelo_reparaciones.crear_reparacion(cursor, {
+                        "movil": Movil, "uf": int(UF),
+                        "zona_intervenida": Zona_inter, "parte_intervenida": parte_intervenida,
+                        "costo": costo, "registrador": registrador, "fecha_registro": fecha_registro,
+                    })
 
-        cursor.execute("""
-            INSERT INTO table_intervenciones 
-            (Movil, UF, Tipologia, Zona_intervenida, Parte_intervenida, Costo_intervencion, Usuario_registro, 
-             Fecha_registro)
-            OUTPUT INSERTED.Id 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            Movil, UF, tipologia, Zona_inter, parte_intervenida, costo, registrador, fecha_registro 
-        ))
+                    # --------------------------------------
+                    # GUARDADO DE ARCHIVOS
+                    # --------------------------------------
 
-        repair_id = cursor.fetchone()[0]
+                    repair_folder = FILES_DIR / str(repair_id)
+                    repair_folder.mkdir(parents=True, exist_ok=True)
+                    resolved_repair_folder = repair_folder.resolve()
 
-        # --------------------------------------
-        # GUARDADO DE ARCHIVOS
-        # --------------------------------------
-      
-        repair_folder = FILES_DIR / str(repair_id)
-        repair_folder.mkdir(parents=True, exist_ok=True)
-        resolved_repair_folder = repair_folder.resolve()
+                    # Iteramos sobre TODOS los archivos enviados en el request.files
+                    # No importa si se llaman foto_0, video_1 o adjunto_x
+                    for key in request.files:
+                        file_list = request.files.getlist(key)
 
-        # Iteramos sobre TODOS los archivos enviados en el request.files
-        # No importa si se llaman foto_0, video_1 o adjunto_x
-        for key in request.files:
-            file_list = request.files.getlist(key)
-            
-            for i, f in enumerate(file_list):
-                if not f or f.filename == "":
-                    continue
+                        for i, f in enumerate(file_list):
+                            if not f or f.filename == "":
+                                continue
 
-                # Generar nombre único
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                ext = Path(secure_filename(f.filename)).suffix.lower()
+                            # Generar nombre único
+                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            ext = Path(secure_filename(f.filename)).suffix.lower()
 
-                # Conservar el prefijo de clasificación, eliminando componentes de ruta.
-                safe_key = secure_filename(key) or "archivo"
-                final_name = secure_filename(f"{safe_key}_{timestamp}_{i}{ext}")
-                path = repair_folder / final_name
-                if path.resolve().parent != resolved_repair_folder:
-                    raise AttachmentValidationError("La ruta del archivo no es válida.")
+                            # Conservar el prefijo de clasificación, eliminando componentes de ruta.
+                            safe_key = secure_filename(key) or "archivo"
+                            final_name = secure_filename(f"{safe_key}_{timestamp}_{i}{ext}")
+                            path = repair_folder / final_name
+                            if path.resolve().parent != resolved_repair_folder:
+                                raise AttachmentValidationError("La ruta del archivo no es válida.")
 
-                # Resetear el puntero por si las validaciones de arriba lo movieron
-                f.seek(0)
-                path = store_upload(f, repair_folder, final_name)
-                rutas_guardadas.append(path)
+                            # Resetear el puntero por si las validaciones de arriba lo movieron
+                            f.seek(0)
+                            path = store_upload(f, repair_folder, final_name)
+                            rutas_guardadas.append(path)
 
-                # Guardar en la base de datos
-                cursor.execute("""
-                    INSERT INTO table_intervenciones_files
-                    (RepairId, FileName, FilePath)
-                    VALUES (?, ?, ?)
-                """, (repair_id, path.name, str(path)))
+                            # Guardar en la base de datos
+                            modelo_reparaciones.registrar_adjunto_de_reparacion(
+                                cursor, repair_id, path.name, str(path))
 
-        conn.commit()
-        cursor.close()
-        conn.close()
 
         return jsonify({"mensaje": "Datos y archivos guardados correctamente"})
 
     except AttachmentValidationError as error:
         for ruta in rutas_guardadas:
             ruta.unlink(missing_ok=True)
-        if conn:
-            conn.rollback()
-            conn.close()
         return jsonify({"error": str(error)}), 400
     except Exception:
         for ruta in rutas_guardadas:
             ruta.unlink(missing_ok=True)
-        if conn:
-            conn.rollback()
-            conn.close()
         logger.exception("error_guardar_adjuntos_reparaciones")
         return jsonify({"error": "No fue posible guardar los archivos."}), 500
 

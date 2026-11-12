@@ -1,5 +1,8 @@
+from repositories.sesiones import sesion_bd
+from contextlib import closing
 from flask import Blueprint, render_template, session, request, jsonify
 from config import connect
+from modelos import usuarios as modelo_usuarios
 from backend_security import login_required, validar_politica_password
 from werkzeug.security import generate_password_hash, check_password_hash
 from config import BASE_DIR
@@ -20,18 +23,9 @@ Profile = Blueprint(
 def index():
     usuario_logeado = session.get('usuario')
     mostrar_alerta_cambio_password = session.pop('mostrar_alerta_cambio_password', False)
-    conn = connect()
-    cursor = conn.cursor()
-    
-    query_main = """ 
-            SELECT Username, Nombre, Email, FechaCreacion, Activo, IDusuario, UF
-            FROM Table_usuarios
-            WHERE Username = ?
-    """ 
-    cursor.execute(query_main, (usuario_logeado,)) 
-    columns = [column[0] for column in cursor.description] 
-    row = cursor.fetchone()
-    conn.close()
+    with sesion_bd(connect) as conn:
+        with closing(conn.cursor()) as cursor:
+            columns, row = modelo_usuarios.buscar_perfil(cursor, usuario_logeado)
 
     if not row:
         return "Usuario no encontrado", 404
@@ -63,32 +57,26 @@ def cambiar_password():
     if error:
         return jsonify({'status': 'error', 'message': error})
 
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT PasswordHash FROM Table_usuarios WHERE Username = ?", (current_user,))
-    row = cursor.fetchone()
-    
-    if row and check_password_hash(row[0], old_password):
-        nuevo_hash = generate_password_hash(new_password)
-        try:
-            cursor.execute("""
-                UPDATE Table_usuarios
-                SET PasswordHash = ?, Cambio_password_obligatorio = 0
-                WHERE Username = ?
-            """, (nuevo_hash, current_user))
-            if cursor.rowcount != 1:
-                conn.rollback()
-                return jsonify({'status': 'error', 'message': 'No fue posible actualizar la contraseña.'}), 500
-            conn.commit()
-            logger.info("cambio_contrasena_perfil %s", contexto_peticion())
-        except Exception:
-            conn.rollback()
-            logger.exception("error_cambiar_password_perfil %s", contexto_peticion())
-            return jsonify({'status': 'error', 'message': 'No fue posible actualizar la contraseña.'}), 500
-        finally:
-            conn.close()
-        return jsonify({'status': 'success', 'message': 'Contraseña actualizada con éxito.'})
-    
-    conn.close()
+    with sesion_bd(connect) as conn:
+        with closing(conn.cursor()) as cursor:
+            row = modelo_usuarios.buscar_hash_contrasena(cursor, current_user)
+
+            if row and check_password_hash(row[0], old_password):
+                nuevo_hash = generate_password_hash(new_password)
+                try:
+                    filas_actualizadas = modelo_usuarios.cambiar_hash_contrasena(
+                        cursor, nuevo_hash, current_user
+                    )
+                    if filas_actualizadas != 1:
+                        conn.rollback()
+                        return jsonify({'status': 'error', 'message': 'No fue posible actualizar la contraseña.'}), 500
+                    conn.commit()
+                    logger.info("cambio_contrasena_perfil %s", contexto_peticion())
+                except Exception:
+                    conn.rollback()
+                    logger.exception("error_cambiar_password_perfil %s", contexto_peticion())
+                    return jsonify({'status': 'error', 'message': 'No fue posible actualizar la contraseña.'}), 500
+                return jsonify({'status': 'success', 'message': 'Contraseña actualizada con éxito.'})
+
     logger.warning("cambio_contrasena_perfil_rechazado %s", contexto_peticion())
     return jsonify({'status': 'error', 'message': 'La contraseña actual es incorrecta.'})

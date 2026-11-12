@@ -12,6 +12,7 @@ from werkzeug.utils import secure_filename
 
 MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
 MAX_ATTACHMENTS_PER_REQUEST = 5
+VIDEO_EXTENSIONS = {".mp4", ".webm", ".avi", ".mov"}
 MAX_IMAGE_PIXELS = 20_000_000
 ATTACHMENT_CSP = (
     "default-src 'none'; script-src 'none'; object-src 'none'; "
@@ -180,12 +181,68 @@ def validate_upload(upload, filename=None, max_bytes=MAX_ATTACHMENT_BYTES):
     return extension
 
 
+def _ebml_elements(data, start, end):
+    """Lee los elementos WebM disponibles en la cabecera, incluidos los de tamaño desconocido."""
+    while start < end:
+        id_width = 9 - data[start].bit_length()
+        size_start = start + id_width
+        if id_width > 4 or size_start >= end:
+            return
+        size_width = 9 - data[size_start].bit_length()
+        body = size_start + size_width
+        if size_width > 8 or body > end:
+            return
+        mask = (1 << (7 * size_width)) - 1
+        size = int.from_bytes(data[size_start:body], "big") & mask
+        stop = end if size == mask else min(body + size, end)
+        yield int.from_bytes(data[start:size_start], "big"), body, stop
+        start = stop
+
+
+def _webm_audio_only(upload):
+    # MediaRecorder usa .webm para audio y video. La pista determina el tipo,
+    # no el Content-Type del formulario ni el nombre indicado por el cliente.
+    header = _read_header(upload)
+    for element, start, end in _ebml_elements(header, 0, len(header)):
+        if element != 0x18538067:  # Segment
+            continue
+        for element, start, end in _ebml_elements(header, start, end):
+            if element != 0x1654AE6B:  # Tracks
+                continue
+            track_types = []
+            for element, start, end in _ebml_elements(header, start, end):
+                if element == 0xAE:  # TrackEntry
+                    track_types.extend(
+                        header[left:right] for tag, left, right in _ebml_elements(header, start, end)
+                        if tag == 0x83  # TrackType
+                    )
+            return bool(track_types) and all(kind == b"\x02" for kind in track_types)
+    return False
+
+
 def validate_uploads(uploads, max_files=MAX_ATTACHMENTS_PER_REQUEST):
     present = [upload for upload in uploads if upload and upload.filename]
     if len(present) > max_files:
         raise AttachmentValidationError(f"Máximo {max_files} archivos permitidos.")
+    video_count = 0
+    other_count = 0
+    other_bytes = 0
     for upload in present:
-        validate_upload(upload)
+        extension = validate_upload(upload)
+        is_video = extension in VIDEO_EXTENSIONS and (
+            extension != ".webm" or not _webm_audio_only(upload)
+        )
+        if is_video:
+            video_count += 1
+            if video_count > 1:
+                raise AttachmentValidationError("Solo se permite un video por envío.")
+        else:
+            other_count += 1
+            other_bytes += _stream_size(upload)
+            if other_count > 4:
+                raise AttachmentValidationError("Se permiten hasta cuatro archivos distintos del video.")
+            if other_bytes > MAX_ATTACHMENT_BYTES:
+                raise AttachmentValidationError("Los archivos distintos del video pueden pesar como máximo 5 MB en conjunto.")
     return present
 
 

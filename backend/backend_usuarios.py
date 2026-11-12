@@ -1,7 +1,10 @@
+from repositories.sesiones import sesion_bd
 import re
+from contextlib import closing
 
 from flask import Blueprint, render_template, request, flash, redirect, session
 from config import connect
+from modelos import usuarios as modelo_usuarios
 from werkzeug.security import generate_password_hash
 from backend_security import login_required, requiere_permiso, validar_politica_password
 from config import BASE_DIR
@@ -73,37 +76,24 @@ def crear_usuario():
         flash(error, 'error')
         return _render()
 
-    conn = None
     try:
-        conn = connect()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT 1 FROM Table_usuarios WHERE IDusuario = ? OR Username = ?",
-            (int(id_usuario), username)
-        )
-        if cursor.fetchone():
-            flash('Ya existe un usuario con esa identificación o ese nombre de usuario. '
-                  'Para modificarlo use la opción de edición.', 'error')
-            return _render()
+        with sesion_bd(connect, transaccional=True) as conn:
+            with closing(conn.cursor()) as cursor:
+                if modelo_usuarios.existe_usuario(cursor, int(id_usuario), username):
+                    flash('Ya existe un usuario con esa identificación o ese nombre de usuario. '
+                          'Para modificarlo use la opción de edición.', 'error')
+                    return _render()
 
-        # Quien crea la cuenta conoce la contraseña inicial: se obliga a cambiarla.
-        cursor.execute(
-            """INSERT INTO Table_usuarios
-                   (Username, PasswordHash, Nombre, Email, Activo, IDusuario, UF, Cambio_password_obligatorio)
-               VALUES (?, ?, ?, ?, 1, ?, ?, 1)""",
-            (username, generate_password_hash(password), nombre, correo, int(id_usuario), uf)
-        )
-        conn.commit()
+                # Quien crea la cuenta conoce la contraseña inicial: se obliga a cambiarla.
+                modelo_usuarios.crear_usuario(
+                    cursor, username, generate_password_hash(password), nombre,
+                    correo, int(id_usuario), uf,
+                )
         logger.info("usuario_creado actor=%s usuario=%s", session.get('usuario'), username)
     except Exception:
-        if conn:
-            conn.rollback()
         logger.exception("error_crear_usuario")
         flash('No fue posible crear el usuario.', 'error')
         return _render()
-    finally:
-        if conn:
-            conn.close()
 
     flash('Usuario creado exitosamente. Deberá cambiar la contraseña en su primer ingreso.', 'success')
     return redirect('/Modulo_usuario/')
@@ -148,41 +138,29 @@ def editar_usuario():
         flash('No se diligenció ningún campo para modificar.', 'error')
         return redirect('/Modulo_usuario/')
 
-    conn = None
     try:
-        conn = connect()
-        cursor = conn.cursor()
-        cursor.execute("SELECT Username FROM Table_usuarios WHERE IDusuario = ?", (int(id_usuario),))
-        actual = cursor.fetchone()
-        if not actual:
-            flash('No existe un usuario con esa identificación.', 'error')
-            return redirect('/Modulo_usuario/')
+        with sesion_bd(connect, transaccional=True) as conn:
+            with closing(conn.cursor()) as cursor:
+                actual = modelo_usuarios.buscar_usuario_por_identificacion(
+                    cursor, int(id_usuario)
+                )
+                if not actual:
+                    flash('No existe un usuario con esa identificación.', 'error')
+                    return redirect('/Modulo_usuario/')
 
-        if username:
-            cursor.execute(
-                "SELECT 1 FROM Table_usuarios WHERE Username = ? AND IDusuario <> ?",
-                (username, int(id_usuario))
-            )
-            if cursor.fetchone():
-                flash('El nombre de usuario ya está asignado a otra persona.', 'error')
-                return redirect('/Modulo_usuario/')
+                if username and modelo_usuarios.existe_nombre_en_otro_usuario(
+                    cursor, username, int(id_usuario)
+                ):
+                    flash('El nombre de usuario ya está asignado a otra persona.', 'error')
+                    return redirect('/Modulo_usuario/')
 
-        # Los campos no diligenciados llegan como NULL y conservan su valor.
-        cursor.execute("""
-            UPDATE Table_usuarios
-            SET Nombre = COALESCE(?, Nombre),
-                Username = COALESCE(?, Username),
-                Email = COALESCE(?, Email),
-                UF = COALESCE(?, UF),
-                PasswordHash = COALESCE(?, PasswordHash),
-                Cambio_password_obligatorio = CASE WHEN ? IS NULL
-                    THEN Cambio_password_obligatorio ELSE 1 END
-            WHERE IDusuario = ?
-        """, (nombre or None, username or None, correo or None, uf or None,
-              password_hash, password_hash, int(id_usuario)))
-        if cursor.rowcount != 1:
-            raise ValueError('La edición no afectó exactamente un usuario.')
-        conn.commit()
+                # Los campos no diligenciados llegan como NULL y conservan su valor.
+                filas_actualizadas = modelo_usuarios.actualizar_usuario(
+                    cursor, nombre or None, username or None, correo or None, uf or None,
+                    password_hash, int(id_usuario),
+                )
+                if filas_actualizadas != 1:
+                    raise ValueError('La edición no afectó exactamente un usuario.')
         campos_auditados = sorted(c for c, v in cambios.items() if v and c != 'PasswordHash')
         if password_hash:
             campos_auditados.append('Password_temporal')
@@ -191,14 +169,9 @@ def editar_usuario():
             session.get('usuario'), actual[0], ",".join(campos_auditados)
         )
     except Exception:
-        if conn:
-            conn.rollback()
         logger.exception("error_editar_usuario")
         flash('No fue posible actualizar el usuario.', 'error')
         return redirect('/Modulo_usuario/')
-    finally:
-        if conn:
-            conn.close()
 
     flash('Usuario actualizado correctamente.', 'success')
     return redirect('/Modulo_usuario/')

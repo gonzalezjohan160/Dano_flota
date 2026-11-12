@@ -1,3 +1,4 @@
+from repositories.sesiones import sesion_bd
 import hashlib
 import os
 from flask import session, abort, redirect, url_for, request
@@ -10,7 +11,7 @@ from flask_limiter.util import get_remote_address
 # RATELIMIT_STORAGE_URI (por ejemplo redis://localhost:6379).
 limiter = Limiter(
     key_func=get_remote_address,
-    storage_uri=os.getenv("RATELIMIT_STORAGE_URI", "memory://"),
+    storage_uri=(os.getenv("RATELIMIT_STORAGE_URI") or "").strip() or "memory://",
 )
 LIMITE_INTENTOS_LOGIN = "5 per minute"
 # Muchos usuarios salen por la misma IP pública de la empresa: el límite por IP
@@ -123,28 +124,21 @@ def cargar_permisos(usuario_id, cursor=None):
     Consulta la base de datos y devuelve la lista de permisos del usuario.
     Si se pasa un cursor se reutiliza su conexión y no se cierra.
     """
-    if cursor is not None:
-        return _consultar_permisos(cursor, usuario_id)
+    from modelos.autenticacion import buscar_permisos
 
+    if cursor is not None:
+        return buscar_permisos(cursor, usuario_id)
+
+    from contextlib import closing
     from config import connect
 
-    conn = connect()
-    try:
-        return _consultar_permisos(conn.cursor(), usuario_id)
-    finally:
-        conn.close()
+    with sesion_bd(connect) as conn, closing(conn.cursor()) as cursor_propio:
+        return buscar_permisos(cursor_propio, usuario_id)
 
 
-def _consultar_permisos(cursor, usuario_id):
-    # Traer permisos directamente del usuario
-    cursor.execute("""
-        SELECT p.Nombre
-        FROM Table_permisos p
-        INNER JOIN Table_usuarios_permisos up
-            ON p.PermisoID = up.PermisoID
-        INNER JOIN Table_usuarios u
-            ON u.ConsID = up.UserID
-        WHERE u.Username = ?
-    """, usuario_id)
-
-    return [row[0] for row in cursor.fetchall()]
+def usuario_id_sesion():
+    """ID interno confiable; nunca se toma del formulario ni se acepta un Username."""
+    valor = session.get("usuario_id")
+    if type(valor) is not int or valor <= 0:
+        abort(401)
+    return valor

@@ -1,14 +1,19 @@
 import pyodbc
+
 import os
 from dotenv import load_dotenv
 from pathlib import Path
 from datetime import timedelta
 
+# Pool ODBC del proceso: antes de abrir la primera conexion.
+pyodbc.pooling = True
+
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-MEDIA_DIR = Path(os.getenv("MEDIA_DIR", "/media/emapp/dano_flota"))
+# Carpeta de adjuntos y videos.
+MEDIA_DIR = Path(r"C:\Dano_flota\Files")
 
 
 # Carpeta principal
@@ -55,9 +60,9 @@ class BaseConfig:
     SESSION_COOKIE_SAMESITE = "Lax"
     # La cookie de sesión solo viaja por HTTPS (los navegadores aceptan además http://localhost).
     SESSION_COOKIE_SECURE = True
-    # Cinco archivos de 5 MB permiten hasta 25 MB de contenido, más la sobrecarga
-    # del formato multipart; también deja espacio para videos tutoriales de hasta 20 MB.
-    MAX_CONTENT_LENGTH = 26 * 1024 * 1024
+    # Hasta 10 MB de archivos (video de 5 MB y otros 5 MB, o tutorial de 10 MB)
+    # más 1 MB para campos del formulario y el formato multipart.
+    MAX_CONTENT_LENGTH = 11 * 1024 * 1024
 
 
 class DevConfig(BaseConfig):
@@ -95,6 +100,7 @@ DATABASE = os.getenv("DB_DATABASE")
 DRIVER = os.getenv("DB_DRIVER")
 usurname = os.getenv("DB_USER")
 password = os.getenv("DB_PASSWORD")
+
 
 
 # Segundos máximos para establecer la conexión. Con la base caída, la petición

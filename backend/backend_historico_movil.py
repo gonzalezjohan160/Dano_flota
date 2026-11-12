@@ -1,8 +1,16 @@
+"""CONTROLADOR del Histórico móvil (daños y reparaciones por vehículo).
+
+Lee la petición, aplica permisos y UF, llama al modelo (modelos/historico_movil.py,
+donde está el SQL) y devuelve la respuesta: la plantilla, JSON o el Excel
+(vistas/excel.py). Las conexiones se abren con closing(), que las cierra siempre,
+también si ocurre un error.
+"""
+from repositories.sesiones import sesion_bd
+from contextlib import closing
+
 from flask import Blueprint, render_template, request, jsonify, send_file, abort
 import math
-import io
 from config import connect
-from datetime import timedelta
 from fechas import FechaInvalida, leer_rango_fechas
 from backend_security import (
     login_required,
@@ -11,7 +19,8 @@ from backend_security import (
     ufs_autorizadas_sesion,
 )
 from config import BASE_DIR
-from openpyxl import Workbook
+from modelos import historico_movil as modelo
+from vistas.excel import crear_libro_excel
 
 Historico_movil = Blueprint(
     'Historico_movil',               # nombre interno del blueprint
@@ -53,181 +62,38 @@ def _leer_filtros():
         'page': page,
     }
 
-def _subquery_danos(filtros):
-    """Arma el SELECT de daños con sus filtros. Devuelve (sql, params)."""
-
-    sql = """
-    SELECT
-        d.Id AS id,
-        d.Fecha_evento AS fecha,
-        d.Movil,
-        d.UF AS UF,
-        (
-            SELECT SUM(i.Costo)
-            FROM table_info_mtto i
-            WHERE i.Id_damage_to_fleet = d.Id
-        ) AS costo,
-        'DAÑO' AS tipo,
-        (
-            SELECT COUNT(*)
-            FROM table_damage_files f
-            WHERE f.DamageId = d.Id
-        ) AS archivos_count
-    FROM table_damage_to_fleet d
-    WHERE ISNULL(d.eliminado, 0) = 0
-    """
-
-    params = []
-    ufs = ufs_autorizadas_sesion()
-    if ufs:
-        marcadores = ", ".join("?" for _ in ufs)
-        sql += f" AND d.UF IN ({marcadores}) "
-        params.extend(str(uf) for uf in ufs)  # UF es varchar: comparar como texto
-    else:
-        sql += " AND 1 = 0 "
-
-    # El móvil es opcional
-    if filtros.get('movil'):
-        sql += " AND d.Movil = ? "
-        params.append(filtros['movil'])
-
-    if filtros['uf'] != 'todos':
-        sql += " AND d.UF = ? "
-        params.append(filtros['uf'])
-
-    
-    if filtros['desde']:
-        sql += " AND d.Fecha_evento >= ? "
-        params.append(filtros['desde'])
-
-    if filtros['hasta']:
-        # Incluye todo el día final.
-        sql += " AND d.Fecha_evento < ? "
-        params.append(filtros['hasta'] + timedelta(days=1))
-
-    return sql, params
-
-
-def _subquery_reparaciones(filtros):
-    """Arma el SELECT de reparaciones/intervenciones con sus filtros."""
-
-    sql = """
-    SELECT
-        p.Id AS id,
-        p.Fecha_registro AS fecha,
-        p.Movil,
-        p.UF AS UF,
-        p.Costo_intervencion AS costo,
-        'REPARACIÓN' AS tipo,
-        (
-            SELECT COUNT(*)
-            FROM table_intervenciones_files k
-            WHERE k.RepairId = p.Id
-        ) AS archivos_count
-    FROM table_intervenciones p
-    WHERE 1 = 1
-    """
-
-    params = []
-    ufs = ufs_autorizadas_sesion()
-    if ufs:
-        marcadores = ", ".join("?" for _ in ufs)
-        sql += f" AND p.UF IN ({marcadores}) "
-        params.extend(str(uf) for uf in ufs)  # UF es varchar: comparar como texto
-    else:
-        sql += " AND 1 = 0 "
-
-    # El móvil es opcional
-    if filtros.get('movil'):
-        sql += " AND p.Movil = ? "
-        params.append(filtros['movil'])
-
-    if filtros['uf'] != 'todos':
-        sql += " AND p.UF = ? "
-        params.append(filtros['uf'])
-
-    if filtros['desde']:
-        sql += " AND p.Fecha_registro >= ? "
-        params.append(filtros['desde'])
-
-    if filtros['hasta']:
-        # Incluye todo el día final.
-        sql += " AND p.Fecha_registro < ? "
-        params.append(filtros['hasta'] + timedelta(days=1))
-
-    return sql, params
-
-
-def _construir_union(filtros):
-    partes = []
-    params = []
-
-    if filtros['tipo'] in ('todos', 'danos'):
-        sql_d, params_d = _subquery_danos(filtros)
-        partes.append(sql_d)
-        params.extend(params_d)
-
-    if filtros['tipo'] in ('todos', 'reparaciones'):
-        sql_r, params_r = _subquery_reparaciones(filtros)
-        partes.append(sql_r)
-        params.extend(params_r)
-
-    sql_union = " UNION ALL ".join(partes)
-
-    return sql_union, params
 
 # 🔹 Mostrar la tabla principal
 @Historico_movil.route('/')
 @login_required
 @requiere_permiso('Ingresar_danos_vs_reparaciones')
-
 def index():
     try:
         filtros = _leer_filtros()
     except FechaInvalida as error:
         return str(error), 400
-    movil_filtro = filtros['movil']
+    ufs = ufs_autorizadas_sesion()
 
-    registros = []
-    total_registros = 0
-    total_paginas = 0
+    with sesion_bd(connect) as conn, closing(conn.cursor()) as cursor:
 
-   
+        # 🔹 Conteo total para la paginación (respetando los filtros activos)
+        total_registros = modelo.contar_registros(cursor, filtros, ufs)
+        total_paginas = max(1, math.ceil(total_registros / REGISTROS_POR_PAGINA))
 
-    conn = connect()
-    cursor = conn.cursor()
+        if filtros['page'] > total_paginas:
+            filtros['page'] = total_paginas
 
-    sql_union, params = _construir_union(filtros)
+        desplazamiento = (filtros['page'] - 1) * REGISTROS_POR_PAGINA
 
-    # 🔹 Conteo total para la paginación (respetando los filtros activos)
-    query_conteo = f"SELECT COUNT(*) FROM ({sql_union}) AS conteo"
-    cursor.execute(query_conteo, params)
-    total_registros = cursor.fetchone()[0]
-    total_paginas = max(1, math.ceil(total_registros / REGISTROS_POR_PAGINA))
-
-    if filtros['page'] > total_paginas:
-        filtros['page'] = total_paginas
-
-    offset = (filtros['page'] - 1) * REGISTROS_POR_PAGINA
-
-    # 🔹 Registros de la página actual, del más reciente al más antiguo
-    query_pagina = f"""
-        SELECT * FROM ({sql_union}) AS datos
-        ORDER BY fecha DESC
-        OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-        """
-    cursor.execute(query_pagina, params + [offset, REGISTROS_POR_PAGINA])
-    columns = [col[0] for col in cursor.description]
-    registros = [dict(zip(columns, row)) for row in cursor.fetchall()]
-
-    # El listado solo muestra estas columnas; Operaciones, Mantenimiento y S. Vial
-    # de cada daño los trae /detalle/<id> al abrirlo (B-12).
-    conn.close()
+        # 🔹 Registros de la página actual. El listado solo muestra estas columnas;
+        # Operaciones, Mantenimiento y S. Vial de cada daño los trae /detalle/<id> (B-12).
+        registros = modelo.registros_de_la_pagina(
+            cursor, filtros, ufs, desplazamiento, REGISTROS_POR_PAGINA)
 
     return render_template(
         "Front_historico_movil.html",
         registros=registros,
-        movil_buscado=movil_filtro,
+        movil_buscado=filtros['movil'],
         filtros=filtros,
         pagina_actual=filtros['page'],
         total_paginas=total_paginas,
@@ -239,111 +105,45 @@ def index():
 @login_required
 @requiere_permiso('Ingresar_danos_vs_reparaciones')
 def detalle(id_damage):
-    conn = connect()
-    cursor = conn.cursor()
+    with sesion_bd(connect) as conn, closing(conn.cursor()) as cursor:
 
-    # Traer registro principal
-    cursor.execute("SELECT * FROM table_damage_to_fleet WHERE Id = ?", (id_damage,))
-    registro_main = cursor.fetchone()
-    columnas = [col[0] for col in cursor.description]
-    registro = dict(zip(columnas, registro_main)) if registro_main else {}
-    if not registro:
-        conn.close()
-        abort(404)
-    if not usuario_puede_acceder_uf(registro.get("UF")):
-        conn.close()
-        abort(403)
-    # Un caso eliminado no se muestra en el Histórico móvil (decisión de negocio M-16).
-    if registro.get("eliminado"):
-        conn.close()
-        abort(404)
+        registro = modelo.buscar_dano(cursor, id_damage)
+        if not registro:
+            abort(404)
+        if not usuario_puede_acceder_uf(registro.get("UF")):
+            abort(403)
+        # Un caso eliminado no se muestra en el Histórico móvil (decisión de negocio M-16).
+        if registro.get("eliminado"):
+            abort(404)
 
-    # OPERACIONES
-    cursor.execute("""
-        SELECT Observaciones_operaciones, rev_error, Observaciones_correctivos, Fecha_registro
-        FROM table_info_oper
-        WHERE Id_damage_to_fleet = ?
-    """, (id_damage,))
-    oper = cursor.fetchone()
-    if oper:
-        oper = dict(zip([col[0] for col in cursor.description], oper))
-
-    # SEGURIDAD VIAL
-    cursor.execute("""
-        SELECT Observaciones_svial, Fecha_registro
-        FROM table_info_svial
-        WHERE Id_damage_to_fleet = ?
-    """, (id_damage,))
-    svial = cursor.fetchone()
-    if svial:
-        svial = dict(zip([col[0] for col in cursor.description], svial))
-
-    # MANTENIMIENTO
-    cursor.execute("""
-        SELECT Costo, observaciones, dano_adicional, Fecha_registro
-        FROM table_info_mtto
-        WHERE Id_damage_to_fleet = ?
-    """, (id_damage,))
-    mtto = cursor.fetchone()
-    if mtto:
-        mtto = dict(zip([col[0] for col in cursor.description], mtto))
-
-    # ARCHIVOS
-    cursor.execute("""
-        SELECT Id, 'operaciones' AS TipoArchivo, FileName, Fecha_subida
-        FROM table_damage_files
-        WHERE DamageId = ?
-    """, (id_damage,))
-    columns_files = [col[0] for col in cursor.description]
-    files = [dict(zip(columns_files, row)) for row in cursor.fetchall()]
-
-    conn.close()
+        gestiones = modelo.gestiones_y_archivos_del_dano(cursor, id_damage)
 
     return jsonify({
         "registro": registro,
-        "oper": oper,
-        "svial": svial,
-        "mtto": mtto,
-        "archivos": files
+        "oper": gestiones["oper"],
+        "svial": gestiones["svial"],
+        "mtto": gestiones["mtto"],
+        "archivos": gestiones["archivos"]
     })
+
 
 @Historico_movil.route('/detalle_reparacion/<int:id>')
 @login_required
 @requiere_permiso('Ingresar_danos_vs_reparaciones')
 def detalle_reparacion(id):
-    conn = connect()
-    cursor = conn.cursor()
+    with sesion_bd(connect) as conn, closing(conn.cursor()) as cursor:
 
-    # Registro principal de la reparación
-    cursor.execute("""
-        SELECT *
-        FROM table_intervenciones
-        WHERE Id = ?
-    """, (id,))
-    registro_main = cursor.fetchone()
-    columnas = [col[0] for col in cursor.description]
-    registro = dict(zip(columnas, registro_main)) if registro_main else {}
-    if not registro:
-        conn.close()
-        abort(404)
-    if not usuario_puede_acceder_uf(registro.get("UF")):
-        conn.close()
-        abort(403)
+        registro = modelo.buscar_reparacion(cursor, id)
+        if not registro:
+            abort(404)
+        if not usuario_puede_acceder_uf(registro.get("UF")):
+            abort(403)
 
-    # ARCHIVOS REPARACIONES
-    cursor.execute("""
-        SELECT Id, 'reparaciones' AS TipoArchivo, FileName, Fecha_subida
-        FROM table_intervenciones_files
-        WHERE RepairId = ?
-    """, (id,))
-    columns_files = [col[0] for col in cursor.description]
-    files = [dict(zip(columns_files, row)) for row in cursor.fetchall()]
-
-    conn.close()
+        archivos = modelo.archivos_de_la_reparacion(cursor, id)
 
     return jsonify({
         "registro": registro,
-        "archivos": files
+        "archivos": archivos
     })
 
 
@@ -356,73 +156,24 @@ def exportar_excel():
         filtros = _leer_filtros()
     except FechaInvalida as error:
         return str(error), 400
+    ufs = ufs_autorizadas_sesion()
 
-    conn = connect()
-    cursor = conn.cursor()
+    hojas = []
+    with sesion_bd(connect) as conn, closing(conn.cursor()) as cursor:
 
-    wb = Workbook()
-    primera_hoja = True
+        # ---------- Hoja de DAÑOS ----------
+        if filtros['tipo'] in ('todos', 'danos'):
+            columnas, filas = modelo.danos_para_excel(cursor, filtros, ufs)
+            hojas.append({"titulo": "Daños", "etiqueta": "DAÑO", "columnas": columnas, "filas": filas})
 
-    # ---------- Hoja de DAÑOS ----------
-    if filtros['tipo'] in ('todos', 'danos'):
-        sql_d, params_d = _subquery_danos(filtros)
-        cursor.execute(f"""
-            SELECT dt.*
-            FROM table_damage_to_fleet dt
-            WHERE dt.Id IN (SELECT id FROM ({sql_d}) AS x)
-            ORDER BY dt.Fecha_evento DESC
-        """, params_d)
-        columnas = [col[0] for col in cursor.description]
-        filas = cursor.fetchall()
-
-        ws = wb.active if primera_hoja else wb.create_sheet()
-        ws.title = "Daños"
-        primera_hoja = False
-        ws.append(["Tipo"] + columnas)
-        for fila in filas:
-            ws.append(["DAÑO"] + list(fila))
-
-    # ---------- Hoja de REPARACIONES / INTERVENCIONES ----------
-    if filtros['tipo'] in ('todos', 'reparaciones'):
-        sql_r, params_r = _subquery_reparaciones(filtros)
-        cursor.execute(f"""
-            SELECT
-                i.[ID],
-                i.[Movil],
-                i.[UF],
-                i.[Tipologia],
-                i.[Zona_intervenida],
-                i.[Parte_intervenida],
-                i.[Costo_intervencion],
-                i.[Usuario_registro],
-                i.[Fecha_registro]
-            FROM table_intervenciones i
-            WHERE i.Id IN (SELECT id FROM ({sql_r}) AS x)
-            ORDER BY i.Fecha_registro DESC
-        """, params_r)
-        columnas = [col[0] for col in cursor.description]
-        filas = cursor.fetchall()
-
-        ws = wb.active if primera_hoja else wb.create_sheet()
-        ws.title = "Reparaciones"
-        primera_hoja = False
-        ws.append(["Tipo"] + columnas)
-        for fila in filas:
-            ws.append(["REPARACIÓN"] + list(fila))
-
-    conn.close()
-
-    if primera_hoja:
-        # No se agregó ninguna hoja (no debería pasar, pero por seguridad)
-        wb.active.title = "Sin datos"
-
-    buffer = io.BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
+        # ---------- Hoja de REPARACIONES / INTERVENCIONES ----------
+        if filtros['tipo'] in ('todos', 'reparaciones'):
+            columnas, filas = modelo.reparaciones_para_excel(cursor, filtros, ufs)
+            hojas.append({"titulo": "Reparaciones", "etiqueta": "REPARACIÓN", "columnas": columnas, "filas": filas})
 
     nombre_archivo = f"historico_movil_{filtros['movil']}.xlsx"
     return send_file(
-        buffer,
+        crear_libro_excel(hojas),
         as_attachment=True,
         download_name=nombre_archivo,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

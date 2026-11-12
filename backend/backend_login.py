@@ -1,3 +1,6 @@
+from repositories.sesiones import sesion_bd
+from contextlib import closing
+
 from flask import Blueprint, request, session, redirect, flash, render_template, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 import secrets
@@ -19,6 +22,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from config import BASE_DIR
 from logger import logger, contexto_peticion
+from modelos import autenticacion as modelo_autenticacion
 
 def enviar_email(destinatario, link):
     remitente = os.getenv("SMTP_USER")
@@ -90,41 +94,30 @@ def login():
     # Si ya inició sesión, no mostrar nuevamente el login
     if 'usuario' in session:
         return redirect('/interfaz')
-    
+
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        
-        conn = None
+
         try:
-            conn = connect()
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT Username, PasswordHash, UF, Activo,
-                       ISNULL(Cambio_password_obligatorio, 0)
-                FROM Table_usuarios
-                WHERE Username = ?
-            """, username)
-            usuario = cursor.fetchone()
-            
+            # closing() cierra cursor y conexión siempre, también si la consulta falla.
+            with sesion_bd(connect) as conn, closing(conn.cursor()) as cursor:
+                usuario = modelo_autenticacion.buscar_usuario_para_login(cursor, username)
         except Exception:
             logger.exception("error_bd_login %s", contexto_peticion(username))
             flash('No fue posible procesar el inicio de sesión. Inténtelo nuevamente.', 'error')
-            return render_template('Front_login.html')    
-        finally:
-            if conn:
-                conn.close()
-        
+            return render_template('Front_login.html')
+
 
         if usuario:
-            user_id, password_hash, uf, activo, cambio_password_obligatorio = usuario
+            user_id, password_hash, uf, activo, cambio_password_obligatorio, nombre_usuario = usuario
             if check_password_hash(password_hash, password):
                 if not activo:
                     logger.warning("login_usuario_inactivo %s", contexto_peticion(username))
                     flash('El usuario se encuentra inactivo. No tiene permitido ingresar al aplicativo.', 'error')
                     return render_template('Front_login.html')
-                
-                session['usuario'] = username
+
+                session['usuario'] = nombre_usuario
                 session['usuario_id'] = user_id
                 session.permanent = True
                 session['UF'] = normalizar_uf_sesion(uf)
@@ -133,10 +126,10 @@ def login():
                 if cambio_password_obligatorio:
                     return redirect(url_for('Profile.index'))
                 return redirect('/interfaz')
-            
+
         logger.warning("login_fallido %s", contexto_peticion(username))
         flash('Usuario o contraseña incorrectos', 'error')
-    
+
     return render_template('Front_login.html')
 
 
@@ -145,48 +138,38 @@ def login():
 def forgot_password():
     if request.method == 'POST':
         email = request.form.get('email')
-        conn = None
         try:
-            conn = connect()
-            cursor = conn.cursor()
-            cursor.execute("SELECT ConsID FROM Table_usuarios WHERE Email = ?", email)
-            usuario = cursor.fetchone()
-            ahora = datetime.datetime.now()
+            # closing() cierra cursor y conexión siempre; el rollback se hace antes,
+            # todavía con la conexión abierta, y el error sigue al except de abajo.
+            with sesion_bd(connect) as conn, closing(conn.cursor()) as cursor:
+                try:
+                    usuario = modelo_autenticacion.buscar_id_por_correo(cursor, email)
+                    ahora = datetime.datetime.now()
 
-            if usuario:
-                # Un enlace nuevo anula los anteriores del mismo usuario.
-                cursor.execute("""
-                    UPDATE Table_password_reset
-                    SET Used = 1
-                    WHERE UserId = ? AND ISNULL(Used, 0) = 0
-                """, (usuario[0],))
+                    if usuario:
+                        # Un enlace nuevo anula los anteriores del mismo usuario.
+                        modelo_autenticacion.anular_enlaces_pendientes(cursor, usuario[0])
 
-            # Purga (BD-8): los tokens vencidos, usados o anulados ya no sirven y
-            # no se conservan. Se hace en cada solicitud, exista o no el correo.
-            cursor.execute("""
-                DELETE FROM Table_password_reset
-                WHERE Expiration < ? OR ISNULL(Used, 0) = 1
-            """, (ahora,))
+                    # Purga (BD-8): los tokens vencidos, usados o anulados ya no sirven y
+                    # no se conservan. Se hace en cada solicitud, exista o no el correo.
+                    modelo_autenticacion.purgar_enlaces_sin_uso(cursor, ahora)
 
-            token = None
-            if usuario:
-                token = secrets.token_urlsafe(32)
-                cursor.execute("""
-                    INSERT INTO Table_password_reset (UserId, Token, Expiration)
-                    VALUES (?, ?, ?)
-                """, (usuario[0], hash_token_restablecimiento(token), ahora + datetime.timedelta(minutes=30)))
-            conn.commit()
+                    token = None
+                    if usuario:
+                        token = secrets.token_urlsafe(32)
+                        modelo_autenticacion.guardar_enlace(
+                            cursor, usuario[0], hash_token_restablecimiento(token),
+                            ahora + datetime.timedelta(minutes=30))
+                    conn.commit()
 
-            if token:
-                reset_link = construir_enlace_restablecimiento(token)
-                enviar_email(email, reset_link)
+                    if token:
+                        reset_link = construir_enlace_restablecimiento(token)
+                        enviar_email(email, reset_link)
+                except Exception:
+                    conn.rollback()
+                    raise
         except Exception:
-            if conn:
-                conn.rollback()
             logger.exception("error_solicitud_restauracion_contrasena %s", contexto_peticion("-"))
-        finally:
-            if conn:
-                conn.close()
 
         flash("Si el correo existe, se enviaron instrucciones.", "info")
         return redirect(url_for('Modulo_login.login'))
@@ -196,68 +179,51 @@ def forgot_password():
 
 @Modulo_login.route('/reset-password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
-    conn = None
     try:
-        conn = connect()
-        cursor = conn.cursor()
-        token_hash = hash_token_restablecimiento(token)
-        cursor.execute("""
-            SELECT r.UserId, r.Expiration, r.Used, u.Username
-            FROM Table_password_reset r
-            INNER JOIN Table_usuarios u ON u.ConsID = r.UserId
-            WHERE r.Token = ?
-        """, token_hash)
-        registro = cursor.fetchone()
+        # closing() cierra cursor y conexión siempre; el rollback se hace antes,
+        # todavía con la conexión abierta, y el error sigue al except de abajo.
+        with sesion_bd(connect) as conn, closing(conn.cursor()) as cursor:
+            try:
+                token_hash = hash_token_restablecimiento(token)
+                registro = modelo_autenticacion.buscar_enlace(cursor, token_hash)
 
-        if not registro:
-            return "Token inválido", 400
+                if not registro:
+                    return "Token inválido", 400
 
-        user_id, expiration, used, username = registro
-        if used:
-            return "Token ya utilizado", 400
-        if datetime.datetime.now() > expiration:
-            return "Token expirado", 400
+                user_id, expiration, used, username = registro
+                if used:
+                    return "Token ya utilizado", 400
+                if datetime.datetime.now() > expiration:
+                    return "Token expirado", 400
 
-        if request.method == 'POST':
-            nueva_password = request.form.get('password')
-            error = validar_politica_password(nueva_password, username)
-            if error:
-                return render_template('Front_resetear_contrasena.html', error=error), 400
+                if request.method == 'POST':
+                    nueva_password = request.form.get('password')
+                    error = validar_politica_password(nueva_password, username)
+                    if error:
+                        return render_template('Front_resetear_contrasena.html', error=error), 400
 
-            # Reclama el token dentro de la transacción para impedir su uso concurrente.
-            cursor.execute("""
-                UPDATE Table_password_reset
-                SET Used = 1
-                WHERE Token = ? AND Used = 0 AND Expiration >= ?
-            """, (token_hash, datetime.datetime.now()))
-            if cursor.rowcount != 1:
+                    # Reclama el token dentro de la transacción para impedir su uso concurrente.
+                    if modelo_autenticacion.reclamar_enlace(cursor, token_hash, datetime.datetime.now()) != 1:
+                        conn.rollback()
+                        return "Token inválido, expirado o ya utilizado", 400
+
+                    hash_nuevo = generate_password_hash(nueva_password)
+                    if modelo_autenticacion.cambiar_contrasena(cursor, hash_nuevo, user_id) != 1:
+                        conn.rollback()
+                        return "No fue posible actualizar la contraseña", 500
+
+                    conn.commit()
+                    logger.info("restablecimiento_contrasena_exitoso %s", contexto_peticion(username))
+                    flash("Contraseña actualizada correctamente", "success")
+                    return redirect(url_for('Modulo_login.login'))
+
+                return render_template('Front_resetear_contrasena.html')
+            except Exception:
                 conn.rollback()
-                return "Token inválido, expirado o ya utilizado", 400
-
-            hash_nuevo = generate_password_hash(nueva_password)
-            cursor.execute("""
-                UPDATE Table_usuarios
-                SET PasswordHash = ?
-                WHERE ConsID = ?
-            """, (hash_nuevo, user_id))
-            if cursor.rowcount != 1:
-                conn.rollback()
-                return "No fue posible actualizar la contraseña", 500
-
-            conn.commit()
-            logger.info("restablecimiento_contrasena_exitoso %s", contexto_peticion(username))
-            flash("Contraseña actualizada correctamente", "success")
-            return redirect(url_for('Modulo_login.login'))
-
-        return render_template('Front_resetear_contrasena.html')
+                raise
     except Exception:
-        if conn:
-            conn.rollback()
         logger.exception("error_restauracion_contrasena %s", contexto_peticion("-"))
         return "No fue posible procesar la solicitud. Inténtelo nuevamente.", 500
-    finally:
-        if conn:
-            conn.close()
 
 @Modulo_login.route('/logout', methods=['POST'])
 def logout():

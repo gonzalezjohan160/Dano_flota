@@ -31,25 +31,39 @@ class Migration:
 
 @dataclass(frozen=True)
 class RequiredColumn:
+    schema: str
     table: str
     column: str
     sql_type: str
     max_length: int | None
     nullable: bool | None
     default: str | None
+    alternate_type: tuple[str, int] | None = None
 
 
 REQUIRED_COLUMNS = (
-    # El inicio de sesión y protect_rutas leen este indicador; interpretan NULL como 0.
-    RequiredColumn("Table_usuarios", "Cambio_password_obligatorio", "bit", 1, None, "0"),
-    # El listado común y la ruta de borrado lógico usan ISNULL(..., 0).
-    RequiredColumn("table_damage_to_fleet", "eliminado", "bit", 1, None, "0"),
+    # El inicio de sesión y protect_rutas leen este indicador.
+    RequiredColumn("usuario", "Table_usuarios", "Cambio_password_obligatorio", "bit", 1, False, "0"),
+    RequiredColumn("usuario", "Table_usuarios", "Alcance_UF", "varchar", 20, None, None, ("nvarchar", 40)),
+    # El listado común y la ruta de borrado lógico filtran por eliminado = 0.
+    RequiredColumn("flota", "table_damage_to_fleet", "eliminado", "bit", 1, False, "0"),
+    # El cierre automático y las bandejas filtran por cerrado.
+    RequiredColumn("flota", "table_damage_to_fleet", "estado_caso", "bit", 1, False, "0"),
+    # BD-6: referencias numericas al autor en las ocho tablas.
+    RequiredColumn("flota", "table_damage_to_fleet", "usuario_id", "int", 4, True, None),
+    RequiredColumn("proceso", "table_info_oper", "usuario_id", "int", 4, False, None),
+    RequiredColumn("proceso", "table_info_mtto", "usuario_id", "int", 4, True, None),
+    RequiredColumn("proceso", "table_info_svial", "usuario_id", "int", 4, False, None),
+    RequiredColumn("proceso", "table_info_labora", "usuario_id", "int", 4, False, None),
+    RequiredColumn("proceso", "table_info_laboral_mult", "usuario_id", "int", 4, True, None),
+    RequiredColumn("proceso", "table_auditoria_correcciones", "usuario_id", "int", 4, True, None),
+    RequiredColumn("proceso", "table_intervenciones", "usuario_id", "int", 4, False, None),
     # Operaciones guarda SI/NO/NO APLICA o NULL; no se debe asignar valor predeterminado.
-    RequiredColumn("table_info_oper", "responsabilidad_operador", "varchar", 20, True, None),
+    RequiredColumn("proceso", "table_info_oper", "responsabilidad_operador", "varchar", 20, True, None),
     # Operaciones guarda SI/NO o NULL; no se debe asignar valor predeterminado.
-    RequiredColumn("table_info_oper", "conciliacion", "varchar", 10, True, None),
+    RequiredColumn("proceso", "table_info_oper", "conciliacion", "varchar", 10, True, None),
     # Tutoriales lista y guarda el título de cada video (NVARCHAR(200) = 400 bytes).
-    RequiredColumn("table_tutoriales", "Titulo", "nvarchar", 400, True, None),
+    RequiredColumn("usuario", "table_tutoriales", "Titulo", "nvarchar", 400, True, None),
 )
 
 
@@ -101,40 +115,44 @@ def _normalized_default(value: str | None) -> str | None:
 
 
 def validate_required_schema(conn) -> None:
-    """Valida las columnas que usan login, borrado lógico, Operaciones y Tutoriales."""
+    """Valida las columnas que usan login, borrado lógico, cierre, Operaciones y Tutoriales."""
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT t.name, c.name, TYPE_NAME(c.user_type_id), c.max_length,
+        SELECT s.name, t.name, c.name, TYPE_NAME(c.user_type_id), c.max_length,
                c.is_nullable, dc.definition
         FROM sys.tables AS t
         INNER JOIN sys.schemas AS s ON s.schema_id = t.schema_id
         INNER JOIN sys.columns AS c ON c.object_id = t.object_id
-        INNER JOIN sys.types AS ty ON ty.user_type_id = c.user_type_id
         LEFT JOIN sys.default_constraints AS dc
             ON dc.parent_object_id = c.object_id
            AND dc.parent_column_id = c.column_id
-        WHERE s.name = N'dbo'
-          AND ((t.name = N'Table_usuarios' AND c.name = N'Cambio_password_obligatorio')
-            OR (t.name = N'table_damage_to_fleet' AND c.name = N'eliminado')
-            OR (t.name = N'table_info_oper' AND c.name IN (N'responsabilidad_operador', N'conciliacion'))
-            OR (t.name = N'table_tutoriales' AND c.name = N'Titulo'))
+        WHERE (s.name = N'usuario' AND t.name = N'Table_usuarios'
+               AND c.name IN (N'Cambio_password_obligatorio', N'Alcance_UF'))
+           OR (s.name = N'flota' AND t.name = N'table_damage_to_fleet' AND c.name IN (N'eliminado', N'estado_caso'))
+           OR (s.name = N'proceso' AND t.name = N'table_info_oper'
+               AND c.name IN (N'responsabilidad_operador', N'conciliacion'))
+           OR (s.name = N'usuario' AND t.name = N'table_tutoriales' AND c.name = N'Titulo')
+           OR (s.name IN (N'flota', N'proceso') AND c.name = N'usuario_id')
     """)
-    found = {(row[0].lower(), row[1].lower()): row for row in cursor.fetchall()}
+    found = {(row[0].lower(), row[1].lower(), row[2].lower()): row for row in cursor.fetchall()}
     problems = []
 
     for expected in REQUIRED_COLUMNS:
-        row = found.get((expected.table.lower(), expected.column.lower()))
-        label = f"dbo.{expected.table}.{expected.column}"
+        row = found.get((expected.schema.lower(), expected.table.lower(), expected.column.lower()))
+        label = f"{expected.schema}.{expected.table}.{expected.column}"
         if row is None:
             problems.append(f"falta {label}")
             continue
-        _, _, actual_type, actual_length, actual_nullable, actual_default = row
-        if str(actual_type).lower() != expected.sql_type:
+        _, _, _, actual_type, actual_length, actual_nullable, actual_default = row
+        actual_type = str(actual_type).lower()
+        expected_length = expected.max_length
+        if expected.alternate_type and actual_type == expected.alternate_type[0]:
+            expected_length = expected.alternate_type[1]
+        elif actual_type != expected.sql_type:
             problems.append(f"{label} debe ser {expected.sql_type}")
             continue
-        if expected.max_length is not None and actual_length != expected.max_length:
-            problems.append(f"{label} debe tener longitud {expected.max_length}")
-        # Se admiten indicadores BIT que acepten nulos porque la aplicación los lee con ISNULL(..., 0).
+        if expected_length is not None and actual_length != expected_length:
+            problems.append(f"{label} debe tener longitud {expected_length}")
         if expected.nullable is not None and bool(actual_nullable) != expected.nullable:
             problems.append(f"{label} tiene nulabilidad incompatible")
         normalized = _normalized_default(actual_default)
@@ -146,7 +164,7 @@ def validate_required_schema(conn) -> None:
     if problems:
         raise SchemaValidationError(
             "Esquema SQL Server incompatible: " + "; ".join(problems)
-            + ". Aplique las migraciones pendientes con `python manage_db.py migrate` y vuelva a validar."
+            + ". Revise que el código y las tablas físicas de SQL Server correspondan a la misma versión del esquema."
         )
 
 
@@ -193,20 +211,23 @@ def _ensure_history_table(cursor) -> None:
     """)
 
 
+# La tabla de usuarios con el nombre de cada etapa: dbo (esquema base del
+# repositorio), con esquemas (5-nov-2026) o con los nombres finales (migración 008).
+TABLAS_DE_USUARIOS = ("dbo.Table_usuarios", "usuario.Table_usuarios", "usuario.Table_usuarios")
+
+
 def _check_prerequisite_tables(cursor) -> None:
+    """Exige una base con el esquema de la aplicación: no se migra una base vacía."""
     cursor.execute("""
-        SELECT name
-        FROM sys.tables
-        WHERE schema_id = SCHEMA_ID(N'dbo')
-          AND name IN (N'Table_usuarios', N'table_damage_to_fleet', N'table_info_oper')
-    """)
-    found = {str(row[0]).lower() for row in cursor.fetchall()}
-    required = {"table_usuarios", "table_damage_to_fleet", "table_info_oper"}
-    missing = sorted(required - found)
-    if missing:
-        names = ", ".join(f"dbo.{name}" for name in missing)
+        SELECT COUNT(*)
+        FROM sys.tables AS t
+        INNER JOIN sys.schemas AS s ON s.schema_id = t.schema_id
+        WHERE s.name + N'.' + t.name IN (?, ?, ?)
+    """, *TABLAS_DE_USUARIOS)
+    row = cursor.fetchone()
+    if not row or not row[0]:
         raise MigrationError(
-            f"Faltan tablas requeridas ({names}). Ejecute primero el script de esquema base en una base vacía."
+            "Falta la tabla de usuarios de la aplicación. Ejecute primero el script de esquema base en una base vacía."
         )
 
 
@@ -230,6 +251,8 @@ def apply_migrations(conn, directory: Path = MIGRATIONS_DIR) -> tuple[list[str],
     already_applied: list[str] = []
 
     try:
+        # Cualquier error dentro de una migración revierte toda su transacción.
+        cursor.execute("SET XACT_ABORT ON;")
         _acquire_lock(cursor)
         lock_acquired = True
         _check_prerequisite_tables(cursor)
@@ -260,6 +283,10 @@ def apply_migrations(conn, directory: Path = MIGRATIONS_DIR) -> tuple[list[str],
                 )
             try:
                 cursor.execute(migration.sql)
+                # Un error que no es el del primer resultado (por ejemplo, después de
+                # los mensajes de sp_rename) solo aparece al recorrer todos los resultados.
+                while cursor.nextset():
+                    pass
                 cursor.execute("""
                     INSERT INTO dbo.SchemaMigrations (Version, FileName, ContentHash)
                     VALUES (?, ?, ?)

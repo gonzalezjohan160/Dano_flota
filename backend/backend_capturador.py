@@ -1,8 +1,12 @@
-import os
-from flask import Blueprint, request, session, render_template, jsonify
+from conexiones import transaccion
+from repositories.flota import consultar_tipologia
+from repositories.sesiones import sesion_bd
+from contextlib import closing
+from flask import Blueprint, request, render_template, jsonify
 from datetime import datetime, timedelta
 from config import connect
 import requests
+from backend_security import usuario_id_sesion
 from backend_security import (
     login_required,
     requiere_permiso,
@@ -19,28 +23,28 @@ from attachment_security import (
     validate_uploads,
 )
 from logger import logger
+from modelos import capturador as modelo_capturador
+from modelos import catalogos as modelo_catalogos
+from modelos import flota as modelo_flota
+from servicios.validacion_caso import area_del_operador, error_de_catalogo
 
 
 Capturador = Blueprint(
     "Capturador",                                   # nombre interno del blueprint
     __name__,
     template_folder=str(BASE_DIR / "frontend"),
-    static_folder=str(BASE_DIR / "Static")               
+    static_folder=str(BASE_DIR / "Static")
 )
 
 
 FILES_DIR = UPLOAD_FOLDERS["Operaciones"]
 
-# Fuente única para las opciones del formulario y su validación en servidor.
-ZONAS_DANO = (
-    "LATERAL IZQUIERDO", "LATERAL DERECHO", "FRONTAL", "POSTERIOR",
-    "TECHO", "ESPEJOS", "PUERTAS", "VIDRIOS", "LLANTAS", "ITS",
-    "SIRCI", "CARROCERÍA INTERNA", "TREN MOTRIZ", "CHASIS",
-)
-DANOS_OCASIONADOS_POR = (
-    "CONDUCTA OPERACIONAL", "INFRAESTRUCTURA PATIO", "INFRAESTRUCTURA VIAL",
-    "VANDALISMO", "MECÁNICO", "SINIESTRO VIAL", "ALISTAMIENTO",
-)
+# Las opciones del formulario y su validación en el servidor salen de los
+# catálogos de la base (esquema catalogo): agregar una ruta o una zona no
+# requiere tocar código.
+def cargar_listas():
+    with sesion_bd(connect) as conn, closing(conn.cursor()) as cursor:
+        return modelo_catalogos.cargar_listas_del_caso(cursor)
 
 
 # 🔹 Página principal
@@ -48,10 +52,14 @@ DANOS_OCASIONADOS_POR = (
 @login_required
 @requiere_permiso('Ingresar_captur_danos')
 def index():
+    listas = cargar_listas()
+    ufs_permitidas = {str(uf) for uf in ufs_autorizadas_sesion()}
     return render_template(
         'Formulario.html',
-        zonas_dano=ZONAS_DANO,
-        danos_ocasionados_por=DANOS_OCASIONADOS_POR,
+        listas=listas,
+        # Solo las UF de la sesión; el servidor lo vuelve a validar al guardar.
+        unidades_funcionales=[uf for uf, _ in listas["unidades_funcionales"] if str(uf) in ufs_permitidas],
+        catalogos_formulario=modelo_catalogos.listas_para_el_navegador(listas),
     )
 
 # 🔹 Endpoint de geocodificación
@@ -98,13 +106,10 @@ def get_conductor():
     if not codigo:
         return jsonify({"nombre": None})
     try:
-        conn = connect()
-        cursor = conn.cursor()
-        cursor.execute("SELECT Nombre_OBZ FROM table_drivers WHERE Codigo_OBZ = ?", (codigo,))
-        row = cursor.fetchone()
-        cursor.close()
-        conn.close()
-        return jsonify({"nombre": row[0] if row else None})
+        with sesion_bd(connect) as conn:
+            with closing(conn.cursor()) as cursor:
+                nombre = modelo_flota.buscar_nombre_del_conductor(cursor, codigo)
+        return jsonify({"nombre": nombre})
     except Exception:
         logger.exception("error_consultar_conductor")
         return jsonify({"nombre": None})
@@ -121,16 +126,7 @@ def get_flota():
     if not ufs:
         return jsonify({"Tipologia_interno": None, "movil_valido": False})
     try:
-        conn = connect()
-        cursor = conn.cursor()
-        marcadores = ", ".join("?" for _ in ufs)
-        cursor.execute(
-            f"SELECT Tipologia_Movil FROM table_Moviles WHERE No_Movil = ? AND UF IN ({marcadores})",
-            (No_interno, *ufs),
-        )
-        row = cursor.fetchone()
-        cursor.close()
-        conn.close()
+        row = consultar_tipologia(No_interno, ufs, connect)
         return jsonify({
             "Tipologia_interno": row[0] if row else None,
             "movil_valido": bool(row)
@@ -138,7 +134,7 @@ def get_flota():
     except Exception:
         logger.exception("error_consultar_flota")
         return jsonify({"Tipologia_interno": None, "movil_valido": False})
-      
+
 
 @Capturador.route('/validarDuplicado')
 @login_required
@@ -150,38 +146,22 @@ def validar_duplicado():
     zona_dano = request.args.get("zona_dano")
 
     try:
-        conn = connect()
-        cursor = conn.cursor()
-        fecha_dt = datetime.strptime(fecha, '%Y-%m-%dT%H:%M')  
-
-        cursor.execute("""
-            SELECT COUNT(*)
-            FROM table_damage_to_fleet
-            WHERE CONVERT(date, Fecha_evento) = CONVERT(date, ?)
-            AND Movil = ?
-            AND Codigo = ?
-            AND Zona_dano = ?
-        """, (fecha_dt, movil, codigo, zona_dano))
-
-        existe = cursor.fetchone()[0] > 0
-        cursor.close()
-        conn.close()
+        with sesion_bd(connect) as conn:
+            with closing(conn.cursor()) as cursor:
+                fecha_dt = datetime.strptime(fecha, '%Y-%m-%dT%H:%M')
+                existe = modelo_capturador.contar_eventos_iguales(
+                    cursor, fecha_dt, movil, codigo, zona_dano) > 0
 
         return jsonify({"duplicado": existe})
 
     except Exception:
         logger.exception("error_validar_duplicado")
-        return jsonify({"duplicado": False})      
-
-# --- Definir constantes de restricción ---
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB por archivo
-MAX_FILES_COUNT = 5               # Máximo 5 archivos por reporte
+        return jsonify({"duplicado": False})
 
 @Capturador.route('/submit', methods=['POST'])
 @login_required
 @requiere_permiso('Ingresar_captur_danos')
 def submit_form():
-    conn = None # Para asegurar el cierre en caso de error
     rutas_guardadas = []
     try:
         # --- 1. PREPARAR LISTA DE ARCHIVOS ---
@@ -197,17 +177,6 @@ def submit_form():
                 extension = ".jpg" if "foto" in key.lower() else ".webm"
                 f.filename = f"{key}{extension}"
         validate_uploads([f for _, f in all_files])
-
-        # --- 2. VALIDACIONES ---
-        if len(all_files) > MAX_FILES_COUNT:
-            return jsonify({"error": f"Máximo {MAX_FILES_COUNT} archivos permitidos."}), 400
-
-        for key, f in all_files:
-            f.seek(0, os.SEEK_END)
-            size = f.tell()
-            f.seek(0) # IMPORTANTE: Volver al inicio para poder guardarlo después
-            if size > MAX_FILE_SIZE:
-                return jsonify({"error": f"El archivo {f.filename} es muy pesado."}), 400
 
         # --- 3. DATOS DEL FORMULARIO ---
         # (Tu código de recolección de datos se mantiene igual)
@@ -226,7 +195,7 @@ def submit_form():
         dano_ocasionado = request.form.get('Dano_ocasionado_por')
         Zona_dano = request.form.get('Zona_dano')
         # El registrador es siempre el usuario de la sesión, nunca el campo del formulario.
-        registrador = session.get('usuario')
+        registrador = usuario_id_sesion()
         centro_operaciones = request.form.get('Centro_de_operaciones')
         lat = request.form.get('Latitud')
         lon = request.form.get('Longitud')
@@ -236,17 +205,12 @@ def submit_form():
         campos_requeridos = (
             fecha_evento, UF, Movil, codigo, nombre, Area, ruta, tipologia,
             Version_libre, parte_afectada, dano_ocasionado, Zona_dano,
-            registrador, centro_operaciones, request.form.get('Direccion'),
+            centro_operaciones, request.form.get('Direccion'),
         )
         if any(valor is None or not valor.strip() for valor in campos_requeridos):
             return jsonify({"error": "Complete todos los campos obligatorios."}), 400
 
-        if Zona_dano not in ZONAS_DANO:
-            return jsonify({"error": "La zona del daño no es válida."}), 400
-
-        if dano_ocasionado not in DANOS_OCASIONADOS_POR:
-            return jsonify({"error": "La causa del daño no es válida."}), 400
-
+        parte_afectada = parte_afectada.strip()
         if len(parte_afectada) > 200:
             return jsonify({"error": "La parte afectada no puede superar 200 caracteres."}), 400
 
@@ -259,10 +223,10 @@ def submit_form():
 
         # 3. Restar los días
         fecha_pasada = hoy - dias_a_restar
-        
+
         try:
             fecha_evento_dt = datetime.strptime(fecha_evento, '%Y-%m-%dT%H:%M')
-           
+
         except ValueError:
             return jsonify({"error": "Fecha de evento inválida"}), 400
 
@@ -274,64 +238,55 @@ def submit_form():
         if fecha_evento_dt > fecha_registro:
             return jsonify({"error": "La fecha del evento no puede ser posterior a la fecha y hora actuales. "
                                      "Revise el día y si la hora es AM o PM."}), 400
-            
+
 
         # --- 4. INSERTAR EN DB (REGISTRO PRINCIPAL) ---
-        conn = connect()
-        cursor = conn.cursor()
+        # El helper revierte antes de cerrar y conserva el error para la respuesta.
+        with sesion_bd(connect) as conn:
+            with closing(conn.cursor()) as cursor:
+                listas = modelo_catalogos.cargar_listas_del_caso(cursor)
+                error = error_de_catalogo(
+                    listas, uf=UF, ruta=ruta, zona_dano=Zona_dano, tipo_dano=dano_ocasionado,
+                    centro_operacion=centro_operaciones)
+                if error:
+                    return jsonify({"error": error}), 400
+                if not modelo_flota.movil_pertenece_a_uf(cursor, Movil, UF):
+                    return jsonify({"error": "El número de vehículo ingresado no es válido."}), 400
 
-        cursor.execute("SELECT 1 FROM table_Moviles WHERE No_Movil = ? AND UF = ?", (Movil, UF))
-        if not cursor.fetchone():
-            cursor.close()
-            conn.close()
-            return jsonify({"error": "El número de vehículo ingresado no es válido."}), 400
+                with transaccion(conn):
+                    # La UF y la tipología son las del móvil; el área sale del código.
+                    damage_id = modelo_capturador.crear_caso(cursor, {
+                        "fecha_evento": fecha_evento_dt, "movil": Movil, "uf": int(UF), "codigo": codigo,
+                        "nombre": nombre, "area": area_del_operador(listas, codigo), "ruta": ruta,
+                        "direccion": direccion_completa, "version_libre": Version_libre,
+                        "parte_afectada": parte_afectada, "dano_ocasionado": dano_ocasionado,
+                        "zona_dano": Zona_dano, "registrador": registrador,
+                        "centro_operaciones": centro_operaciones, "fecha_registro": fecha_registro,
+                    })
 
-        cursor.execute("""
-            INSERT INTO table_damage_to_fleet 
-            (Fecha_evento, UF, Movil, Codigo, Nombre, Area, Ruta, Tipologia, Direccion, 
-             Version_libre, Parte_afectada, Dano_ocasionado, Zona_dano, Registrador, 
-             Centro_operaciones, Fecha_registro)
-            OUTPUT INSERTED.Id 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (fecha_evento_dt, UF, Movil, codigo, nombre, Area, ruta, tipologia,
-              direccion_completa, Version_libre, parte_afectada, dano_ocasionado,
-              Zona_dano, registrador, centro_operaciones, fecha_registro))
+                    # --- 5. GUARDADO FÍSICO DE ARCHIVOS ---
+                    # Definir rutas
+                    damage_folder = FILES_DIR/str(damage_id)
+                    damage_folder.mkdir(parents=True, exist_ok=True)
 
-        damage_id = cursor.fetchone()[0]
+                    for key, f in all_files:
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        safe_name = secure_filename(f.filename)
+                        final_name = f"{Path(safe_name).stem}_{timestamp}{Path(safe_name).suffix.lower()}"
+                        path = store_upload(f, damage_folder, final_name)
+                        rutas_guardadas.append(path)
 
-        # --- 5. GUARDADO FÍSICO DE ARCHIVOS ---
-        # Definir rutas
-        damage_folder = FILES_DIR/str(damage_id)
-        damage_folder.mkdir(parents=True, exist_ok=True)
+                        modelo_capturador.registrar_adjunto_del_caso(cursor, damage_id, path.name, str(path))
 
-        for key, f in all_files:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            safe_name = secure_filename(f.filename)
-            final_name = f"{Path(safe_name).stem}_{timestamp}{Path(safe_name).suffix.lower()}"
-            path = store_upload(f, damage_folder, final_name)
-            rutas_guardadas.append(path)
 
-            cursor.execute("""
-                INSERT INTO table_damage_files (DamageId, FileName, FilePath)
-                VALUES (?, ?, ?)
-            """, (damage_id, path.name, str(path)))
-                
-        conn.commit()
-             
-        
         return jsonify({"mensaje": "Registro exitoso", "id": damage_id})
-    
+
     except AttachmentValidationError as error:
-        if conn:
-            conn.rollback()
         for ruta in rutas_guardadas:
             ruta.unlink(missing_ok=True)
         return jsonify({"error": str(error)}), 400
     except Exception:
-        if conn: conn.rollback()
         for ruta in rutas_guardadas:
             ruta.unlink(missing_ok=True)
         logger.exception("error_guardar_adjuntos_capturador")
         return jsonify({"error": "No fue posible guardar los archivos."}), 500
-    finally:
-        if conn: conn.close()

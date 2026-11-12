@@ -1,154 +1,23 @@
-from config import connect
+"""Sincroniza altas, cambios de nombre y retiros de operadores."""
+from contextlib import closing
 
-
-def obtener_operadores_nuevos():
-
-    conexion = connect()
-    cursor = conexion.cursor()
-
-    try:
-
-        cursor.execute("""
-            SELECT
-                v.code,
-                v.name
-            FROM [emoperation].[dbo].[em_view_employees] AS v
-            LEFT JOIN [damage_to_fleet].[dbo].[table_drivers] AS d
-                ON d.Codigo_OBZ = v.code
-            WHERE v.code IS NOT NULL
-              AND v.name IS NOT NULL
-              AND d.Codigo_OBZ IS NULL
-        """)
-
-        return cursor.fetchall()
-
-    finally:
-        cursor.close()
-        conexion.close()
-
-
-def obtener_operadores_eliminar():
-
-    conexion = connect()
-    cursor = conexion.cursor()
-
-    try:
-
-        cursor.execute("""
-            SELECT
-                d.Codigo_OBZ
-            FROM [damage_to_fleet].[dbo].[table_drivers] AS d
-            LEFT JOIN [emoperation].[dbo].[em_view_employees] AS v
-                ON v.code = d.Codigo_OBZ
-            WHERE v.code IS NULL
-        """)
-
-        return cursor.fetchall()
-
-    finally:
-        cursor.close()
-        conexion.close()
-
-
-def insertar_operadores_nuevos(operadores):
-
-    conexion = connect()
-    cursor = conexion.cursor()
-
-    nuevos = 0
-
-    try:
-
-        for operador in operadores:
-
-            code = operador.code
-            nombre = operador.name
-
-            cursor.execute("""
-                INSERT INTO [damage_to_fleet].[dbo].[table_drivers]
-                    (Codigo_OBZ, Nombre_OBZ)
-                VALUES (?, ?)
-            """, code, nombre)
-
-            nuevos += 1
-
-        conexion.commit()
-
-        return nuevos
-
-    except Exception:
-
-        conexion.rollback()
-        raise
-
-    finally:
-
-        cursor.close()
-        conexion.close()
-
-
-def eliminar_operadores(operadores):
-
-    conexion = connect()
-    cursor = conexion.cursor()
-
-    eliminados = 0
-
-    try:
-
-        for operador in operadores:
-
-            code = operador.Codigo_OBZ
-
-            cursor.execute("""
-                DELETE FROM [damage_to_fleet].[dbo].[table_drivers]
-                WHERE Codigo_OBZ = ?
-            """, code)
-
-            eliminados += cursor.rowcount
-
-        conexion.commit()
-
-        return eliminados
-
-    except Exception:
-
-        conexion.rollback()
-        raise
-
-    finally:
-
-        cursor.close()
-        conexion.close()
+from modelos import sincronizacion_operadores as modelo
+from repositories.sesiones import sesion_bd
 
 
 def sincronizar_operadores():
+    with sesion_bd(transaccional=True) as conexion, closing(conexion.cursor()) as cursor:
+        conflictos = modelo.validar_fuente(cursor)
+        tabla = modelo.tabla_destino(cursor)
+        operadores_nuevos = modelo.listar_operadores_nuevos(cursor, tabla)
+        operadores_retirados = modelo.listar_operadores_retirados(cursor, tabla)
+        actualizados = modelo.actualizar_nombres(cursor, tabla)
 
-    operadores_nuevos = obtener_operadores_nuevos()
-    operadores_eliminar = obtener_operadores_eliminar()
+        for operador in operadores_nuevos:
+            modelo.insertar_operador(cursor, tabla, operador.code, operador.name)
+        eliminados = sum(
+            modelo.eliminar_operador(cursor, tabla, operador.Codigo_OBZ)
+            for operador in operadores_retirados
+        )
 
-    nuevos = insertar_operadores_nuevos(operadores_nuevos)
-    eliminados = eliminar_operadores(operadores_eliminar)
-
-    conexion = connect()
-    cursor = conexion.cursor()
-
-    try:
-
-        cursor.execute("""
-            SELECT COUNT(*)
-            FROM [emoperation].[dbo].[em_view_employees]
-            WHERE code IS NOT NULL
-              AND name IS NOT NULL
-        """)
-
-        total_operadores = cursor.fetchone()[0]
-
-    finally:
-
-        cursor.close()
-        conexion.close()
-
-    existentes = total_operadores - nuevos
-
-    return nuevos, eliminados, existentes
+    return len(operadores_nuevos), actualizados, eliminados, conflictos

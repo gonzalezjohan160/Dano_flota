@@ -1,4 +1,7 @@
+from conexiones import conexion_bd
+from repositories.sesiones import sesion_bd, abrir_conexion
 
+from contextlib import closing
 from pathlib import Path
 from uuid import uuid4
 
@@ -17,6 +20,7 @@ from werkzeug.utils import secure_filename
 
 from backend_security import login_required, requiere_permiso
 from config import BASE_DIR, UPLOAD_FOLDERS, connect
+from modelos import tutoriales as modelo_tutoriales
 
 
 Tutoriales = Blueprint(
@@ -27,7 +31,7 @@ Tutoriales = Blueprint(
 
 VIDEO_DIR = UPLOAD_FOLDERS["Tutoriales"]
 ALLOWED_EXTENSIONS = {".mp4", ".webm"}
-MAX_VIDEO_BYTES = 20 * 1024 * 1024
+MAX_VIDEO_BYTES = 10 * 1024 * 1024
 
 
 def _valid_video(upload):
@@ -61,27 +65,15 @@ def _valid_video(upload):
 @Tutoriales.route("/Tutoriales")
 @login_required
 def index():
-    conn = connect()
-
-    try:
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT id, Titulo
-            FROM dbo.table_tutoriales
-            ORDER BY Fecha_subida DESC, id DESC
-        """)
-
-        tutoriales = [
-            {
-                "id": row[0],
-                "titulo": row[1] or "Tutorial sin título",
-            }
-            for row in cursor.fetchall()
-        ]
-
-    finally:
-        conn.close()
+    with sesion_bd(connect) as conn:
+        with closing(conn.cursor()) as cursor:
+            tutoriales = [
+                {
+                    "id": row[0],
+                    "titulo": row[1] or "Tutorial sin título",
+                }
+                for row in modelo_tutoriales.listar_tutoriales(cursor)
+            ]
 
     return render_template(
         "tutoriales.html",
@@ -140,24 +132,27 @@ def subir():
     conn = None
 
     try:
-        conn = connect()
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            INSERT INTO dbo.table_tutoriales
-                (Titulo, FileName, FilePath, Fecha_subida)
-            VALUES (?, ?, ?, GETDATE())
-        """, titulo, stored_name, str(stored_path.resolve()))
-
-        conn.commit()
-
+        conn = abrir_conexion(connect)
     except Exception:
         stored_path.unlink(missing_ok=True)
         raise
 
-    finally:
-        if conn is not None:
-            conn.close()
+    with conexion_bd(conn) as conexion:
+        try:
+            cursor = conexion.cursor()
+        except Exception:
+            stored_path.unlink(missing_ok=True)
+            raise
+
+        with closing(cursor):
+            try:
+                modelo_tutoriales.crear_tutorial(
+                    cursor, titulo, stored_name, str(stored_path.resolve())
+                )
+                conexion.commit()
+            except Exception:
+                stored_path.unlink(missing_ok=True)
+                raise
 
     flash("Video subido correctamente.", "success")
     return redirect(url_for("Tutoriales.index"))
@@ -167,68 +162,51 @@ def subir():
 @login_required
 @requiere_permiso("Eliminar_videos")
 def eliminar(tutorial_id):
-    conn = None
+    conn = abrir_conexion(connect)
+    with conexion_bd(conn):
+        try:
+            with closing(conn.cursor()) as cursor:
+                row = modelo_tutoriales.buscar_archivo_tutorial(cursor, tutorial_id)
 
-    try:
-        conn = connect()
-        cursor = conn.cursor()
+                if not row:
+                    flash("El tutorial no existe.", "error")
+                    return redirect(url_for("Tutoriales.index"))
 
-        cursor.execute("""
-            SELECT FileName, FilePath
-            FROM dbo.table_tutoriales
-            WHERE id = ?
-        """, tutorial_id)
+                filename = secure_filename(row[0] or "")
+                file_path = row[1]
 
-        row = cursor.fetchone()
+                if not filename or not file_path:
+                    flash("El archivo del tutorial no es válido.", "error")
+                    return redirect(url_for("Tutoriales.index"))
 
-        if not row:
-            flash("El tutorial no existe.", "error")
-            return redirect(url_for("Tutoriales.index"))
+                path = Path(file_path).resolve()
 
-        filename = secure_filename(row[0] or "")
-        file_path = row[1]
+                # Verificación de seguridad:
+                # el archivo debe pertenecer exactamente a la carpeta
+                # configurada para los tutoriales.
+                if (
+                    path.parent != VIDEO_DIR.resolve()
+                    or path.name != filename
+                    or path.suffix.lower() not in ALLOWED_EXTENSIONS
+                ):
+                    flash("La ubicación del archivo no es válida.", "error")
+                    return redirect(url_for("Tutoriales.index"))
 
-        if not filename or not file_path:
-            flash("El archivo del tutorial no es válido.", "error")
-            return redirect(url_for("Tutoriales.index"))
+                # Primero eliminamos el archivo físico.
+                if path.exists():
+                    if not path.is_file():
+                        flash("El archivo del tutorial no es válido.", "error")
+                        return redirect(url_for("Tutoriales.index"))
 
-        path = Path(file_path).resolve()
+                    path.unlink()
 
-        # Verificación de seguridad:
-        # el archivo debe pertenecer exactamente a la carpeta
-        # configurada para los tutoriales.
-        if (
-            path.parent != VIDEO_DIR.resolve()
-            or path.name != filename
-            or path.suffix.lower() not in ALLOWED_EXTENSIONS
-        ):
-            flash("La ubicación del archivo no es válida.", "error")
-            return redirect(url_for("Tutoriales.index"))
+                # Después eliminamos el registro de SQL Server.
+                modelo_tutoriales.eliminar_tutorial(cursor, tutorial_id)
 
-        # Primero eliminamos el archivo físico.
-        if path.exists():
-            if not path.is_file():
-                flash("El archivo del tutorial no es válido.", "error")
-                return redirect(url_for("Tutoriales.index"))
-
-            path.unlink()
-
-        # Después eliminamos el registro de SQL Server.
-        cursor.execute("""
-            DELETE FROM dbo.table_tutoriales
-            WHERE id = ?
-        """, tutorial_id)
-
-        conn.commit()
-
-    except Exception:
-        if conn is not None:
+                conn.commit()
+        except Exception:
             conn.rollback()
-        raise
-
-    finally:
-        if conn is not None:
-            conn.close()
+            raise
 
     flash("Video eliminado correctamente.", "success")
     return redirect(url_for("Tutoriales.index"))
@@ -237,21 +215,9 @@ def eliminar(tutorial_id):
 @Tutoriales.route("/video/<int:tutorial_id>")
 @login_required
 def ver_video(tutorial_id):
-    conn = connect()
-
-    try:
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT FileName, FilePath
-            FROM dbo.table_tutoriales
-            WHERE id = ?
-        """, tutorial_id)
-
-        row = cursor.fetchone()
-
-    finally:
-        conn.close()
+    with sesion_bd(connect) as conn:
+        with closing(conn.cursor()) as cursor:
+            row = modelo_tutoriales.buscar_archivo_tutorial(cursor, tutorial_id)
 
     if not row:
         abort(404)

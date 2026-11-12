@@ -1,8 +1,10 @@
+from conexiones import conexion_bd
+from repositories.sesiones import sesion_bd, abrir_conexion
 from flask import Flask, render_template, request, jsonify, url_for, redirect, session, g, flash, abort
 import os
 import secrets
 import threading
-import time
+from contextlib import closing
 from config import connect, configuracion_activa, BaseDatosNoDisponible
 from backend_unificado import Modulo_unificado
 from backend_dashboard import Front_dashboard
@@ -24,6 +26,7 @@ from schema_migrations import SchemaValidationError, validate_required_schema
 from werkzeug.middleware.proxy_fix import ProxyFix
 from backend_security import cargar_permisos, normalizar_uf_sesion, limiter
 from autorizacion import regla_para
+from modelos import autenticacion as modelo_autenticacion
 
 load_dotenv()
 
@@ -62,8 +65,11 @@ if not Interfaz.config.get("SECRET_KEY"):
 _SCHEMA_VALIDATION_PID = None
 _SCHEMA_VALIDATION_ERROR = None
 _SCHEMA_VALIDATION_LOCK = threading.Lock()
-# Último fallo transitorio: (pid, momento en que terminó el intento, mensaje).
+# Último fallo transitorio: (pid, número de intento, mensaje). Se usa un contador
+# y no el reloj: en Windows time.monotonic() avanza a saltos de ~15 ms y dos
+# peticiones seguidas parecerían simultáneas.
 _SCHEMA_FALLO_TRANSITORIO = None
+_SCHEMA_INTENTOS_FALLIDOS = 0
 
 
 def _validar_esquema_una_vez_por_proceso():
@@ -72,7 +78,7 @@ def _validar_esquema_una_vez_por_proceso():
     if _SCHEMA_VALIDATION_PID == process_id:
         return _SCHEMA_VALIDATION_ERROR
 
-    llegada = time.monotonic()
+    intentos_al_llegar = _SCHEMA_INTENTOS_FALLIDOS
     with _SCHEMA_VALIDATION_LOCK:
         if _SCHEMA_VALIDATION_PID == process_id:
             return _SCHEMA_VALIDATION_ERROR
@@ -80,32 +86,30 @@ def _validar_esquema_una_vez_por_proceso():
         # resultado en vez de repetir la espera uno tras otro; las peticiones que
         # llegan después del fallo sí reintentan.
         fallo = _SCHEMA_FALLO_TRANSITORIO
-        if fallo and fallo[0] == process_id and fallo[1] >= llegada:
+        if fallo and fallo[0] == process_id and fallo[1] > intentos_al_llegar:
             return fallo[2]
 
-        conn = None
         error = None
         try:
-            conn = connect()
+            conn = abrir_conexion(connect)
         except Exception as exc:
             # Fallo transitorio (SQL Server aún no responde, corte de red): no se
             # guarda en caché y se reintenta en la siguiente petición.
             logger.error("validacion_esquema_sqlserver_sin_conexion causa=%s", exc.__cause__ or exc)
             return _registrar_fallo_transitorio(
                 process_id, "No fue posible conectar con SQL Server para validar el esquema requerido.")
-        try:
-            validate_required_schema(conn)
-        except SchemaValidationError as exc:
-            error = str(exc)
-            logger.error("validacion_esquema_sqlserver_incompatible: %s", error)
-        except Exception:
-            # También puede ser transitorio (conexión cortada a mitad): se reintenta.
-            logger.error("validacion_esquema_sqlserver_fallo_inesperado")
-            return _registrar_fallo_transitorio(
-                process_id,
-                "No fue posible inspeccionar el esquema de SQL Server. Revise la conectividad y permisos de metadatos.")
-        finally:
-            conn.close()
+        with conexion_bd(conn):
+            try:
+                validate_required_schema(conn)
+            except SchemaValidationError as exc:
+                error = str(exc)
+                logger.error("validacion_esquema_sqlserver_incompatible: %s", error)
+            except Exception:
+                # También puede ser transitorio (conexión cortada a mitad): se reintenta.
+                logger.error("validacion_esquema_sqlserver_fallo_inesperado")
+                return _registrar_fallo_transitorio(
+                    process_id,
+                    "No fue posible inspeccionar el esquema de SQL Server. Revise la conectividad y permisos de metadatos.")
 
         # Solo se guarda en caché el éxito o un esquema incompatible, que no se
         # corrige solo: tras aplicar las migraciones, reinicie Gunicorn.
@@ -115,8 +119,9 @@ def _validar_esquema_una_vez_por_proceso():
 
 
 def _registrar_fallo_transitorio(process_id, mensaje):
-    global _SCHEMA_FALLO_TRANSITORIO
-    _SCHEMA_FALLO_TRANSITORIO = (process_id, time.monotonic(), mensaje)
+    global _SCHEMA_FALLO_TRANSITORIO, _SCHEMA_INTENTOS_FALLIDOS
+    _SCHEMA_INTENTOS_FALLIDOS += 1
+    _SCHEMA_FALLO_TRANSITORIO = (process_id, _SCHEMA_INTENTOS_FALLIDOS, mensaje)
     return mensaje
 
 
@@ -197,24 +202,18 @@ def proteger_rutas():
 
     # En cada petición se lee el estado actual del usuario, para que desactivarlo
     # o cambiarle permisos o UF aplique también a las sesiones ya abiertas.
-    conn = None
     try:
-        conn = connect()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT Activo, UF, ISNULL(Cambio_password_obligatorio, 0) FROM Table_usuarios WHERE Username = ?",
-            session.get('usuario_id')
-        )
-        estado_usuario = cursor.fetchone()
-        permisos = cargar_permisos(session.get('usuario_id'), cursor) if estado_usuario else []
+        with sesion_bd(connect) as conn, closing(conn.cursor()) as cursor:
+            estado_usuario = modelo_autenticacion.buscar_estado_de_sesion(cursor, session.get('usuario_id') or session.get('usuario'))
+            if estado_usuario:
+                session['usuario_id'] = int(estado_usuario[3])
+                session['usuario'] = estado_usuario[4]
+            permisos = cargar_permisos(session.get('usuario_id'), cursor) if estado_usuario else []
     except BaseDatosNoDisponible:
         raise
     except Exception:
         logger.exception("error_verificar_estado_usuario %s", contexto_peticion())
         return servicio_no_disponible()
-    finally:
-        if conn:
-            conn.close()
 
     # Usuario eliminado o desactivado: se cierra la sesión.
     if not estado_usuario or not estado_usuario[0]:
@@ -223,7 +222,7 @@ def proteger_rutas():
         flash('Su sesión fue cerrada porque el usuario se encuentra inactivo.', 'error')
         return redirect(url_for('Modulo_login.login'))
 
-    _, uf, cambio_password_obligatorio = estado_usuario
+    _, uf, cambio_password_obligatorio = estado_usuario[:3]
     session['UF'] = normalizar_uf_sesion(uf)
     session['permisos'] = permisos
 
@@ -338,9 +337,9 @@ def error_acceso(e):
 
 
 if __name__ == "__main__":
-        
-       
+
+
         #sincronizar_operadores()
-        
+
        #Interfaz.run(host="0.0.0.0", port=5000, debug=True, ssl_context=None)
         Interfaz.run(host="0.0.0.0", port=5000, ssl_context='adhoc', debug=False)
