@@ -2,6 +2,8 @@
    Llevan !important para conservar la prioridad que tenía el estilo en línea.
    display sigue en línea porque el JavaScript lo cambia con element.style.display. */
 
+.filtro-lupa::placeholder { text-align: center; }
+
 .u-alinear-centro { text-align: center !important; }
 .u-alinear-derecha { text-align: right !important; }
 .u-alto-100 { height: 100px !important; }

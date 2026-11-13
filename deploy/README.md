@@ -8,3 +8,6 @@
 Las variables `${...}` se completan con `envsubst`. El procedimiento completo
 (usuario de servicio, permisos, generación de estas plantillas y verificación)
 está en el `readme.md` de la raíz, sección 3 "Instalación en un servidor nuevo".
+
+Para entregar un ambiente de pruebas con datos de referencia, siga la
+[guía del starter de QA](starter_qa.md).

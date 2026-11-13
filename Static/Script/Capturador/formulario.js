@@ -115,7 +115,10 @@ const coords = {
 };
 
 const map = L.map('map').setView([4.65, -74.1], 12);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+map.attributionControl.setPrefix(false);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors &middot; Open Database License (ODbL)'
+}).addTo(map);
 
 patioSelect.addEventListener('change', () => {
     const patio = patioSelect.value;

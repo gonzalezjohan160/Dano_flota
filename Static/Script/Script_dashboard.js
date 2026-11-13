@@ -143,7 +143,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // MAPA
     const map = L.map('map').setView([4.7110, -74.0721], 11);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    map.attributionControl.setPrefix(false);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors &middot; Open Database License (ODbL)'
+    }).addTo(map);
 
     if (heatData.length > 0) {
         L.heatLayer(heatData, { radius: 25, blur: 15, maxZoom: 17 }).addTo(map);

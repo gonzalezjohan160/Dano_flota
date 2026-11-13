@@ -53,9 +53,9 @@
                         Móvil
                     </label>
 
-                    <input type="text" id="filtroMovil" placeholder="Ej: Z32-4032">
+                    <input type="text" id="filtroMovil" class="filtro-lupa" placeholder="🔍">
 
-                </div>
+                </div> <br>
                 <div class="table-scroll">
                     <table class="custom-table" id="tablaUltimosEventos">
                         <thead>
@@ -120,53 +120,57 @@
 
         <div class="card">
             <div class="card-header">Top 10 operadores (Siniestralidad)</div>
-            <div class="card-body table-scroll">
-                <table class="custom-table">
-                    <thead>
-                        <tr>
-                            <th>Cód / Nombre</th>
-                            <th class="text-center">Cant.</th>
-                            <th class="text-right">Costo</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in ranking %}
-                        <tr>
-                            <td>
-                                <span class="op-code">{{ row[0] }}</span><br>
-                                <small>{{ row[1] }}</small>
-                            </td>
-                            <td class="text-center"><span class="badge">{{ row[2] }}</span></td>
-                            <td class="text-right text-danger">${{ "{:,.0f}".format(row[3]) }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <div class="card-body">
+                <div class="table-scroll">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>Cód / Nombre</th>
+                                <th class="text-center">Cant.</th>
+                                <th class="text-right">Costo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in ranking %}
+                            <tr>
+                                <td>
+                                    <span class="op-code">{{ row[0] }}</span><br>
+                                    <small>{{ row[1] }}</small>
+                                </td>
+                                <td class="text-center"><span class="badge">{{ row[2] }}</span></td>
+                                <td class="text-right text-danger">${{ "{:,.0f}".format(row[3]) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
         <div class="card">
             <div class="card-header"> Rutas con más eventos</div>
 
-            <div class="card-body table-scroll">
-                <table class="custom-table">
-                    <thead>
-                        <tr>
-                            <th>Ruta</th>
-                            <th class="text-center">Cantidad</th>
-                        </tr>
-                    </thead>
+            <div class="card-body">
+                <div class="table-scroll">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>Ruta</th>
+                                <th class="text-center">Cantidad</th>
+                            </tr>
+                        </thead>
 
-                    <tbody>
-                        {% for row in ranking_rutas %}
-                        <tr>
-                            <td>{{ row[0] }}</td>
-                            <td class="text-center"><span class="badge">{{ row[1] }}</span></td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
+                        <tbody>
+                            {% for row in ranking_rutas %}
+                            <tr>
+                                <td>{{ row[0] }}</td>
+                                <td class="text-center"><span class="badge">{{ row[1] }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
 
-                </table>
+                    </table>
+                </div>
 
             </div>
         </div>
@@ -176,24 +180,26 @@
                 Usuarios con más eventos registrados
             </div>
 
-            <div class="card-body table-scroll">
-                <table class="custom-table">
-                    <thead>
-                        <tr>
-                            <th>Usuario</th>
-                            <th class="text-center">Cantidad</th>
-                        </tr>
-                    </thead>
+            <div class="card-body">
+                <div class="table-scroll">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>Usuario</th>
+                                <th class="text-center">Cantidad</th>
+                            </tr>
+                        </thead>
 
-                    <tbody>
-                        {% for row in ranking_registradores %}
-                        <tr>
-                            <td> <span class="op-code">{{ row[0] }}</span> </td>
-                            <td class="text-center"><span class="badge">{{ row[1] }}</span></td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                        <tbody>
+                            {% for row in ranking_registradores %}
+                            <tr>
+                                <td> <span class="op-code">{{ row[0] }}</span> </td>
+                                <td class="text-center"><span class="badge">{{ row[1] }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -207,9 +213,9 @@
                         Móvil
                     </label>
 
-                    <input type="text" id="filtroVehiculo" placeholder="Ej: Z32-4032">
+                    <input type="text" id="filtroVehiculo" class="filtro-lupa" placeholder="🔍">
 
-                </div>
+                </div><br>
                 <div class="table-scroll">
                     <table class="custom-table" id="tablaVehiculos">
                         <thead>
@@ -236,24 +242,26 @@
 
         <div class="card">
             <div class="card-header">Eventos por zona afectada</div>
-            <div class="card-body table-scroll">
-                <table class="custom-table">
-                    <thead>
-                        <tr>
-                            <th>Zona Afectada</th>
-                            <th class="text-center">Cantidad (Eventos)</th>
-                        </tr>
-                    </thead>
+            <div class="card-body">
+                <div class="table-scroll">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>Zona Afectada</th>
+                                <th class="text-center">Cantidad (Eventos)</th>
+                            </tr>
+                        </thead>
 
-                    <tbody>
-                        {% for row in zonas %}
-                        <tr>
-                            <td>{{ row[0] }}</td>
-                            <td class="text-center"><span class="badge">{{ row[1] }}</span></td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                        <tbody>
+                            {% for row in zonas %}
+                            <tr>
+                                <td>{{ row[0] }}</td>
+                                <td class="text-center"><span class="badge">{{ row[1] }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 

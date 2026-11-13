@@ -31,3 +31,8 @@ frontend/start_venv.ps1
 # Soluciones y proyectos de SQL Server Management Studio
 *.ssmssln
 *.ssmssqlproj
+
+# Respaldos y paquetes del starter de QA
+*.bak
+*.starter.zip
+*.adjuntos.zip

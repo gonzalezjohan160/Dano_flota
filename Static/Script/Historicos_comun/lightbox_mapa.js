@@ -71,9 +71,10 @@
         }
 
         map = L.map(mapDiv).setView([4.65, -74.1], 12);
+        map.attributionControl.setPrefix(false);
 
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            attribution: "&copy; OpenStreetMap contributors"
+            attribution: '&copy; OpenStreetMap contributors &middot; Open Database License (ODbL)'
         }).addTo(map);
     };
 

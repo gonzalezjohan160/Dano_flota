@@ -13,7 +13,7 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Carpeta de adjuntos y videos.
-MEDIA_DIR = Path(r"C:\Dano_flota\Files")
+MEDIA_DIR = Path(r"/media/emapp/dano_flota")
 
 
 # Carpeta principal

@@ -53,9 +53,10 @@ function initMapaModal() {
     if (mapaModal) return;
 
     mapaModal = L.map("map").setView([4.7110, -74.0721], 11); // Bogotá por defecto
+    mapaModal.attributionControl.setPrefix(false);
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors",
+        attribution: '&copy; OpenStreetMap contributors &middot; Open Database License (ODbL)',
         maxZoom: 19
     }).addTo(mapaModal);
 

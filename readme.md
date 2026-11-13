@@ -332,6 +332,9 @@ hasta que se declare.
 
 # 6. Esquema SQL Server y migraciones
 
+Para respaldar el origen y preparar un punto de inicio reproducible de pruebas,
+consulte la [guía del starter de QA](deploy/starter_qa.md).
+
 El código requiere estas columnas: `dbo.Table_usuarios.Cambio_password_obligatorio`,
 `dbo.table_damage_to_fleet.eliminado`, `dbo.table_info_oper.responsabilidad_operador`,
 `dbo.table_info_oper.conciliacion` y `dbo.table_tutoriales.Titulo` (la migración 005
@@ -419,6 +422,8 @@ Ningún archivo versionado contiene usuarios, rutas ni claves de un servidor
 concreto; se completan con los valores de la sección 3.1 y el `.env`.
 
 # 7.1 Estructura del código (MVC)
+
+La convención de nombres y las rutas propuestas están en el [catálogo de nombres](catalogo_nombres.md).
 
 | Capa | Dónde | Qué hace |
 |---|---|---|
